@@ -6,6 +6,7 @@
 #include "globals.cpp"
 #include "twelve_split_spline.h"
 #include <CLI/CLI.hpp>
+#include <fstream>
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
 
@@ -66,13 +67,44 @@ int main(int argc, char *argv[]) {
                                  fit_matrix, energy_hessian,
                                  energy_hessian_inverse);
 
+  ct_surface.m_affine_manifold.generate_lagrange_nodes();
+
   ct_surface.write_coeffs_to_obj("test_cubic_points.obj");
 
   ct_surface.sample_to_obj("test_sample_cubic_points.obj", 25);
 
   ct_surface.write_cubic_surface_to_msh_no_conn("test_cubic_sphere.msh");
-  ct_surface.write_cubic_surface_to_msh_with_conn(
-      "test_cubic_sphere_with_conn.msh");
+  //   ct_surface.write_cubic_surface_to_msh_with_conn("duck_with_conn");
+
+  ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
+      "icosphere_from_lagrange_nodes");
+
+  Eigen::SparseMatrix<double> c_f_int;
+  ct_surface.C_F_int(c_f_int);
+  Eigen::SparseMatrix<double> C_E_end;
+  ct_surface.C_E_end(C_E_end);
+  Eigen::SparseMatrix<double> C_E_mid;
+  ct_surface.C_E_mid(C_E_mid);
+
+  std::ofstream file("interior_constraint_matrix.txt");
+  file << std::setprecision(16) << c_f_int;
+  std::ofstream file_2("edge_endpoint_constraint_matrix.txt");
+  file_2 << std::setprecision(16) << c_f_int;
+  std::ofstream file_3("edge_midpoint_constraint_matrix.txt");
+  file_3 << std::setprecision(16) << c_f_int;
+
+  file.close();
+  file_2.close();
+  file_3.close();
+
+  //   std::ofstream file_4("interior_constraint_matrix_triplets.txt");
+  //   const auto trip1 = c_f_int.to_triplets();
+  //   std::ofstream file_5("edge_endpoint_constraint_matrix_triplets.txt");
+  //   std::ofstream file_6("edge_midpoint_constraint_matrix_triplets.txt");
+
+  //   file_4.close();
+  //   file_5.close();
+  //   file_6.close();
 
   return 0;
 }

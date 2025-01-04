@@ -4,6 +4,9 @@ add_library(CloughTocherPatchLib
   clough_tocher_autogen_matrix_coeffs.hpp
   clough_tocher_matrices.cpp
   clough_tocher_surface.cpp
+  clough_tocher_autogen_constraint_matrices.hpp
+  clough_tocher_constraint_matrices.hpp
+  clough_tocher_constraint_matrices.cpp
 )
 target_include_directories(CloughTocherPatchLib PUBLIC .)
 target_link_libraries(CloughTocherPatchLib PUBLIC
