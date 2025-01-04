@@ -67,7 +67,10 @@ int main(int argc, char *argv[]) {
                                  fit_matrix, energy_hessian,
                                  energy_hessian_inverse);
 
+  // important !!! call the following two before compute constraints, but only
+  // once!!!
   ct_surface.m_affine_manifold.generate_lagrange_nodes();
+  ct_surface.m_affine_manifold.compute_edge_global_uv_mappings();
 
   ct_surface.write_coeffs_to_obj("test_cubic_points.obj");
 
@@ -89,9 +92,9 @@ int main(int argc, char *argv[]) {
   std::ofstream file("interior_constraint_matrix.txt");
   file << std::setprecision(16) << c_f_int;
   std::ofstream file_2("edge_endpoint_constraint_matrix.txt");
-  file_2 << std::setprecision(16) << c_f_int;
+  file_2 << std::setprecision(16) << C_E_end;
   std::ofstream file_3("edge_midpoint_constraint_matrix.txt");
-  file_3 << std::setprecision(16) << c_f_int;
+  file_3 << std::setprecision(16) << C_E_mid;
 
   file.close();
   file_2.close();

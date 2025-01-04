@@ -733,7 +733,7 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     }
     if (v_charts[e.right_vertex_index].is_cone) {
       // v1 is cone
-      C_dE.row(1) << 0, 0, 0, 0, 0, 0, 1, 0;
+      C_dE.row(1) << 0, 0, 0, 0, 1, 0, 0, 0;
     }
 
     // P_dE reindexing global dof to local index
@@ -876,11 +876,19 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     const auto u_12 = uvs.row(v2) - uvs.row(v1);
     // const auto u_10 = uvs.row(v0) - uvs.row(v1);
 
+    // std::cout << u_01 << std::endl;
+    // std::cout << u_02 << std::endl;
+    // std::cout << u_12 << std::endl;
+
     // u_ij_prime
     const auto u_01_prime = uvs.row(v1_prime) - uvs.row(v0_prime);
     const auto u_02_prime = uvs.row(v2_prime) - uvs.row(v0_prime);
     const auto u_12_prime = uvs.row(v2_prime) - uvs.row(v1_prime);
     // const auto u_10_prime = uvs.row(v0_prime) - uvs.row(v1_prime);
+
+    // std::cout << u_01_prime << std::endl;
+    // std::cout << u_02_prime << std::endl;
+    // std::cout << u_12_prime << std::endl;
 
     // m01 and m01_prime
     const auto m_01 = (u_02 + u_12) / 2.0;
