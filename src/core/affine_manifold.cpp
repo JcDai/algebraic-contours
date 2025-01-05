@@ -1015,34 +1015,41 @@ void AffineManifold::compute_edge_global_uv_mappings() {
     e.top_global_uv_position = uvs.row(e.top_global_uv_idx);
 
     // bottom face
-    const auto &f_bottom = F.row(bottom_f_idx);
-    const auto &f_bottom_uv = F_uv.row(bottom_f_idx);
+    if (bottom_f_idx > -1) {
+      const auto &f_bottom = F.row(bottom_f_idx);
+      const auto &f_bottom_uv = F_uv.row(bottom_f_idx);
 
-    std::array<int64_t, 3> bottom_local_idx = {
-        {-1, -1, -1}}; // right (reverse left), left (reverse right), bottom
-    for (int i = 0; i < 3; ++i) {
-      if (f_bottom[i] == e.right_vertex_index) {
-        bottom_local_idx[0] = i;
+      std::array<int64_t, 3> bottom_local_idx = {
+          {-1, -1, -1}}; // right (reverse left), left (reverse right), bottom
+      for (int i = 0; i < 3; ++i) {
+        if (f_bottom[i] == e.right_vertex_index) {
+          bottom_local_idx[0] = i;
+        }
+        if (f_bottom[i] == e.left_vertex_index) {
+          bottom_local_idx[1] = i;
+        }
+        if (f_bottom[i] == e.bottom_vertex_index) {
+          bottom_local_idx[2] = i;
+        }
       }
-      if (f_bottom[i] == e.left_vertex_index) {
-        bottom_local_idx[1] = i;
+
+      for (int i = 0; i < 3; ++i) {
+        assert(bottom_local_idx[i] > -1);
       }
-      if (f_bottom[i] == e.bottom_vertex_index) {
-        bottom_local_idx[2] = i;
-      }
+
+      e.reverse_left_global_uv_idx = f_bottom_uv[bottom_local_idx[0]];
+      e.reverse_right_global_uv_idx = f_bottom_uv[bottom_local_idx[1]];
+      e.bottom_global_uv_idx = f_bottom_uv[bottom_local_idx[2]];
+
+      e.reverse_left_global_uv_position = uvs.row(e.reverse_left_global_uv_idx);
+      e.reverse_right_global_uv_position =
+          uvs.row(e.reverse_right_global_uv_idx);
+      e.bottom_global_uv_position = uvs.row(e.bottom_global_uv_idx);
+    } else {
+      e.reverse_left_global_uv_idx = -1;
+      e.reverse_right_global_uv_idx = -1;
+      e.bottom_global_uv_idx = -1;
     }
-
-    for (int i = 0; i < 3; ++i) {
-      assert(bottom_local_idx[i] > -1);
-    }
-
-    e.reverse_left_global_uv_idx = f_bottom_uv[bottom_local_idx[0]];
-    e.reverse_right_global_uv_idx = f_bottom_uv[bottom_local_idx[1]];
-    e.bottom_global_uv_idx = f_bottom_uv[bottom_local_idx[2]];
-
-    e.reverse_left_global_uv_position = uvs.row(e.reverse_left_global_uv_idx);
-    e.reverse_right_global_uv_position = uvs.row(e.reverse_right_global_uv_idx);
-    e.bottom_global_uv_position = uvs.row(e.bottom_global_uv_idx);
   }
 }
 

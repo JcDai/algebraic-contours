@@ -54,9 +54,8 @@ CloughTocherSurface::CloughTocherSurface(
 
 Eigen::Matrix<double, 1, 3>
 CloughTocherSurface::evaluate_patch(const PatchIndex &patch_index,
-                                    const double &u, const double &v,
-                                    const double &w) {
-  return m_patches[patch_index].CT_eval(u, v, w);
+                                    const double &u, const double &v) {
+  return m_patches[patch_index].CT_eval(u, v);
 }
 
 void CloughTocherSurface::generate_face_normals(
@@ -135,15 +134,15 @@ void CloughTocherSurface::write_cubic_surface_to_msh_no_conn(
 
   for (const auto &patch : m_patches) {
     for (const auto &bc : tri_0_bcs) {
-      auto z = patch.CT_eval(bc[0], bc[1], 1 - bc[0] - bc[1]);
+      auto z = patch.CT_eval(bc[0], bc[1]);
       file << z(0, 0) << " " << z(0, 1) << " " << z(0, 2) << "\n";
     }
     for (const auto &bc : tri_1_bcs) {
-      auto z = patch.CT_eval(bc[0], bc[1], 1 - bc[0] - bc[1]);
+      auto z = patch.CT_eval(bc[0], bc[1]);
       file << z(0, 0) << " " << z(0, 1) << " " << z(0, 2) << "\n";
     }
     for (const auto &bc : tri_2_bcs) {
-      auto z = patch.CT_eval(bc[0], bc[1], 1 - bc[0] - bc[1]);
+      auto z = patch.CT_eval(bc[0], bc[1]);
       file << z(0, 0) << " " << z(0, 1) << " " << z(0, 2) << "\n";
     }
   }
@@ -190,11 +189,11 @@ void CloughTocherSurface::sample_to_obj(std::string filename, int sample_size) {
       for (int j = 0; j <= sample_size - i; ++j) {
         double u = 1. / sample_size * i;
         double v = 1. / sample_size * j;
-        double w = 1 - u - v;
+        // double w = 1 - u - v;
 
         // std::cout << "u: " << u << " v: " << v << " w: " << w << std::endl;
         // std::cout << "w^3: " << w * w * w << std::endl;
-        auto z = patch.CT_eval(u, v, w);
+        auto z = patch.CT_eval(u, v);
 
         // std::cout << z << std::endl;
 
@@ -281,8 +280,7 @@ void CloughTocherSurface::write_cubic_surface_to_msh_with_conn(
         // vertex already computed
         continue;
       } else {
-        auto z = patch.CT_eval(CT_nodes[i][0], CT_nodes[i][1],
-                               1 - CT_nodes[i][0] - CT_nodes[i][1]);
+        auto z = patch.CT_eval(CT_nodes[i][0], CT_nodes[i][1]);
         v_to_v_map[Fv[i]] = vertices.size();
         vertices.push_back(z);
       }
@@ -304,8 +302,7 @@ void CloughTocherSurface::write_cubic_surface_to_msh_with_conn(
     }
 
     // node 3
-    auto zz = patch.CT_eval(CT_nodes[3][0], CT_nodes[3][1],
-                            1 - CT_nodes[3][0] - CT_nodes[3][1]);
+    auto zz = patch.CT_eval(CT_nodes[3][0], CT_nodes[3][1]);
     l_vids[3] = vertices.size();
     vertices.push_back(zz);
 
@@ -320,12 +317,10 @@ void CloughTocherSurface::write_cubic_surface_to_msh_with_conn(
         l_vids[4 + i * 2 + 1] = vs[0];
       } else {
         // eval new vertices
-        auto z0 = patch.CT_eval(
-            CT_nodes[4 + i * 2 + 0][0], CT_nodes[4 + i * 2 + 0][1],
-            1 - CT_nodes[4 + i * 2 + 0][0] - CT_nodes[4 + i * 2 + 0][1]);
-        auto z1 = patch.CT_eval(
-            CT_nodes[4 + i * 2 + 1][0], CT_nodes[4 + i * 2 + 1][1],
-            1 - CT_nodes[4 + i * 2 + 1][0] - CT_nodes[4 + i * 2 + 1][1]);
+        auto z0 = patch.CT_eval(CT_nodes[4 + i * 2 + 0][0],
+                                CT_nodes[4 + i * 2 + 0][1]);
+        auto z1 = patch.CT_eval(CT_nodes[4 + i * 2 + 1][0],
+                                CT_nodes[4 + i * 2 + 1][1]);
         l_vids[4 + i * 2 + 0] = vertices.size();
         vertices.push_back(z0);
         l_vids[4 + i * 2 + 1] = vertices.size();
@@ -338,8 +333,7 @@ void CloughTocherSurface::write_cubic_surface_to_msh_with_conn(
 
     // node 10 - 18
     for (int i = 10; i < 19; ++i) {
-      auto z = patch.CT_eval(CT_nodes[i][0], CT_nodes[i][1],
-                             1 - CT_nodes[i][0] - CT_nodes[i][1]);
+      auto z = patch.CT_eval(CT_nodes[i][0], CT_nodes[i][1]);
       l_vids[i] = vertices.size();
       vertices.push_back(z);
     }
@@ -460,7 +454,7 @@ void CloughTocherSurface::
   for (size_t i = 0; i < lagrange_nodes.size(); ++i) {
     const auto patch_idx = lagrange_nodes[i].first;
     const auto bc = lagrange_nodes[i].second;
-    auto z = m_patches[patch_idx].CT_eval(bc[0], bc[1], 1. - bc[0] - bc[1]);
+    auto z = m_patches[patch_idx].CT_eval(bc[0], bc[1]);
     vertices.push_back(z);
   }
 
@@ -513,27 +507,47 @@ void CloughTocherSurface::
 
   file << "$EndElements\n";
 
-  // mark cones
-  // const auto &cone_indices = m_affine_manifold.generate_cones();
-
-  // file << "$NodeData\n";
-  // file << "1\n";                       // num string tags
-  // file << "\"Cone\"\n";                // string tag
-  // file << "1\n";                       // num real tags
-  // file << "0.0\n";                     // time step starts
-  // file << "3\n";                       // three integer tags
-  // file << "0\n";                       // time step
-  // file << "1\n";                       // num field
-  // file << cone_indices.size() << "\n"; // num associated nodal values
-  // for (const auto &idx : cone_indices) {
-  //   file << v_to_v_map[idx] + 1 << " 1.0\n";
-  // }
-  // file << "$EndNodeData\n";
-
   std::ofstream v_map_file(filename + "_input_v_to_output_v_map.txt");
   for (const auto &pair : m_affine_manifold.v_to_lagrange_node_map) {
     v_map_file << pair.first << " " << pair.second << std::endl;
   }
+}
+
+void CloughTocherSurface::
+    write_external_bd_interpolated_function_values_from_lagrange_nodes(
+        std::string filename,
+        std::vector<Eigen::Matrix<double, 12, 1>> &external_boundary_data) {
+  std::ofstream file(filename + ".txt");
+  std::ofstream file_uv(filename + "_uvs.txt");
+
+  const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
+  const auto &f_charts = m_affine_manifold.m_face_charts;
+  // evaluate function values
+  std::vector<double> values;
+  std::vector<Eigen::Vector2d> uv_positions;
+  for (size_t i = 0; i < lagrange_nodes.size(); ++i) {
+    const auto patch_idx = lagrange_nodes[i].first;
+    const auto bc = lagrange_nodes[i].second;
+    auto z = m_patches[patch_idx].external_boundary_data_eval(
+        bc[0], bc[1], external_boundary_data[patch_idx]);
+    values.push_back(z);
+
+    const auto &tri_coords = f_charts[patch_idx].face_uv_positions;
+    Eigen::Vector2d uv_pos = bc[0] * tri_coords[0] + bc[1] * tri_coords[1] +
+                             (1.0 - bc[0] - bc[1]) * tri_coords[2];
+    uv_positions.push_back(uv_pos);
+  }
+
+  for (const double &v : values) {
+    file << std::setprecision(16) << v << std::endl;
+  }
+
+  for (const auto &p : uv_positions) {
+    file_uv << p[0] << " " << p[1] << std::endl;
+  }
+
+  file.close();
+  file_uv.close();
 }
 
 void CloughTocherSurface::P_G2F(Eigen::SparseMatrix<double> &m) {
@@ -606,8 +620,10 @@ void CloughTocherSurface::P_G2E(Eigen::SparseMatrix<double> &m) {
     for (int j = 0; j < 12; ++j) {
       triplets.emplace_back(i * 24 + j,
                             f_charts[top_face_idx].lagrange_nodes[j], 1);
-      triplets.emplace_back(i * 24 + 12 + j,
-                            f_charts[bottom_face_idx].lagrange_nodes[j], 1);
+      if (bottom_face_idx > -1) {
+        triplets.emplace_back(i * 24 + 12 + j,
+                              f_charts[bottom_face_idx].lagrange_nodes[j], 1);
+      }
     }
   }
 
@@ -669,18 +685,31 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
 
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
+    if (e.is_boundary) {
+      // skip boundary edges
+      continue;
+    }
     // T vertices
     const int64_t v0 = e.left_global_uv_idx;
     const int64_t v1 = e.right_global_uv_idx;
     const int64_t v2 = e.top_global_uv_idx;
     // T' vertices
-    const int64_t v0_prime = e.reverse_right_global_uv_idx;
-    const int64_t v1_prime = e.reverse_left_global_uv_idx;
+    const int64_t v0_prime =
+        e.reverse_left_global_uv_idx; // reverse left == original right
+    const int64_t v1_prime =
+        e.reverse_right_global_uv_idx; // reverse right == original left
     const int64_t v2_prime = e.bottom_global_uv_idx;
+
+    // std::cout << "v0 v1 v2: " << v0 << "  " << v1 << "  " << v2 << std::endl;
+    // std::cout << "v0' v1' v2': " << v0_prime << "  " << v1_prime << "  "
+    //           << v2_prime << std::endl;
 
     // T and T'
     const auto &T = Fv.row(e.top_face_index);
     const auto &T_prime = Fv.row(e.bottom_face_index);
+
+    // std::cout << "T: " << T << std::endl;
+    // std::cout << "T': " << T_prime << std::endl;
 
     // u_ij
     const auto u_01 = uvs.row(v1) - uvs.row(v0);
@@ -688,11 +717,25 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     const auto u_12 = uvs.row(v2) - uvs.row(v1);
     const auto u_10 = uvs.row(v0) - uvs.row(v1);
 
+    // std::cout << "u_01: " << u_01[0] << " " << u_01[1] << std::endl;
+    // std::cout << "u_02: " << u_02[0] << " " << u_02[1] << std::endl;
+    // std::cout << "u_12: " << u_12[0] << " " << u_12[1] << std::endl;
+    // std::cout << "u_10: " << u_10[0] << " " << u_10[1] << std::endl;
+
     // u_ij_prime
     const auto u_01_prime = uvs.row(v1_prime) - uvs.row(v0_prime);
     const auto u_02_prime = uvs.row(v2_prime) - uvs.row(v0_prime);
     const auto u_12_prime = uvs.row(v2_prime) - uvs.row(v1_prime);
     const auto u_10_prime = uvs.row(v0_prime) - uvs.row(v1_prime);
+
+    // std::cout << "u_01': " << u_01_prime[0] << " " << u_01_prime[1]
+    //           << std::endl;
+    // std::cout << "u_02': " << u_02_prime[0] << " " << u_02_prime[1]
+    //           << std::endl;
+    // std::cout << "u_12': " << u_12_prime[0] << " " << u_12_prime[1]
+    //           << std::endl;
+    // std::cout << "u_10': " << u_10_prime[0] << " " << u_10_prime[1]
+    //           << std::endl;
 
     // D0 D1
     Eigen::Matrix<double, 2, 2> D0;
@@ -700,11 +743,17 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     Eigen::Matrix<double, 2, 2> D1;
     D1 << u_12[0], u_12[1], u_10[0], u_10[1];
 
+    // std::cout << "D0: " << std::endl << D0 << std::endl;
+    // std::cout << "D1: " << std::endl << D1 << std::endl;
+
     // D0_prime D1_prime
     Eigen::Matrix<double, 2, 2> D0_prime;
     D0_prime << u_01_prime[0], u_01_prime[1], u_02_prime[0], u_02_prime[1];
     Eigen::Matrix<double, 2, 2> D1_prime;
     D1_prime << u_12_prime[0], u_12_prime[1], u_10_prime[0], u_10_prime[1];
+
+    // std::cout << "D0: " << std::endl << D0 << std::endl;
+    // std::cout << "D1: " << std::endl << D1 << std::endl;
 
     // u_01_prep u_01_prep_prime
     Eigen::Vector2d u_01_prep(-u_01[1], u_01[0]);
@@ -715,10 +764,15 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     Eigen::Matrix<double, 1, 2> g1 = u_01_prep.transpose() * D1.inverse();
 
     // g0_prime g1_prime
+    // Eigen::Matrix<double, 1, 2> g0_prime =
+    //     u_01_prep_prime.transpose() * D0_prime.inverse();
+    // Eigen::Matrix<double, 1, 2> g1_prime =
+    //     u_01_prep_prime.transpose() * D1_prime.inverse();
+
     Eigen::Matrix<double, 1, 2> g0_prime =
-        u_01_prep_prime.transpose() * D0_prime.inverse();
+        u_01_prep.transpose() * D0_prime.inverse();
     Eigen::Matrix<double, 1, 2> g1_prime =
-        u_01_prep_prime.transpose() * D1_prime.inverse();
+        u_01_prep.transpose() * D1_prime.inverse();
 
     // C_dE(e)
     Eigen::Matrix<double, 2, 8> C_dE;
@@ -857,18 +911,31 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
 
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
+    if (e.is_boundary) {
+      // skip boundary edges
+      continue;
+    }
     // T vertices
     const int64_t v0 = e.left_global_uv_idx;
     const int64_t v1 = e.right_global_uv_idx;
     const int64_t v2 = e.top_global_uv_idx;
     // T' vertices
-    const int64_t v0_prime = e.reverse_right_global_uv_idx;
-    const int64_t v1_prime = e.reverse_left_global_uv_idx;
+    const int64_t v0_prime =
+        e.reverse_left_global_uv_idx; // reverse_left == original right
+    const int64_t v1_prime =
+        e.reverse_right_global_uv_idx; // reverse_right == original left
     const int64_t v2_prime = e.bottom_global_uv_idx;
+
+    std::cout << "v0 v1 v2: " << v0 << "  " << v1 << "  " << v2 << std::endl;
+    std::cout << "v0' v1' v2': " << v0_prime << "  " << v1_prime << "  "
+              << v2_prime << std::endl;
 
     // T and T'
     const auto &T = Fv.row(e.top_face_index);
     const auto &T_prime = Fv.row(e.bottom_face_index);
+
+    std::cout << "T: " << T << std::endl;
+    std::cout << "T': " << T_prime << std::endl;
 
     // u_ij
     const auto u_01 = uvs.row(v1) - uvs.row(v0);
@@ -894,23 +961,43 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     const auto m_01 = (u_02 + u_12) / 2.0;
     const auto m_01_prime = (u_02_prime + u_12_prime) / 2.0;
 
+    std::cout << "m_01: " << m_01[0] << " " << m_01[1] << std::endl;
+    std::cout << "m_01': " << m_01_prime[0] << " " << m_01_prime[1]
+              << std::endl;
+
     // u_01_prep u_01_prep_prime
     Eigen::Vector2d u_01_prep(-u_01[1], u_01[0]);
     Eigen::Vector2d u_01_prep_prime(-u_01_prime[1], u_01_prime[0]);
 
+    std::cout << "u_01_prep: " << u_01_prep[0] << " " << u_01_prep[1]
+              << std::endl;
+    std::cout << "u_01_prep_prime': " << u_01_prep_prime[0] << " "
+              << u_01_prep_prime[1] << std::endl;
+
     // g_M and g_M_prime
+    // Eigen::Matrix<double, 1, 5> g_M;
+    // g_M = (c_h - (m_01.dot(u_01.normalized())) * c_e).transpose() /
+    //       (m_01.dot(u_01_prep.normalized()));
+    // Eigen::Matrix<double, 1, 5> g_M_prime;
+    // g_M_prime =
+    //     (c_h - (m_01_prime.dot(u_01_prime.normalized())) * c_e).transpose() /
+    //     (m_01_prime.dot(u_01_prep_prime.normalized()));
+
     Eigen::Matrix<double, 1, 5> g_M;
     g_M = (c_h - (m_01.dot(u_01.normalized())) * c_e).transpose() /
           (m_01.dot(u_01_prep.normalized()));
     Eigen::Matrix<double, 1, 5> g_M_prime;
-    g_M_prime =
-        (c_h - (m_01_prime.dot(u_01_prime.normalized())) * c_e).transpose() /
-        (m_01_prime.dot(u_01_prep_prime.normalized()));
+    // g_M_prime =
+    //     (c_h - (m_01_prime.dot(u_01_prime.normalized())) * c_e).transpose() /
+    //     (m_01_prime.dot(u_01_prep_prime.normalized()));
+
+    g_M_prime = (c_h - (m_01_prime.dot(u_01.normalized())) * c_e).transpose() /
+                (m_01_prime.dot(u_01_prep.normalized()));
 
     // C_dM
     Eigen::Matrix<double, 1, 10> C_dM;
     C_dM.block<1, 5>(0, 0) = g_M;
-    C_dM.block<1, 5>(0, 5) = g_M_prime;
+    C_dM.block<1, 5>(0, 5) = -g_M_prime;
 
     // P_dM
     Eigen::Matrix<double, 10, 24> P_dM;
@@ -945,16 +1032,16 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     auto T_prime_P_dM_indices = P_dM_helper(lid_0_prime, lid_1_prime);
 
     // assemble P_dM respect to [qL_int  qL_int']
-    P_dM(0, T_P_dM_indices[0]) = 1;       // p0
-    P_dM(1, T_P_dM_indices[1]) = 1;       // p1
-    P_dM(2, T_P_dM_indices[2]) = 1;       // d01
-    P_dM(3, T_P_dM_indices[3]) = 1;       // d10
-    P_dM(4, T_P_dM_indices[4]) = 1;       // h01
-    P_dM(5, T_prime_P_dM_indices[0]) = 1; // p0'
-    P_dM(6, T_prime_P_dM_indices[1]) = 1; // p1'
-    P_dM(7, T_prime_P_dM_indices[2]) = 1; // d01'
-    P_dM(8, T_prime_P_dM_indices[3]) = 1; // d10'
-    P_dM(9, T_prime_P_dM_indices[4]) = 1; // h01'
+    P_dM(0, T_P_dM_indices[0]) = 1;            // p0
+    P_dM(1, T_P_dM_indices[1]) = 1;            // p1
+    P_dM(2, T_P_dM_indices[2]) = 1;            // d01
+    P_dM(3, T_P_dM_indices[3]) = 1;            // d10
+    P_dM(4, T_P_dM_indices[4]) = 1;            // h01
+    P_dM(5, T_prime_P_dM_indices[0] + 12) = 1; // p0'
+    P_dM(6, T_prime_P_dM_indices[1] + 12) = 1; // p1'
+    P_dM(7, T_prime_P_dM_indices[2] + 12) = 1; // d01'
+    P_dM(8, T_prime_P_dM_indices[3] + 12) = 1; // d10'
+    P_dM(9, T_prime_P_dM_indices[4] + 12) = 1; // h01'
 
     // C_M_L_e
     Eigen::Matrix<double, 1, 24> C_M_L_e = C_dM * P_dM * diag_L_L2d_ind;

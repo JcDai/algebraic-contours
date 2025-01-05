@@ -24,6 +24,8 @@ int main(int argc, char *argv[]) {
   CLI::App app{"Generate Clough-Tocher cubic surface mesh."};
   std::string input_filename = "";
   std::string output_dir = "./";
+  std::string output_name = "CT";
+  std::string boundary_data = "";
   spdlog::level::level_enum log_level = spdlog::level::off;
   Eigen::Matrix<double, 3, 1> color = SKY_BLUE;
   int num_subdivisions = DISCRETIZATION_LEVEL;
@@ -40,6 +42,10 @@ int main(int argc, char *argv[]) {
   app.add_option("-w,--weight", weight,
                  "Fitting weight for the quadratic surface approximation")
       ->check(CLI::PositiveNumber);
+  app.add_option("-o, --output", output_name, "Output file prefix");
+  app.add_option(
+      "--boundary-data", boundary_data,
+      "input boundary data. Only support 1 Function Value interpolant");
   CLI11_PARSE(app, argc, argv);
 
   // Set logger level
@@ -52,6 +58,23 @@ int main(int argc, char *argv[]) {
   Eigen::MatrixXd V, uv, N;
   Eigen::MatrixXi F, FT, FN;
   igl::readOBJ(input_filename, V, uv, N, F, FT, FN);
+
+  // get boundary data
+  bool have_external_boundary_data = false;
+  std::vector<Eigen::Matrix<double, 12, 1>> ext_boundary_data;
+  if (boundary_data != "") {
+    have_external_boundary_data = true;
+    std::ifstream boundary_data_file(boundary_data);
+    for (int64_t i = 0; i < F.rows(); ++i) {
+      Eigen::Matrix<double, 12, 1> bd;
+      for (int j = 0; j < 12; ++j) {
+        boundary_data_file >> bd(j, 0);
+      }
+      //   std::cout << bd << std::endl;
+      ext_boundary_data.push_back(bd);
+    }
+    boundary_data_file.close();
+  }
 
   // Generate quadratic spline
   spdlog::info("Computing spline surface");
@@ -72,15 +95,8 @@ int main(int argc, char *argv[]) {
   ct_surface.m_affine_manifold.generate_lagrange_nodes();
   ct_surface.m_affine_manifold.compute_edge_global_uv_mappings();
 
-  ct_surface.write_coeffs_to_obj("test_cubic_points.obj");
-
-  ct_surface.sample_to_obj("test_sample_cubic_points.obj", 25);
-
-  ct_surface.write_cubic_surface_to_msh_no_conn("test_cubic_sphere.msh");
-  //   ct_surface.write_cubic_surface_to_msh_with_conn("duck_with_conn");
-
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
-      "icosphere_from_lagrange_nodes");
+      output_name + "_from_lagrange_nodes");
 
   Eigen::SparseMatrix<double> c_f_int;
   ct_surface.C_F_int(c_f_int);
@@ -89,25 +105,24 @@ int main(int argc, char *argv[]) {
   Eigen::SparseMatrix<double> C_E_mid;
   ct_surface.C_E_mid(C_E_mid);
 
-  std::ofstream file("interior_constraint_matrix.txt");
+  std::ofstream file(output_name + "_interior_constraint_matrix.txt");
   file << std::setprecision(16) << c_f_int;
-  std::ofstream file_2("edge_endpoint_constraint_matrix.txt");
+  std::ofstream file_2(output_name + "_edge_endpoint_constraint_matrix.txt");
   file_2 << std::setprecision(16) << C_E_end;
-  std::ofstream file_3("edge_midpoint_constraint_matrix.txt");
+  std::ofstream file_3(output_name + "_edge_midpoint_constraint_matrix.txt");
   file_3 << std::setprecision(16) << C_E_mid;
 
   file.close();
   file_2.close();
   file_3.close();
 
-  //   std::ofstream file_4("interior_constraint_matrix_triplets.txt");
-  //   const auto trip1 = c_f_int.to_triplets();
-  //   std::ofstream file_5("edge_endpoint_constraint_matrix_triplets.txt");
-  //   std::ofstream file_6("edge_midpoint_constraint_matrix_triplets.txt");
-
-  //   file_4.close();
-  //   file_5.close();
-  //   file_6.close();
+  if (have_external_boundary_data) {
+    // TODO
+    ct_surface
+        .write_external_bd_interpolated_function_values_from_lagrange_nodes(
+            output_name + "_function_values_from_lagrange_nodes",
+            ext_boundary_data);
+  }
 
   return 0;
 }

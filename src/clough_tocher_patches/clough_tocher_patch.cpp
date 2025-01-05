@@ -70,41 +70,56 @@ int CloughTocherPatch::triangle_ind(const double &u, const double &v,
   return idx;
 }
 
-Eigen::Matrix<double, 1, 10>
+Eigen::Matrix<double, 10, 1>
 CloughTocherPatch::monomial_basis_eval(const double &u, const double &v,
                                        const double &w) const {
-  Eigen::Matrix<double, 1, 10> monomial_basis_values;
+  Eigen::Matrix<double, 10, 1> monomial_basis_values;
   monomial_basis_values(0, 0) = w * w * w; // w3
-  monomial_basis_values(0, 1) = v * w * w; // vw2
-  monomial_basis_values(0, 2) = v * v * w; // v2w
-  monomial_basis_values(0, 3) = v * v * v; // v3
-  monomial_basis_values(0, 4) = u * w * w; // uw2
-  monomial_basis_values(0, 5) = u * v * w; // uvw
-  monomial_basis_values(0, 6) = u * v * v; // uv2
-  monomial_basis_values(0, 7) = u * u * w; // u2w
-  monomial_basis_values(0, 8) = u * u * v; // u2v
-  monomial_basis_values(0, 9) = u * u * u; // u3
+  monomial_basis_values(1, 0) = v * w * w; // vw2
+  monomial_basis_values(2, 0) = v * v * w; // v2w
+  monomial_basis_values(3, 0) = v * v * v; // v3
+  monomial_basis_values(4, 0) = u * w * w; // uw2
+  monomial_basis_values(5, 0) = u * v * w; // uvw
+  monomial_basis_values(6, 0) = u * v * v; // uv2
+  monomial_basis_values(7, 0) = u * u * w; // u2w
+  monomial_basis_values(8, 0) = u * u * v; // u2v
+  monomial_basis_values(9, 0) = u * u * u; // u3
 
   return monomial_basis_values;
 }
 
-Eigen::Matrix<double, 1, 3> CloughTocherPatch::CT_eval(const double &u,
-                                                       const double &v,
-                                                       const double &w) const {
+Eigen::Matrix<double, 3, 1> CloughTocherPatch::CT_eval(const double &u,
+                                                       const double &v) const {
+  const double w = 1.0 - u - v;
   int idx = CloughTocherPatch::triangle_ind(u, v, w);
 
   // std::cout << "subtri_idx: " << idx << std::endl;
-  Eigen::Matrix<double, 1, 10> bb_vector =
+  Eigen::Matrix<double, 10, 1> bb_vector =
       CloughTocherPatch::monomial_basis_eval(u, v, w);
 
   // std::cout << "monomial: " << bb_vector << std::endl;
 
-  Eigen::Matrix<double, 1, 3> val;
-  val = bb_vector * m_CT_coeffs[idx];
+  Eigen::Matrix<double, 3, 1> val;
+  val = m_CT_coeffs[idx].transpose() * bb_vector;
   return val;
 }
 
 std::array<Eigen::Matrix<double, 10, 3>, 3>
 CloughTocherPatch::get_coeffs() const {
   return m_CT_coeffs;
+}
+
+double CloughTocherPatch::external_boundary_data_eval(
+    const double &u, const double &v,
+    Eigen::Matrix<double, 12, 1> &external_boundary_data) const {
+  const double w = 1.0 - u - v;
+  int idx = CloughTocherPatch::triangle_ind(u, v, w);
+
+  Eigen::Matrix<double, 10, 1> bb_vector =
+      CloughTocherPatch::monomial_basis_eval(u, v, w);
+
+  double value =
+      (m_CT_matrices[idx] * external_boundary_data).transpose() * bb_vector;
+
+  return value;
 }

@@ -19,8 +19,7 @@ public:
                           &energy_hessian_inverse);
 
   Eigen::Matrix<double, 1, 3> evaluate_patch(const PatchIndex &patch_index,
-                                             const double &u, const double &v,
-                                             const double &w);
+                                             const double &u, const double &v);
 
   void write_cubic_surface_to_msh_no_conn(std::string filename);
   void write_coeffs_to_obj(std::string filename);
@@ -29,6 +28,9 @@ public:
   void write_cubic_surface_to_msh_with_conn(std::string filename);
   void write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
       std::string filename);
+  void write_external_bd_interpolated_function_values_from_lagrange_nodes(
+      std::string filename,
+      std::vector<Eigen::Matrix<double, 12, 1>> &external_boundary_data);
 
 public:
   void generate_face_normals(const Eigen::MatrixXd &V,

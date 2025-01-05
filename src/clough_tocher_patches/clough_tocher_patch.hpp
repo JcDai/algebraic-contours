@@ -22,13 +22,17 @@ public:
 
   int triangle_ind(const double &u, const double &v, const double &w) const;
 
-  Eigen::Matrix<double, 1, 10>
+  Eigen::Matrix<double, 10, 1>
   monomial_basis_eval(const double &u, const double &v, const double &w) const;
 
-  Eigen::Matrix<double, 1, 3> CT_eval(const double &u, const double &v,
-                                      const double &w) const;
+  Eigen::Matrix<double, 3, 1> CT_eval(const double &u, const double &v) const;
 
   std::array<Eigen::Matrix<double, 10, 3>, 3> get_coeffs() const;
+
+  // test usage
+  double external_boundary_data_eval(
+      const double &u, const double &v,
+      Eigen::Matrix<double, 12, 1> &external_boundary_data) const;
 
 public:
   //   std::array<Eigen::Matrix<double, 12, 1>, 3> m_boundary_data;
