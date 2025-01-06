@@ -343,9 +343,9 @@ def generate_L2L(polys_C1, node_bary, node_subtri, all_inknowns):
 
 def generate_ce(subtri_polys):
     "Creates a vector of coefficients which, when applied to the vector [p0,p1,G01,G10,N01] yields the derivative along the edge at the midpoint."
-    midpt_dfde = subtri_polys[0].as_expr().subs({w:0,v:1-u}).expand().collect(u).diff(u).subs({u:Rational(1,2)})
+    midpt_dfde = subtri_polys[0].as_expr().subs({w:0,u:1-v}).expand().collect(v).diff(v).subs({v:Rational(1,2)})
     edge_endpt_vars = [p0,p1,G01,G10, N01]
-    c_e = [midpt_dfde.coeff(v) for v in edge_endpt_vars]
+    c_e = [midpt_dfde.coeff(q) for q in edge_endpt_vars]
     return c_e
 
 # ******** Testing *********
