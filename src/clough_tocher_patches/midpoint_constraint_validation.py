@@ -14,7 +14,7 @@ def compute_gm(T):
     mpt = (T[0]+T[1])/2 
     m   =  T[2]-mpt
     u01_n = u01/np.linalg.norm(u01); u10_n = u10/np.linalg.norm(u10); 
-    gm =  (ch - np.dot(m, u01_n)*c_e)/np.dot(m, perp(u01_n));
+    gm =  (ch - np.dot(m, u01_n)*c_e/np.linalg.norm(u01))/np.dot(m, perp(u01_n));
     return gm;
 
 def compute_r(T,ff,gradf):
@@ -28,8 +28,8 @@ npa = np.array
 c_e = generate_ce(polys_C1_f)
 c_e = npa(c_e) 
 ch = npa([0,0,0,0,1])
-T =  list( map(npa, [ [0,0],[1,0],[0,1]]))
-Tp = list( map(npa, [ [1,0],[0,0],[0,-1]]))
+T =  list( map(npa, [ [0,0],[2,0],[0,1]]))
+Tp = list( map(npa, [ [2,0],[0,0],[0,-1]]))
 
 a300, a030, a210, a120, a201, a021, a003, a111, a102, a012 = \
         symbols('a300 a030 a210 a120 a201 a021 a003 a111 a102 a012')
