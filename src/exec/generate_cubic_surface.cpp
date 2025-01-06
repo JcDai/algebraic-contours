@@ -100,17 +100,17 @@ int main(int argc, char *argv[]) {
 
   Eigen::SparseMatrix<double> c_f_int;
   ct_surface.C_F_int(c_f_int);
-  Eigen::SparseMatrix<double> C_E_end;
-  ct_surface.C_E_end(C_E_end);
-  Eigen::SparseMatrix<double> C_E_mid;
-  ct_surface.C_E_mid(C_E_mid);
+  Eigen::SparseMatrix<double> C_e_end;
+  ct_surface.C_E_end(C_e_end);
+  Eigen::SparseMatrix<double> C_e_mid;
+  ct_surface.C_E_mid(C_e_mid);
 
   std::ofstream file(output_name + "_interior_constraint_matrix.txt");
   file << std::setprecision(16) << c_f_int;
   std::ofstream file_2(output_name + "_edge_endpoint_constraint_matrix.txt");
-  file_2 << std::setprecision(16) << C_E_end;
+  file_2 << std::setprecision(16) << C_e_end;
   std::ofstream file_3(output_name + "_edge_midpoint_constraint_matrix.txt");
-  file_3 << std::setprecision(16) << C_E_mid;
+  file_3 << std::setprecision(16) << C_e_mid;
 
   file.close();
   file_2.close();

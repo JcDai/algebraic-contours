@@ -615,16 +615,24 @@ void CloughTocherSurface::P_G2E(Eigen::SparseMatrix<double> &m) {
 
   std::vector<Eigen::Triplet<double>> triplets;
   for (size_t i = 0; i < e_charts.size(); ++i) {
+    // std::cout << "edge " << e_charts[i].left_vertex_index << " "
+    //           << e_charts[i].right_vertex_index << ": " << std::endl;
     const auto &top_face_idx = e_charts[i].top_face_index;
     const auto &bottom_face_idx = e_charts[i].bottom_face_index;
     for (int j = 0; j < 12; ++j) {
       triplets.emplace_back(i * 24 + j,
                             f_charts[top_face_idx].lagrange_nodes[j], 1);
-      if (bottom_face_idx > -1) {
+      // std::cout << f_charts[top_face_idx].lagrange_nodes[j] << " ";
+    }
+    // std::cout << " / ";
+    if (bottom_face_idx > -1) {
+      for (int j = 0; j < 12; ++j) {
         triplets.emplace_back(i * 24 + 12 + j,
                               f_charts[bottom_face_idx].lagrange_nodes[j], 1);
+        // std::cout << f_charts[bottom_face_idx].lagrange_nodes[j] << " ";
       }
     }
+    // std::cout << std::endl;
   }
 
   m.setFromTriplets(triplets.begin(), triplets.end());
@@ -633,7 +641,11 @@ void CloughTocherSurface::P_G2E(Eigen::SparseMatrix<double> &m) {
 std::array<int, 4> P_dE_helper(int a, int b) {
   int hash = a * 10 + b;
 
+  // get
+  // d01 d02 d10 d12
+  // from
   // p0 p1 p2 d01 d10 d12 d21 d20 d02 h01 h12 h20
+  // 0  1  2  3   4   5   6   7   8   9   10  11
 
   switch (hash) {
   case 1:
@@ -687,8 +699,16 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     const auto &e = e_charts[eid];
     if (e.is_boundary) {
       // skip boundary edges
+      // std::cout << "edge " << e.left_vertex_index << " " <<
+      // e.right_vertex_index
+      //           << " skipped." << std::endl;
       continue;
     }
+
+    // std::cout << "edge " << e.left_vertex_index << " " <<
+    // e.right_vertex_index
+    //           << std::endl;
+
     // T vertices
     const int64_t v0 = e.left_global_uv_idx;
     const int64_t v1 = e.right_global_uv_idx;
@@ -738,19 +758,29 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     //           << std::endl;
 
     // D0 D1
+    // Eigen::Matrix<double, 2, 2> D0;
+    // D0 << u_01[0], u_01[1], u_02[0], u_02[1];
+    // Eigen::Matrix<double, 2, 2> D1;
+    // D1 << u_12[0], u_12[1], u_10[0], u_10[1];
+
     Eigen::Matrix<double, 2, 2> D0;
     D0 << u_01[0], u_01[1], u_02[0], u_02[1];
     Eigen::Matrix<double, 2, 2> D1;
-    D1 << u_12[0], u_12[1], u_10[0], u_10[1];
+    D1 << u_10[0], u_10[1], u_12[0], u_12[1];
 
     // std::cout << "D0: " << std::endl << D0 << std::endl;
     // std::cout << "D1: " << std::endl << D1 << std::endl;
 
     // D0_prime D1_prime
+    // Eigen::Matrix<double, 2, 2> D0_prime;
+    // D0_prime << u_01_prime[0], u_01_prime[1], u_02_prime[0], u_02_prime[1];
+    // Eigen::Matrix<double, 2, 2> D1_prime;
+    // D1_prime << u_12_prime[0], u_12_prime[1], u_10_prime[0], u_10_prime[1];
+
     Eigen::Matrix<double, 2, 2> D0_prime;
     D0_prime << u_01_prime[0], u_01_prime[1], u_02_prime[0], u_02_prime[1];
     Eigen::Matrix<double, 2, 2> D1_prime;
-    D1_prime << u_12_prime[0], u_12_prime[1], u_10_prime[0], u_10_prime[1];
+    D1_prime << u_10_prime[0], u_10_prime[1], u_12_prime[0], u_12_prime[1];
 
     // std::cout << "D0: " << std::endl << D0 << std::endl;
     // std::cout << "D1: " << std::endl << D1 << std::endl;
@@ -776,9 +806,18 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
 
     // C_dE(e)
     Eigen::Matrix<double, 2, 8> C_dE;
-    C_dE << g0(0, 0), g0(0, 1), -g0_prime(0, 0), -g0_prime(0, 1), 0, 0, 0,
-        0,                                                                // v0
-        0, 0, 0, 0, g1(0, 0), g1(0, 1), -g1_prime(0, 0), -g1_prime(0, 1); // v1
+    C_dE.row(0) << g0(0, 0), g0(0, 1), -g1_prime(0, 0), -g1_prime(0, 1), 0, 0,
+        0,
+        0; // v0
+    C_dE.row(1) << 0, 0, 0, 0, g1(0, 0), g1(0, 1), -g0_prime(0, 0),
+        -g0_prime(0, 1); // v1
+
+    // C_dE.row(0) << g0(0, 0), g0(0, 1), -g0_prime(0, 0), -g0_prime(0, 1), 0,
+    // 0,
+    //     0,
+    //     0; // v0
+    // C_dE.row(1) << 0, 0, 0, 0, g1(0, 0), g1(0, 1), -g1_prime(0, 0),
+    //     -g1_prime(0, 1); // v1
 
     // check cones and modify C_dE(e)
     if (v_charts[e.left_vertex_index].is_cone) {
@@ -806,6 +845,9 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     }
     assert(lid_0 > -1 && lid_1 > -1);
 
+    // std::cout << "T local id for v0 v1: " << lid_0 << " " << lid_1 <<
+    // std::endl;
+
     // v0_prime v1_prime local id in T'
     int64_t lid_0_prime, lid_1_prime = -1;
     for (int i = 0; i < 3; ++i) {
@@ -817,6 +859,10 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
       }
     }
     assert(lid_0_prime > -1 && lid_1_prime > -1);
+
+    // std::cout << "T' local id for v0 v1: " << lid_0_prime << " " <<
+    // lid_1_prime
+    //           << std::endl;
 
     // T and T' reindex
     auto T_P_dE_indices = P_dE_helper(lid_0, lid_1);
@@ -852,7 +898,9 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
 std::array<int, 5> P_dM_helper(int a, int b) {
   int hash = a * 10 + b;
 
+  // p0 p1 p01 p10 h01
   // p0 p1 p2 d01 d10 d12 d21 d20 d02 h01 h12 h20
+  // 0  1  2  3   4   5   6   7   8   9   10  11
 
   switch (hash) {
   case 1:
@@ -904,7 +952,7 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
   Eigen::Matrix<double, 5, 1> c_h;
   c_h << 0, 0, 0, 0, 1;
 
-  Eigen::Matrix<double, 5, 1> c_e = c_e_m();
+  const Eigen::Matrix<double, 5, 1> c_e = c_e_m();
 
   Eigen::SparseMatrix<double> C_M_L;
   C_M_L.resize(E_cnt, 24 * E_cnt);
@@ -913,8 +961,13 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     const auto &e = e_charts[eid];
     if (e.is_boundary) {
       // skip boundary edges
+      std::cout << "edge " << e.left_vertex_index << " " << e.right_vertex_index
+                << " skipped." << std::endl;
       continue;
     }
+    std::cout << "------------------------" << std::endl;
+    std::cout << "edge " << e.left_vertex_index << " " << e.right_vertex_index
+              << std::endl;
     // T vertices
     const int64_t v0 = e.left_global_uv_idx;
     const int64_t v1 = e.right_global_uv_idx;
@@ -943,9 +996,9 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     const auto u_12 = uvs.row(v2) - uvs.row(v1);
     // const auto u_10 = uvs.row(v0) - uvs.row(v1);
 
-    // std::cout << u_01 << std::endl;
-    // std::cout << u_02 << std::endl;
-    // std::cout << u_12 << std::endl;
+    std::cout << "u_01: " << u_01 << std::endl;
+    std::cout << "u_02: " << u_02 << std::endl;
+    std::cout << "u_12: " << u_12 << std::endl;
 
     // u_ij_prime
     const auto u_01_prime = uvs.row(v1_prime) - uvs.row(v0_prime);
@@ -953,9 +1006,9 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     const auto u_12_prime = uvs.row(v2_prime) - uvs.row(v1_prime);
     // const auto u_10_prime = uvs.row(v0_prime) - uvs.row(v1_prime);
 
-    // std::cout << u_01_prime << std::endl;
-    // std::cout << u_02_prime << std::endl;
-    // std::cout << u_12_prime << std::endl;
+    std::cout << "u_01_prime: " << u_01_prime << std::endl;
+    std::cout << "u_02_prime: " << u_02_prime << std::endl;
+    std::cout << "u_12_prime: " << u_12_prime << std::endl;
 
     // m01 and m01_prime
     const auto m_01 = (u_02 + u_12) / 2.0;
@@ -975,29 +1028,34 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
               << u_01_prep_prime[1] << std::endl;
 
     // g_M and g_M_prime
-    // Eigen::Matrix<double, 1, 5> g_M;
-    // g_M = (c_h - (m_01.dot(u_01.normalized())) * c_e).transpose() /
-    //       (m_01.dot(u_01_prep.normalized()));
-    // Eigen::Matrix<double, 1, 5> g_M_prime;
-    // g_M_prime =
-    //     (c_h - (m_01_prime.dot(u_01_prime.normalized())) * c_e).transpose() /
-    //     (m_01_prime.dot(u_01_prep_prime.normalized()));
-
     Eigen::Matrix<double, 1, 5> g_M;
-    g_M = (c_h - (m_01.dot(u_01.normalized())) * c_e).transpose() /
-          (m_01.dot(u_01_prep.normalized()));
+    g_M =
+        (c_h - (m_01.dot(u_01.normalized()) / u_01.norm()) * c_e).transpose() /
+        (m_01.dot(u_01_prep.normalized()));
     Eigen::Matrix<double, 1, 5> g_M_prime;
-    // g_M_prime =
-    //     (c_h - (m_01_prime.dot(u_01_prime.normalized())) * c_e).transpose() /
-    //     (m_01_prime.dot(u_01_prep_prime.normalized()));
+    g_M_prime =
+        (c_h -
+         (m_01_prime.dot(u_01_prime.normalized()) / u_01_prime.norm()) * c_e)
+            .transpose() /
+        (m_01_prime.dot(u_01_prep_prime.normalized()));
 
-    g_M_prime = (c_h - (m_01_prime.dot(u_01.normalized())) * c_e).transpose() /
-                (m_01_prime.dot(u_01_prep.normalized()));
+    std::cout << "m_01.dot(u_01.normalized()) / u_01.norm(): "
+              << m_01.dot(u_01.normalized()) / u_01.norm() << std::endl;
+
+    std::cout << "m_01_prime.dot(u_01_prime.normalized()) / u_01_prime.norm(): "
+              << m_01_prime.dot(u_01_prime.normalized()) / u_01_prime.norm()
+              << std::endl;
+
+    std::cout << "g_M: " << g_M << std::endl;
+    std::cout << "g_M_prime: " << g_M_prime << std::endl;
 
     // C_dM
     Eigen::Matrix<double, 1, 10> C_dM;
     C_dM.block<1, 5>(0, 0) = g_M;
-    C_dM.block<1, 5>(0, 5) = -g_M_prime;
+    C_dM.block<1, 5>(0, 5) = g_M_prime;
+
+    std::cout << "C_dM:" << std::endl;
+    std::cout << C_dM << std::endl;
 
     // P_dM
     Eigen::Matrix<double, 10, 24> P_dM;
@@ -1015,6 +1073,8 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     }
     assert(lid_0 > -1 && lid_1 > -1);
 
+    std::cout << "T local id for v0 v1: " << lid_0 << " " << lid_1 << std::endl;
+
     // v0_prime v1_prime local id in T'
     int64_t lid_0_prime, lid_1_prime = -1;
     for (int i = 0; i < 3; ++i) {
@@ -1027,9 +1087,24 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     }
     assert(lid_0_prime > -1 && lid_1_prime > -1);
 
+    std::cout << "T' local id for v0' v1': " << lid_0_prime << " "
+              << lid_1_prime << std::endl;
+
     // T and T' reindex
     auto T_P_dM_indices = P_dM_helper(lid_0, lid_1);
     auto T_prime_P_dM_indices = P_dM_helper(lid_0_prime, lid_1_prime);
+
+    std::cout << "T P_dM indices: ";
+    for (const auto &i : T_P_dM_indices) {
+      std::cout << i << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "T' P_dM indices: ";
+    for (const auto &i : T_prime_P_dM_indices) {
+      std::cout << i << " ";
+    }
+    std::cout << std::endl;
 
     // assemble P_dM respect to [qL_int  qL_int']
     P_dM(0, T_P_dM_indices[0]) = 1;            // p0
@@ -1043,8 +1118,11 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     P_dM(8, T_prime_P_dM_indices[3] + 12) = 1; // d10'
     P_dM(9, T_prime_P_dM_indices[4] + 12) = 1; // h01'
 
+    std::cout << P_dM << std::endl;
+
     // C_M_L_e
     Eigen::Matrix<double, 1, 24> C_M_L_e = C_dM * P_dM * diag_L_L2d_ind;
+    // std::cout << C_M_L_e << std::endl;
 
     // set C_M_L
     for (int i = 0; i < 24; ++i) {
@@ -1054,6 +1132,7 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
 
   Eigen::SparseMatrix<double> p_g2e;
   P_G2E(p_g2e);
+  // std::cout << p_g2e << std::endl;
 
   m = C_M_L * p_g2e;
 }
