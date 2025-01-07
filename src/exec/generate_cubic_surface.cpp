@@ -100,8 +100,8 @@ int main(int argc, char *argv[]) {
 
   Eigen::SparseMatrix<double> c_f_int;
   ct_surface.C_F_int(c_f_int);
-  Eigen::SparseMatrix<double> C_e_end;
-  ct_surface.C_E_end(C_e_end);
+  Eigen::SparseMatrix<double> C_e_end, C_e_end_elim;
+  ct_surface.C_E_end(C_e_end, C_e_end_elim);
   Eigen::SparseMatrix<double> C_e_mid;
   ct_surface.C_E_mid(C_e_mid);
 
@@ -112,9 +112,14 @@ int main(int argc, char *argv[]) {
   std::ofstream file_3(output_name + "_edge_midpoint_constraint_matrix.txt");
   file_3 << std::setprecision(16) << C_e_mid;
 
+  std::ofstream file_4(output_name +
+                       "_edge_endpoint_constraint_matrix_eliminated.txt");
+  file_4 << std::setprecision(16) << C_e_end_elim;
+
   file.close();
   file_2.close();
   file_3.close();
+  file_4.close();
 
   if (have_external_boundary_data) {
     // TODO

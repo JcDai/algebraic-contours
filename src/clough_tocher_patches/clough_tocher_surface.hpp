@@ -54,7 +54,8 @@ public:
 
   // edge endpoint constraints
   void P_G2E(Eigen::SparseMatrix<double> &m);
-  void C_E_end(Eigen::SparseMatrix<double> &m);
+  void C_E_end(Eigen::SparseMatrix<double> &m,
+               Eigen::SparseMatrix<double> &m_elim);
 
   // edge midpoint constraints
   void C_E_mid(Eigen::SparseMatrix<double> &m);

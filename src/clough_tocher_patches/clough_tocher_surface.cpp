@@ -673,7 +673,8 @@ std::array<int, 4> P_dE_helper(int a, int b) {
   return {{-1, -1, -1, -1}};
 }
 
-void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
+void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
+                                  Eigen::SparseMatrix<double> &m_elim) {
   const auto N_L = m_affine_manifold.m_lagrange_nodes.size();
   const auto E_cnt = m_affine_manifold.m_edge_charts.size();
 
@@ -695,19 +696,32 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
   Eigen::SparseMatrix<double> C_E_L;
   C_E_L.resize(2 * E_cnt, 24 * E_cnt);
 
+  std::vector<int> visited(v_charts.size(), 0);
+  std::vector<int> skip(2 * E_cnt, 0);
+  int64_t skip_cnt = 0;
+
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
     if (e.is_boundary) {
       // skip boundary edges
-      // std::cout << "edge " << e.left_vertex_index << " " <<
-      // e.right_vertex_index
-      //           << " skipped." << std::endl;
       continue;
     }
 
-    // std::cout << "edge " << e.left_vertex_index << " " <<
-    // e.right_vertex_index
-    //           << std::endl;
+    if (visited[e.left_vertex_index] == 0 &&
+        !v_charts[e.left_vertex_index].is_cone) {
+      // if first time access this vertex and is not cone
+      visited[e.left_vertex_index] = 1;
+      skip[2 * eid + 0] = 1;
+      skip_cnt++;
+    }
+
+    if (visited[e.right_vertex_index] == 0 &&
+        !v_charts[e.right_vertex_index].is_cone) {
+      // if first time access this vertex and is not cone
+      visited[e.right_vertex_index] = 1;
+      skip[2 * eid + 1] = 1;
+      skip_cnt++;
+    }
 
     // T vertices
     const int64_t v0 = e.left_global_uv_idx;
@@ -893,6 +907,39 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
   P_G2E(p_g2e);
 
   m = C_E_L * p_g2e;
+
+  // compute C_E_L_elim
+  Eigen::SparseMatrix<double> C_E_L_elim;
+  C_E_L_elim.resize(2 * E_cnt - skip_cnt, 24 * E_cnt);
+
+  std::vector<int> cones;
+  m_affine_manifold.compute_cones(cones);
+  assert(skip_cnt == int64_t(v_charts.size() - cones.size()));
+  std::cout << "skip cnt: " << skip_cnt
+            << " v_cnt - cone_cnt: " << v_charts.size() - cones.size()
+            << std::endl;
+
+  int64_t row_id = 0;
+  std::vector<int64_t> C_to_C_elim_idx_map(2 * E_cnt, -1);
+  for (size_t i = 0; i < skip.size(); ++i) {
+    if (skip[i] == 1) {
+      continue;
+    } else {
+      C_to_C_elim_idx_map[i] = row_id;
+      row_id++;
+    }
+  }
+  for (int64_t k = 0; k < C_E_L.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(C_E_L, k); it; ++it) {
+      if (C_to_C_elim_idx_map[it.row()] != -1) {
+        C_E_L_elim.insert(C_to_C_elim_idx_map[it.row()], it.col()) = it.value();
+      }
+    }
+  }
+
+  // get m_elim
+  m_elim.resize(2 * E_cnt - skip_cnt, N_L);
+  m_elim = C_E_L_elim * p_g2e;
 }
 
 std::array<int, 5> P_dM_helper(int a, int b) {
