@@ -342,11 +342,48 @@ def generate_L2L(polys_C1, node_bary, node_subtri, all_inknowns):
 # a vector of coefficients c_e
 
 def generate_ce(subtri_polys):
-    "Creates a vector of coefficients which, when applied to the vector [p0,p1,G01,G10,N01] yields the derivative along the edge at the midpoint."
+    "Generates a vector of coefficients which, when applied to the vector [p0,p1,G01,G10,N01] yields the derivative along the edge at the midpoint."
     midpt_dfde = subtri_polys[0].as_expr().subs({w:0,u:1-v}).expand().collect(v).diff(v).subs({v:Rational(1,2)})
     edge_endpt_vars = [p0,p1,G01,G10, N01]
     c_e = [midpt_dfde.coeff(q) for q in edge_endpt_vars]
     return c_e
+
+# !!!! untested 
+def generate_ct(subtri_polys): 
+    """
+    Generates a set of 6 vectors of coefficients ct[j][m], j=0,2, m=0..2 for tangent plane continuity constraints at cones, assuming the cone is at vertex 0 and G01 = G02 =0.  ct[1][m] are all zeros and should not be used.  ct[j][m] dot q^alpha_e (the vector of 12 dofs for a triangle in the order as in all_unknowns, and alpha is x,y, or z) yields one of the components of the m-th basis vector of tangent vectors to the surface on subtriangle j at vertex 0 (shared by subtriangles 0 and 2, which is why c[1][m] are undefined).
+    """
+    global all_unknowns
+    t,k = symbols('t k')
+    poly_0_tk = Poly( subtri_polys[0].subs({G01:0,G02:0}),[u,v,w])(1-t, (1-k)*t, 1-(1-t)-(1-k)*t)
+    Q_00  = Poly( sp.simplify( sp.factor( poly_0_tk - poly_0_tk.subs({t:0}) )/t**2).subs({t:0}),k)
+    poly_2_tk = Poly( subtri_polys[2].subs({G01:0,G02:0}),[u,v,w])(1-t, k*t, 1-(1-t)-k*t)
+    Q_02  = Poly( sp.simplify( sp.factor( poly_2_tk - poly_2_tk.subs({t:0}) )/t**2).subs({t:0}),k)
+
+    Q_00_coeffs = [ Q_00.coeff_monomial(1), Q_00.coeff_monomial(k), Q_00.coeff_monomial(k**2)]
+    Q_02_coeffs = [ Q_02.coeff_monomial(1), Q_02.coeff_monomial(k), Q_02.coeff_monomial(k**2)]
+    ct = [list( map( lambda x: [x.coeff(v) for v in all_unknowns], Q_00_coeffs)),[[0]*12]*3,
+          list( map( lambda x: [x.coeff(v) for v in all_unknowns], Q_02_coeffs))]
+    return ct
+
+def check_ct_consistency(ct,subtri_polys):
+    t,k = symbols('t k')
+    passed = True
+    for j in [0,2]:
+        tang_poly = sum( 
+             [ct[j][0][i]*all_unknowns[i] for i in range(12)])+\
+        sum( [ct[j][1][i]*all_unknowns[i] for i in range(12)])*k+\
+        sum( [ct[j][2][i]*all_unknowns[i] for i in range(12)])*k**2
+        if j == 0: 
+            s = 1-k
+        else:
+            s = k
+        passed = passed and not sp.simplify( 
+            sp.collect(
+                (sp.factor(sp.diff( collect(subtri_polys[j].subs({G01:0, G02:0, u:1-t, 
+                    v:s*t, w:1-(1-t)-s*t}),t), t))/t).subs({t:0}),k)/2-tang_poly)
+    print( "Consistency of cone tangent computation " + "passed" if passed else "not passed")
+    
 
 # ******** Testing *********
 
