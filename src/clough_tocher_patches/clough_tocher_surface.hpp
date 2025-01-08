@@ -32,6 +32,9 @@ public:
       std::string filename,
       std::vector<Eigen::Matrix<double, 12, 1>> &external_boundary_data);
 
+  // for bilaplacian
+  void write_connected_lagrange_nodes(std::string filename, Eigen::MatrixXd &V);
+
 public:
   void generate_face_normals(const Eigen::MatrixXd &V,
                              const AffineManifold &affine_manifold,

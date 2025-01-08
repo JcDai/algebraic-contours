@@ -90,6 +90,13 @@ int main(int argc, char *argv[]) {
                                  fit_matrix, energy_hessian,
                                  energy_hessian_inverse);
 
+  std::cout << "#F: " << ct_surface.m_affine_manifold.m_face_charts.size()
+            << std::endl;
+  std::cout << "#E: " << ct_surface.m_affine_manifold.m_edge_charts.size()
+            << std::endl;
+  std::cout << "#V: " << ct_surface.m_affine_manifold.m_vertex_charts.size()
+            << std::endl;
+
   // important !!! call the following two before compute constraints, but only
   // once!!!
   ct_surface.m_affine_manifold.generate_lagrange_nodes();
@@ -97,6 +104,9 @@ int main(int argc, char *argv[]) {
 
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
       output_name + "_from_lagrange_nodes");
+
+  ct_surface.write_connected_lagrange_nodes(output_name + "_bilaplacian_nodes",
+                                            V);
 
   Eigen::SparseMatrix<double> c_f_int;
   ct_surface.C_F_int(c_f_int);

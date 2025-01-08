@@ -513,6 +513,80 @@ void CloughTocherSurface::
   }
 }
 
+Eigen::Vector3d bc_to_cart(const Eigen::Vector3i &f, const Eigen::MatrixXd &V,
+                           const PlanarPoint &bc) {
+  const double &u = bc[0];
+  const double &v = bc[1];
+  const double w = 1.0 - u - v;
+
+  return u * V.row(f[0]) + v * V.row(f[1]) + w * V.row(f[2]);
+}
+
+void CloughTocherSurface::write_connected_lagrange_nodes(std::string filename,
+                                                         Eigen::MatrixXd &V) {
+  const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
+  const auto &F = m_affine_manifold.get_faces();
+  // evaluate vertices
+  std::vector<Eigen::Vector3d> vertices;
+  for (size_t i = 0; i < lagrange_nodes.size(); ++i) {
+    const auto &patch_idx = lagrange_nodes[i].first;
+    const auto &bc = lagrange_nodes[i].second;
+
+    const Eigen::Vector3i &f = F.row(patch_idx);
+    vertices.push_back(bc_to_cart(f, V, bc));
+  }
+
+  // create faces
+  std::vector<Eigen::Vector3i> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    // 01c
+    faces.emplace_back(l_nodes[0], l_nodes[3], l_nodes[12]);
+    faces.emplace_back(l_nodes[12], l_nodes[3], l_nodes[9]);
+    faces.emplace_back(l_nodes[3], l_nodes[4], l_nodes[9]);
+    faces.emplace_back(l_nodes[9], l_nodes[4], l_nodes[14]);
+    faces.emplace_back(l_nodes[4], l_nodes[1], l_nodes[14]);
+    faces.emplace_back(l_nodes[12], l_nodes[9], l_nodes[13]);
+    faces.emplace_back(l_nodes[13], l_nodes[9], l_nodes[15]);
+    faces.emplace_back(l_nodes[9], l_nodes[14], l_nodes[15]);
+    faces.emplace_back(l_nodes[13], l_nodes[15], l_nodes[18]);
+
+    // 12c
+    faces.emplace_back(l_nodes[1], l_nodes[5], l_nodes[14]);
+    faces.emplace_back(l_nodes[14], l_nodes[5], l_nodes[10]);
+    faces.emplace_back(l_nodes[5], l_nodes[6], l_nodes[10]);
+    faces.emplace_back(l_nodes[10], l_nodes[6], l_nodes[16]);
+    faces.emplace_back(l_nodes[6], l_nodes[2], l_nodes[16]);
+    faces.emplace_back(l_nodes[14], l_nodes[10], l_nodes[15]);
+    faces.emplace_back(l_nodes[15], l_nodes[10], l_nodes[17]);
+    faces.emplace_back(l_nodes[10], l_nodes[16], l_nodes[17]);
+    faces.emplace_back(l_nodes[15], l_nodes[17], l_nodes[18]);
+
+    // 20c
+    faces.emplace_back(l_nodes[2], l_nodes[7], l_nodes[16]);
+    faces.emplace_back(l_nodes[16], l_nodes[7], l_nodes[11]);
+    faces.emplace_back(l_nodes[7], l_nodes[8], l_nodes[11]);
+    faces.emplace_back(l_nodes[11], l_nodes[8], l_nodes[12]);
+    faces.emplace_back(l_nodes[8], l_nodes[0], l_nodes[12]);
+    faces.emplace_back(l_nodes[16], l_nodes[11], l_nodes[17]);
+    faces.emplace_back(l_nodes[17], l_nodes[11], l_nodes[13]);
+    faces.emplace_back(l_nodes[11], l_nodes[12], l_nodes[13]);
+    faces.emplace_back(l_nodes[17], l_nodes[13], l_nodes[18]);
+  }
+
+  std::ofstream file(filename + ".obj");
+  for (size_t i = 0; i < vertices.size(); ++i) {
+    file << "v " << vertices[i][0] << " " << vertices[i][1] << " "
+         << vertices[i][2] << std::endl;
+  }
+
+  for (size_t i = 0; i < faces.size(); ++i) {
+    file << "f " << faces[i][0] + 1 << " " << faces[i][1] + 1 << " "
+         << faces[i][2] + 1 << std::endl;
+  }
+  file.close();
+}
+
 void CloughTocherSurface::
     write_external_bd_interpolated_function_values_from_lagrange_nodes(
         std::string filename,
@@ -706,6 +780,15 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
       // skip boundary edges
       continue;
     }
+
+    if (eid == 17) {
+      std::cout << "in" << std::endl;
+    }
+
+    // std::cout << "------------eid " << eid << "-------------" << std::endl;
+    // std::cout << "edge: " << e.left_vertex_index << " " <<
+    // e.right_vertex_index
+    //           << std::endl;
 
     if (visited[e.left_vertex_index] == 0 &&
         !v_charts[e.left_vertex_index].is_cone) {
@@ -1011,6 +1094,11 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
       continue;
     }
 
+    // std::cout << "------------eid " << eid << "-------------" << std::endl;
+    // std::cout << "edge: " << e.left_vertex_index << " " <<
+    // e.right_vertex_index
+    //           << std::endl;
+
     // T vertices
     const int64_t v0 = e.left_global_uv_idx;
     const int64_t v1 = e.right_global_uv_idx;
@@ -1021,6 +1109,10 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
     const int64_t v1_prime =
         e.reverse_right_global_uv_idx; // reverse_right == original left
     const int64_t v2_prime = e.bottom_global_uv_idx;
+
+    // std::cout << "v0 v1 v2: " << v0 << "  " << v1 << "  " << v2 << std::endl;
+    // std::cout << "v0' v1' v2': " << v0_prime << "  " << v1_prime << "  "
+    //           << v2_prime << std::endl;
 
     // T and T'
     const auto &T = Fv.row(e.top_face_index);
@@ -1058,6 +1150,9 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
             .transpose() /
         (m_01_prime.dot(u_01_prep_prime.normalized()));
 
+    // std::cout << "g_M: " << g_M << std::endl;
+    // std::cout << "g_M_prime" << g_M_prime << std::endl;
+
     // C_dM
     Eigen::Matrix<double, 1, 10> C_dM;
     C_dM.block<1, 5>(0, 0) = g_M;
@@ -1090,6 +1185,10 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
       }
     }
     assert(lid_0_prime > -1 && lid_1_prime > -1);
+
+    // std::cout << "lid_0, lid_1: " << lid_0 << " " << lid_1 << std::endl;
+    // std::cout << "lid_0_prime, lid_1_prime: " << lid_0_prime << " "
+    //           << lid_1_prime << std::endl;
 
     // T and T' reindex
     auto T_P_dM_indices = P_dM_helper(lid_0, lid_1);
