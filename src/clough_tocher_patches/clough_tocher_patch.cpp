@@ -16,17 +16,6 @@ CloughTocherPatch::CloughTocherPatch(
     const std::array<TriangleMidpointFunctionData, 3> &midpoint_data)
     : m_corner_data(corner_data), m_midpoint_data(midpoint_data) {
 
-  // compute boundary data
-  for (int i = 0; i < 3; ++i) {
-    // p0,p1,p2
-    m_boundary_data.row(i) = m_corner_data[i].function_value;
-    // G01, G02, G12, G10, G20, G21
-    m_boundary_data.row(3 + i * 2 + 0) = m_corner_data[i].first_edge_derivative;
-    m_boundary_data.row(3 + i * 2 + 1) =
-        m_corner_data[i].second_edge_derivative;
-  }
-
-  // p0, p1, p2, G10, G01, G02, G20, G21, G12, N01, N20, N12
   m_boundary_data.row(0) = m_corner_data[0].function_value; // p0
   m_boundary_data.row(1) = m_corner_data[1].function_value; // p1
   m_boundary_data.row(2) = m_corner_data[2].function_value; // p2
