@@ -9,3 +9,4 @@ logs*
 *vscode*
 *pycache*
 *.obj
+c1-scripts/dependencies

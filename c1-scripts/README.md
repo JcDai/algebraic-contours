@@ -2,6 +2,8 @@
 
 ### Requirements / Dependencies
 
+**Requires CMake 3.30**
+
 - Parametrization: https://github.com/rjc8237/seamless-parametrization-penner.git
   - binary: ./build/bin/parametrize_seamless
 - Polyfem: https://github.com/polyfem/polyfem.git
