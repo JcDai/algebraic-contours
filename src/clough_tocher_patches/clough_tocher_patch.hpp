@@ -16,9 +16,7 @@ public:
 
 public:
   CloughTocherPatch();
-  CloughTocherPatch(
-      const std::array<TriangleCornerFunctionData, 3> &corner_data,
-      const std::array<TriangleMidpointFunctionData, 3> &midpoint_data);
+  CloughTocherPatch(Eigen::Matrix<double, 12, 3> &boundary_data);
 
   int triangle_ind(const double &u, const double &v, const double &w) const;
 
@@ -44,4 +42,6 @@ public:
                        // N12,N20, for x, y, z
   std::array<Eigen::Matrix<double, 10, 3>, 3>
       m_CT_coeffs; // constant ct matrices for 3 sub tris
+
+  int64_t m_patch_id;
 };

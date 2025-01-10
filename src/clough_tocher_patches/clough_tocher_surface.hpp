@@ -32,6 +32,9 @@ public:
       std::string filename,
       std::vector<Eigen::Matrix<double, 12, 1>> &external_boundary_data);
 
+  // for bilaplacian
+  void write_connected_lagrange_nodes(std::string filename, Eigen::MatrixXd &V);
+
 public:
   void generate_face_normals(const Eigen::MatrixXd &V,
                              const AffineManifold &affine_manifold,
@@ -44,6 +47,8 @@ public:
   std::vector<std::array<TriangleCornerFunctionData, 3>> m_corner_data;
   std::vector<std::array<TriangleMidpointFunctionData, 3>> m_midpoint_data;
 
+  std::vector<Eigen::Vector3d> m_lagrange_node_values;
+
 public:
   // constraint matrices
 
@@ -54,7 +59,8 @@ public:
 
   // edge endpoint constraints
   void P_G2E(Eigen::SparseMatrix<double> &m);
-  void C_E_end(Eigen::SparseMatrix<double> &m);
+  void C_E_end(Eigen::SparseMatrix<double> &m,
+               Eigen::SparseMatrix<double> &m_elim);
 
   // edge midpoint constraints
   void C_E_mid(Eigen::SparseMatrix<double> &m);

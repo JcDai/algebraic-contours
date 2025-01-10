@@ -12,35 +12,25 @@ const std::array<Eigen::Matrix<double, 10, 12>, 3>
     CloughTocherPatch::m_CT_matrices = CT_subtri_matrices();
 
 CloughTocherPatch::CloughTocherPatch(
-    const std::array<TriangleCornerFunctionData, 3> &corner_data,
-    const std::array<TriangleMidpointFunctionData, 3> &midpoint_data)
-    : m_corner_data(corner_data), m_midpoint_data(midpoint_data) {
+    Eigen::Matrix<double, 12, 3> &boundary_data)
+    : m_boundary_data(boundary_data) {
 
-  // compute boundary data
-  for (int i = 0; i < 3; ++i) {
-    // p0,p1,p2
-    m_boundary_data.row(i) = m_corner_data[i].function_value;
-    // G01, G02, G12, G10, G20, G21
-    m_boundary_data.row(3 + i * 2 + 0) = m_corner_data[i].first_edge_derivative;
-    m_boundary_data.row(3 + i * 2 + 1) =
-        m_corner_data[i].second_edge_derivative;
-  }
+  // TODO: old deprecated code, hij are quadratic, wrong , just here for
+  // reference
+  // m_boundary_data.row(0) = m_corner_data[0].function_value; // p0
+  // m_boundary_data.row(1) = m_corner_data[1].function_value; // p1
+  // m_boundary_data.row(2) = m_corner_data[2].function_value; // p2
 
-  // p0, p1, p2, G10, G01, G02, G20, G21, G12, N01, N20, N12
-  m_boundary_data.row(0) = m_corner_data[0].function_value; // p0
-  m_boundary_data.row(1) = m_corner_data[1].function_value; // p1
-  m_boundary_data.row(2) = m_corner_data[2].function_value; // p2
+  // m_boundary_data.row(3) = m_corner_data[0].first_edge_derivative;  // d01
+  // m_boundary_data.row(4) = m_corner_data[1].second_edge_derivative; // d10
+  // m_boundary_data.row(5) = m_corner_data[1].first_edge_derivative;  // d12
+  // m_boundary_data.row(6) = m_corner_data[2].second_edge_derivative; // d21
+  // m_boundary_data.row(7) = m_corner_data[2].first_edge_derivative;  // d20
+  // m_boundary_data.row(8) = m_corner_data[0].second_edge_derivative; // d02
 
-  m_boundary_data.row(3) = m_corner_data[0].first_edge_derivative;  // G01
-  m_boundary_data.row(4) = m_corner_data[1].second_edge_derivative; // G10
-  m_boundary_data.row(5) = m_corner_data[1].first_edge_derivative;  // G12
-  m_boundary_data.row(6) = m_corner_data[2].second_edge_derivative; // G21
-  m_boundary_data.row(7) = m_corner_data[2].first_edge_derivative;  // G20
-  m_boundary_data.row(8) = m_corner_data[0].second_edge_derivative; // G02
-
-  m_boundary_data.row(9) = m_midpoint_data[2].normal_derivative;  // N01
-  m_boundary_data.row(10) = m_midpoint_data[0].normal_derivative; // N12
-  m_boundary_data.row(11) = m_midpoint_data[1].normal_derivative; // N20
+  // m_boundary_data.row(9) = m_midpoint_data[2].normal_derivative;  // h01
+  // m_boundary_data.row(10) = m_midpoint_data[0].normal_derivative; // h12
+  // m_boundary_data.row(11) = m_midpoint_data[1].normal_derivative; // h20
 
   // compute coeff matrices
   for (int i = 0; i < 3; ++i) {

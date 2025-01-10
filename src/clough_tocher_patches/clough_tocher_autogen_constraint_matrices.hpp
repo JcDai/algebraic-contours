@@ -235,9 +235,9 @@ inline void L_d2L_dep_matrix(double L[7][12]) {
 }
 
 inline void c_e_matrix(double c[5]) {
-  c[0] = 3 / 2;
-  c[1] = -3 / 2;
-  c[2] = 1 / 4;
-  c[3] = -1 / 4;
-  c[4] = 0;
+  c[0] = -3. / 2.;
+  c[1] = 3. / 2.;
+  c[2] = -1. / 4.;
+  c[3] = 1. / 4.;
+  c[4] = 0.;
 }

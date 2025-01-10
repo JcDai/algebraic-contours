@@ -90,6 +90,13 @@ int main(int argc, char *argv[]) {
                                  fit_matrix, energy_hessian,
                                  energy_hessian_inverse);
 
+  std::cout << "#F: " << ct_surface.m_affine_manifold.m_face_charts.size()
+            << std::endl;
+  std::cout << "#E: " << ct_surface.m_affine_manifold.m_edge_charts.size()
+            << std::endl;
+  std::cout << "#V: " << ct_surface.m_affine_manifold.m_vertex_charts.size()
+            << std::endl;
+
   // important !!! call the following two before compute constraints, but only
   // once!!!
   ct_surface.m_affine_manifold.generate_lagrange_nodes();
@@ -98,23 +105,31 @@ int main(int argc, char *argv[]) {
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
       output_name + "_from_lagrange_nodes");
 
+  ct_surface.write_connected_lagrange_nodes(output_name + "_bilaplacian_nodes",
+                                            V);
+
   Eigen::SparseMatrix<double> c_f_int;
   ct_surface.C_F_int(c_f_int);
-  Eigen::SparseMatrix<double> C_E_end;
-  ct_surface.C_E_end(C_E_end);
-  Eigen::SparseMatrix<double> C_E_mid;
-  ct_surface.C_E_mid(C_E_mid);
+  Eigen::SparseMatrix<double> C_e_end, C_e_end_elim;
+  ct_surface.C_E_end(C_e_end, C_e_end_elim);
+  Eigen::SparseMatrix<double> C_e_mid;
+  ct_surface.C_E_mid(C_e_mid);
 
   std::ofstream file(output_name + "_interior_constraint_matrix.txt");
   file << std::setprecision(16) << c_f_int;
   std::ofstream file_2(output_name + "_edge_endpoint_constraint_matrix.txt");
-  file_2 << std::setprecision(16) << C_E_end;
+  file_2 << std::setprecision(16) << C_e_end;
   std::ofstream file_3(output_name + "_edge_midpoint_constraint_matrix.txt");
-  file_3 << std::setprecision(16) << C_E_mid;
+  file_3 << std::setprecision(16) << C_e_mid;
+
+  std::ofstream file_4(output_name +
+                       "_edge_endpoint_constraint_matrix_eliminated.txt");
+  file_4 << std::setprecision(16) << C_e_end_elim;
 
   file.close();
   file_2.close();
   file_3.close();
+  file_4.close();
 
   if (have_external_boundary_data) {
     // TODO
@@ -123,6 +138,40 @@ int main(int argc, char *argv[]) {
             output_name + "_function_values_from_lagrange_nodes",
             ext_boundary_data);
   }
+
+  // check constraint error
+  const auto &lag_values = ct_surface.m_lagrange_node_values;
+  Eigen::MatrixXd lag_v_mat(lag_values.size(), 3);
+  for (size_t i = 0; i < lag_values.size(); ++i) {
+    lag_v_mat.row(i) = lag_values[i].transpose();
+  }
+
+  auto int_error = c_f_int * lag_v_mat;
+  double int_max_error = int_error.maxCoeff();
+  double int_min_error = int_error.minCoeff();
+  std::cout << "interior max error: "
+            << ((std::abs(int_max_error) > std::abs(int_min_error))
+                    ? std::abs(int_max_error)
+                    : std::abs(int_min_error))
+            << std::endl;
+
+  auto end_error = C_e_end * lag_v_mat;
+  double end_max_error = end_error.maxCoeff();
+  double end_min_error = end_error.minCoeff();
+  std::cout << "endpoint max error: "
+            << ((std::abs(end_max_error) > std::abs(end_min_error))
+                    ? std::abs(end_max_error)
+                    : std::abs(end_min_error))
+            << std::endl;
+
+  auto mid_error = C_e_mid * lag_v_mat;
+  double mid_max_error = mid_error.maxCoeff();
+  double mid_min_error = mid_error.minCoeff();
+  std::cout << "midpoint max error: "
+            << ((std::abs(mid_max_error) > std::abs(mid_min_error))
+                    ? std::abs(mid_max_error)
+                    : std::abs(mid_min_error))
+            << std::endl;
 
   return 0;
 }

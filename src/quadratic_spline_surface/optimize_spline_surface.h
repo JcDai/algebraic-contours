@@ -35,7 +35,7 @@ struct OptimizationParameters {
       0.0; // fitting weight for vertex edge gradients collapsing to a cone
 
   double cone_normal_orthogonality_factor =
-      1.0; // wight for encouraging orthogonality with a normal at a cone
+      0.0; // wight for encouraging orthogonality with a normal at a cone
 
   // TODO
   bool compute_final_energy =
