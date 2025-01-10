@@ -8,6 +8,7 @@ import gmsh
 import h5py
 from scipy import sparse 
 import json
+import scipy
 
 # check orient3d > 0
 def orient3d(aa, bb, cc, dd):
@@ -209,9 +210,10 @@ if __name__ == "__main__":
     print("Calling parametrization code")
     # para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field --output " + workspace_path
     para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field"
-    print(para_command.split())
-    subprocess.run(para_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    print("here")
+    # print(para_command.split())
+    subprocess.run(para_command,  shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # subprocess.run(para_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    # print("here")
 
 
     ####################################################
@@ -444,7 +446,8 @@ if __name__ == "__main__":
 
     print("Calling Clough Tocher code")
     ct_command = path_to_ct_exe + " --input " + workspace_path + "parameterized_mesh.obj -o CT"
-    subprocess.run(ct_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    subprocess.run(ct_command,  shell=True, check=True)
+    # subprocess.run(ct_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     ####################################################
     #          Map tri langrange nodes to tet          #
@@ -653,26 +656,28 @@ if __name__ == "__main__":
     ####################################################
     print("constructing full hard constraint matrix ...")
 
-    interior_matix = np.loadtxt('CT_interior_constraint_matrix.txt') 
-    edge_end_point_matrix = np.loadtxt('CT_edge_endpoint_constraint_matrix_eliminated.txt') 
-    edge_mid_point_matrix = np.loadtxt('CT_edge_midpoint_constraint_matrix.txt')
+    interior_matix = scipy.io.mmread('CT_interior_constraint_matrix.txt') 
+    edge_end_point_matrix = scipy.io.mmread('CT_edge_endpoint_constraint_matrix_eliminated.txt') 
+    edge_mid_point_matrix = scipy.io.mmread('CT_edge_midpoint_constraint_matrix.txt')
 
-    full_matrix = np.concatenate((interior_matix, edge_end_point_matrix, edge_mid_point_matrix))
+    full_matrix = scipy.sparse.vstack((interior_matix, edge_end_point_matrix, edge_mid_point_matrix))
 
     local2global = np.loadtxt(workspace_path + tri_to_tet_index_mapping_file_name).astype(np.int32)
-    A = full_matrix
+    A = full_matrix.tocoo(True)
     m = mio.read(workspace_path + linear_tet_file_name)
     v = m.points
     b = -(A @ v[local2global, :])
 
     with h5py.File(workspace_path  + "CT_full_constraint_matrix.hdf5", 'w') as f:
         f.create_dataset("local2global", data=local2global.astype(np.int32))
-        f.create_dataset("A", data=A)
+        f.create_dataset("A_triplets/values", data=A.data)
+        f.create_dataset("A_triplets/cols", data=A.col)
+        f.create_dataset("A_triplets/rows", data=A.row)
         f.create_dataset("b", data=b)
 
     print("constructing soft constraint matrix ...")
 
-    # A_1 = L u  b_1 = -L x_0
+    # A_1 = L    b_1 = -L x_0
     # A_2 = I    b_2 = x0 - xtrg (for now xtrg can be zero to run some experiments)
 
     lap_conn_file = "CT_bilaplacian_nodes.obj"
@@ -728,7 +733,14 @@ if __name__ == "__main__":
     
     # print("Calling Polyfem")
     polyfem_command = path_to_polyfem_exe + " -j " + workspace_path + "constraints.json"
-    subprocess.run(polyfem_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    print(polyfem_command)
+    subprocess.run(polyfem_command,  shell=True, check=True)
+
+    # ####################################################
+    # #             extraxt inside tets                  #
+    # ####################################################
+    polyfem_mesh = mio.read(output_name + '_final.vtu')
+
 
 
 
