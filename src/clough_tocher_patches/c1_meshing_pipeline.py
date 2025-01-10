@@ -7,6 +7,7 @@ import sys
 import gmsh
 import h5py
 from scipy import sparse 
+import json
 
 # check orient3d > 0
 def orient3d(aa, bb, cc, dd):
@@ -99,6 +100,33 @@ if __name__ == "__main__":
     print("generated embedded_surface.obj for parametrization.")
 
     # get tets containing surface
+    print("constructing tet->surface and surface->tet mapping ...")
+    surface_in_tet_map = {}
+    for i in range(tets.shape[0]):
+        ff0 = [tets[i][0], tets[i][1], tets[i][2]]
+        ff1 = [tets[i][0], tets[i][1], tets[i][3]]
+        ff2 = [tets[i][0], tets[i][2], tets[i][3]]
+        ff3 = [tets[i][1], tets[i][2], tets[i][3]]
+        ff0.sort()
+        ff1.sort()
+        ff2.sort()
+        ff3.sort()
+
+        ffs = [
+            str(ff0[0]) + "+" + str(ff0[1]) + "+" + str(ff0[2]),
+            str(ff1[0]) + "+" + str(ff1[1]) + "+" + str(ff1[2]),
+            str(ff2[0]) + "+" + str(ff2[1]) + "+" + str(ff2[2]),
+            str(ff3[0]) + "+" + str(ff3[1]) + "+" + str(ff3[2])
+        ]
+        for f_str in ffs:
+            if f_str in surface_in_tet_map:
+                surface_in_tet_map[f_str].append(i)
+            else:
+                surface_in_tet_map[f_str] = [i]
+
+    print("computed face in tet map")
+    # print(surface_in_tet_map)
+
     surface_adj_tet = {}
     tet_surface_origin = {}
 
@@ -109,15 +137,24 @@ if __name__ == "__main__":
         tet_surface_origin[j] = []
 
     for i in range(surface_tet_faces.shape[0]):
-        face = surface_tet_faces[i]
-        for j in range(tets.shape[0]):
-            if all (v in tets[j] for v in face):
-                surface_adj_tet[i].append(j)
-                tet_surface_origin[j].append(i)
-            if len(surface_adj_tet[i]) >= 2:
-                break
-        if len(surface_adj_tet[i]) >= 2:
-            continue  
+        face = [surface_tet_faces[i][0], surface_tet_faces[i][1], surface_tet_faces[i][2]]
+        face.sort()
+        face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
+        surface_adj_tet[i] = surface_in_tet_map[face_str]
+        assert len(surface_adj_tet[i]) > 0
+        for tt in surface_in_tet_map[face_str]:
+            tet_surface_origin[tt].append(i)
+
+    # for i in range(surface_tet_faces.shape[0]):
+    #     face = surface_tet_faces[i]
+    #     for j in range(tets.shape[0]):
+    #         if all (v in tets[j] for v in face):
+    #             surface_adj_tet[i].append(j)
+    #             tet_surface_origin[j].append(i)
+    #         if len(surface_adj_tet[i]) >= 2:
+    #             break
+    #     if len(surface_adj_tet[i]) >= 2:
+    #         continue  
 
     print("computed tet->surface and surface->tet mapping.")
     
@@ -170,8 +207,11 @@ if __name__ == "__main__":
     #             Call Parametrization Code            #
     ####################################################
     print("Calling parametrization code")
-    para_command = path_to_para_exe + " " + workspace_path + "embedded_surface.obj --fit_field --output " + workspace_path
-    subprocess.run(para_command.split(' '), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    # para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field --output " + workspace_path
+    para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field"
+    print(para_command.split())
+    subprocess.run(para_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    print("here")
 
 
     ####################################################
@@ -194,19 +234,43 @@ if __name__ == "__main__":
     deleted_old_fids = []
     used_new_fids = [False for f in para_out_f]
 
+    # face dict existance
+    para_in_face_existance = {}
+    para_out_face_existance = {}
+    # for i in range(para_in_f.shape[0]):
+    #     face = [para_in_f[i][0], para_in_f[i][1], para_in_f[i][2]]
+    #     face.sort()
+    #     face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
+    #     para_in_face_existance[face_str] = i
+
+    for i in range(para_out_f.shape[0]):
+        face = [para_out_f[i][0], para_out_f[i][1], para_out_f[i][2]]
+        face.sort()
+        face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
+        para_out_face_existance[face_str] = i
+
     para_in_to_out_face_mapping = {}
 
     for i in range(para_in_f.shape[0]):
-        found = False
-        for j in range(para_out_f.shape[0]):
-            if used_new_fids[j]:
-                continue
-            if face_equal(para_in_f[i], para_out_f[j]):
-                found = True
-                used_new_fids[j] = True
-                para_in_to_out_face_mapping[i] = [j]
-        if not found:
+        face = [para_in_f[i][0], para_in_f[i][1], para_in_f[i][2]]
+        face.sort()
+        face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
+        if face_str in para_out_face_existance:
+            para_in_to_out_face_mapping[i] = [para_out_face_existance[face_str]]
+        else:
             deleted_old_fids.append(i)
+
+    # for i in range(para_in_f.shape[0]):
+    #     found = False
+    #     for j in range(para_out_f.shape[0]):
+    #         if used_new_fids[j]:
+    #             continue
+    #         if face_equal(para_in_f[i], para_out_f[j]):
+    #             found = True
+    #             used_new_fids[j] = True
+    #             para_in_to_out_face_mapping[i] = [j]
+    #     if not found:
+    #         deleted_old_fids.append(i)
 
     print("Done parametrization mapping.")
 
@@ -380,7 +444,7 @@ if __name__ == "__main__":
 
     print("Calling Clough Tocher code")
     ct_command = path_to_ct_exe + " --input " + workspace_path + "parameterized_mesh.obj -o CT"
-    subprocess.run(ct_command.split(' '), stdout=subprocess.STDOUT, stderr=subprocess.STDOUT)
+    subprocess.run(ct_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     ####################################################
     #          Map tri langrange nodes to tet          #
@@ -648,11 +712,21 @@ if __name__ == "__main__":
         file.create_dataset("A_triplets/rows", data=A_2_p.row)
         file.create_dataset("local2global", data=local2global.astype(np.int32))
 
-    ####################################################
-    #                    Call Polyfem                  #
-    ####################################################
-    #TODO:
+    # ####################################################
+    # #            create json  for Polyfem              #
+    # ####################################################
 
+    c_json = {'space': {'discr_order': 3}, 'geometry': [{'mesh': output_name + '_initial_tetmesh.msh', 'volume_selection': 1, 'surface_selection': 1}], 'constraints': {'hard': ['CT_full_constraint_matrix.hdf5'], 'soft': [{'weight': 10000.0, 'data': 'soft_1.hdf5'}, {'weight': 10000.0, 'data': 'soft_2.hdf5'}]}, 'materials': [{'id': 1, 'type': 'NeoHookean', 'E': 20000000.0, 'nu': 0.3}], 'solver': {'nonlinear': {'x_delta': 1e-10, 'solver': 'Newton', 'grad_norm': 1e-08, 'advanced': {'f_delta': 1e-10}}, 'augmented_lagrangian': {'initial_weight': 100000000.0}}, 'boundary_conditions': {'dirichlet_boundary': {'id': 1, 'value': [0, 0, 0]}}, 'output': {'paraview': {'file_name': 'sim3d.vtu', 'surface': True, 'wireframe': True, 'points': True, 'options': {'material': True, 'force_high_order': True}, 'vismesh_rel_area': 1e-05}}}
+    with open('constraints.json', 'w') as f:
+        json.dump(c_json, f)
+
+    # ####################################################
+    # #                    Call Polyfem                  #
+    # ####################################################
+    
+    # print("Calling Polyfem")
+    polyfem_command = path_to_polyfem_exe + " -j " + workspace_path + "constraints.json"
+    subprocess.run(polyfem_command.split(' '), stdout=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 
 
