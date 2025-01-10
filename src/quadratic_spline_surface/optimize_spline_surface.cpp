@@ -7,6 +7,8 @@
 #include "planarH.h"
 #include "powell_sabin_local_to_global_indexing.h"
 
+#include <random>
+
 // Build the hessian for the local fitting energy
 //
 // This is a diagonal matrix with special weights for cones and cone adjacent
@@ -709,6 +711,40 @@ void generate_optimized_twelve_split_position_data(
       V, affine_manifold, halfedge, he_to_corner, variable_vertices,
       variable_edges, fit_matrix, hessian_inverse, optimized_V,
       optimized_vertex_gradients, optimized_reduced_edge_gradients);
+
+  // // random perturb for test
+  // // TODO: delete it
+  // std::uniform_real_distribution<double> unif(-1, 1);
+  // std::default_random_engine re;
+
+  // for (int64_t i = 0; i < optimized_V.rows(); ++i) {
+  //   for (int j = 0; j < optimized_V.cols(); ++j) {
+  //     optimized_V(i, j) += 0.1 * unif(re);
+  //   }
+  // }
+
+  for (size_t i = 0; i < optimized_vertex_gradients.size(); ++i) {
+    if (affine_manifold.m_vertex_charts[i].is_cone) {
+      // std::cout << "cone skipped perturb" << std::endl;
+      // std::cout << optimized_vertex_gradients[i] << std::endl;
+
+      optimized_vertex_gradients[i] << 0, 0, 0, 0, 0, 0;
+      continue;
+    }
+    // for (int j = 0; j < 2; ++j) {
+    //   for (int k = 0; k < 3; ++k) {
+    //     optimized_vertex_gradients[i](j, k) += 10 * unif(re);
+    //   }
+    // }
+  }
+
+  // for (size_t i = 0; i < optimized_reduced_edge_gradients.size(); ++i) {
+  //   for (int j = 0; j < 3; ++j) {
+  //     for (int k = 0; k < 3; ++k) {
+  //       optimized_reduced_edge_gradients[i][j][k] += 10 * unif(re);
+  //     }
+  //   }
+  // }
 
   // Build corner position data from the optimized gradients
   generate_affine_manifold_corner_data(optimized_V, affine_manifold,
