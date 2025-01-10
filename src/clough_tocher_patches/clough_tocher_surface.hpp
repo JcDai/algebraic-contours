@@ -47,6 +47,8 @@ public:
   std::vector<std::array<TriangleCornerFunctionData, 3>> m_corner_data;
   std::vector<std::array<TriangleMidpointFunctionData, 3>> m_midpoint_data;
 
+  std::vector<Eigen::Vector3d> m_lagrange_node_values;
+
 public:
   // constraint matrices
 
