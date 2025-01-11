@@ -21,4 +21,4 @@ The last line of the output should be "All executables were located. Installatio
 
 #### Run
 
-Use the script `run_c1_meshing.py`
+Use the script `run_c1_meshing.py`. If you want to move the script, keep the `executables.json` in the same folder!
