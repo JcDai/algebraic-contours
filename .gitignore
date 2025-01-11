@@ -9,3 +9,7 @@ logs*
 *vscode*
 *pycache*
 *.obj
+src/clou*/*.msh
+src/clou*/*.hdf5
+src/clou*/*.json
+src/clou*/*.vtu

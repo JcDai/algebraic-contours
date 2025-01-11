@@ -9,6 +9,7 @@ import h5py
 from scipy import sparse 
 import json
 import scipy
+import datetime
 
 # check orient3d > 0
 def orient3d(aa, bb, cc, dd):
@@ -78,19 +79,25 @@ if __name__ == "__main__":
     vertices = tm.points
     tets = tm.cells_dict['tetra']
     filtered_tets = []
-    winding_numbers = tm.cell_data['winding_number'][0]
+    winding_numbers_data = tm.cell_data['winding_number'][0]
+    # print(type(winding_numbers))
     for i in range(tets.shape[0]):
-        if abs(winding_numbers[i]) >= 0.5:
+        if abs(winding_numbers_data[i]) >= 0.5:
             filtered_tets.append(tets[i])
+
+    winding_numbers = {}
+    for i in range(tets.shape[0]):
+        winding_numbers[i] = winding_numbers_data[i]
 
     filtered_tets = np.array(filtered_tets)
 
     # check orientation, TODO: only do in debug
+    print("[{}] ".format(datetime.datetime.now()), "checking tet orientation ...")
     for i in range(tets.shape[0]):
         if not orient3d(vertices[tets[i][0]], vertices[tets[i][1]], vertices[tets[i][2]], vertices[tets[i][3]]):
             print("tet {} flipped".format(i))
         assert orient3d(vertices[tets[i][0]], vertices[tets[i][1]], vertices[tets[i][2]], vertices[tets[i][3]])
-    print("passed orientation check.")
+    print("[{}] ".format(datetime.datetime.now()), "passed orientation check.")
 
     # get surface mesh for parametrization
     surface_tet_faces = igl.boundary_facets(filtered_tets)
@@ -98,10 +105,10 @@ if __name__ == "__main__":
     assert((igl.bfs_orient(para_in_f)[0] == para_in_f).all())
 
     igl.write_obj(workspace_path + "embedded_surface.obj", para_in_v, para_in_f)
-    print("generated embedded_surface.obj for parametrization.")
+    print("[{}] ".format(datetime.datetime.now()), "generated embedded_surface.obj for parametrization.")
 
     # get tets containing surface
-    print("constructing tet->surface and surface->tet mapping ...")
+    print("[{}] ".format(datetime.datetime.now()), "constructing tet->surface and surface->tet mapping ...")
     surface_in_tet_map = {}
     for i in range(tets.shape[0]):
         ff0 = [tets[i][0], tets[i][1], tets[i][2]]
@@ -125,7 +132,7 @@ if __name__ == "__main__":
             else:
                 surface_in_tet_map[f_str] = [i]
 
-    print("computed face in tet map")
+    print("[{}] ".format(datetime.datetime.now()), "computed face in tet map")
     # print(surface_in_tet_map)
 
     surface_adj_tet = {}
@@ -157,10 +164,10 @@ if __name__ == "__main__":
     #     if len(surface_adj_tet[i]) >= 2:
     #         continue  
 
-    print("computed tet->surface and surface->tet mapping.")
+    print("[{}] ".format(datetime.datetime.now()), "computed tet->surface and surface->tet mapping.")
     
     # do simplicial embedding
-    print("Doing simplicial embedding ...")
+    print("[{}] ".format(datetime.datetime.now()), "Doing simplicial embedding ...")
     tets_regular = copy.deepcopy(tets).tolist()
     tets_vertices_regular = copy.deepcopy(vertices).tolist()    
     tet_surface = copy.deepcopy(tet_surface_origin)
@@ -186,6 +193,11 @@ if __name__ == "__main__":
             tets_regular.append([tets[i][0], tets[i][1], new_v_id, tets[i][3]])
             tets_regular.append([tets[i][0], tets[i][1], tets[i][2], new_v_id])
 
+            # propagate winding number
+            old_winding_number = winding_numbers[i]
+            for tid in new_t_ids:
+                winding_numbers[tid] = old_winding_number
+
             # reset tet surface mapping
             for tid in new_t_ids:
                 tet_surface[tid] = []
@@ -202,12 +214,12 @@ if __name__ == "__main__":
     tets_regular = np.array(tets_regular)
     tets_vertices_regular = np.array(tets_vertices_regular)
 
-    print("Done simplicial embedding. Splitted {} tets".format(simplicial_embedding_cnt))
+    print("[{}] ".format(datetime.datetime.now()), "Done simplicial embedding. Splitted {} tets".format(simplicial_embedding_cnt))
 
     ####################################################
     #             Call Parametrization Code            #
     ####################################################
-    print("Calling parametrization code")
+    print("[{}] ".format(datetime.datetime.now()), "Calling parametrization code")
     # para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field --output " + workspace_path
     para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field"
     # print(para_command.split())
@@ -220,11 +232,11 @@ if __name__ == "__main__":
     #                     Para Split                   #
     ####################################################
     # get para in and out mapping
-    print("Doing parametrization input to output mapping ...")
+    print("[{}] ".format(datetime.datetime.now()), "Doing parametrization input to output mapping ...")
     para_out_file = workspace_path + "parameterized_mesh.obj" # the file name para code should generate
     para_out_v, para_out_tc, _, para_out_f, para_out_ftc, _ = igl.read_obj(para_out_file)
 
-    print("after para #v: {0}, before para #v: {1}".format(para_in_v.shape[0], para_out_v.shape[0]))
+    print("[{}] ".format(datetime.datetime.now()), "after para #v: {0}, before para #v: {1}".format(para_in_v.shape[0], para_out_v.shape[0]))
     v_thres = para_in_v.shape[0]
 
     # old face existance
@@ -274,10 +286,10 @@ if __name__ == "__main__":
     #     if not found:
     #         deleted_old_fids.append(i)
 
-    print("Done parametrization mapping.")
+    print("[{}] ".format(datetime.datetime.now()), "Done parametrization mapping.")
 
     # match new faces to old faces
-    print("Compute old -> new face containment")
+    print("[{}] ".format(datetime.datetime.now()), "Compute old -> new face containment")
     for f_out in new_face_ids:
         bc = (para_out_v[para_out_f[f_out][0]] + para_out_v[para_out_f[f_out][1]] + para_out_v[para_out_f[f_out][2]]) / 3.0
         found = False
@@ -295,7 +307,7 @@ if __name__ == "__main__":
     tet_after_para_tets = copy.deepcopy(tets_regular.tolist())
 
     # add new vertices to tet mesh
-    print("Adding parametrized new vertices to tetmesh ... ")
+    print("[{}] ".format(datetime.datetime.now()), "Adding parametrized new vertices to tetmesh ... ")
     para_out_v_to_tet_v_map = copy.deepcopy(para_in_v_to_tet_v_map)
     for i in range(para_in_v.shape[0], para_out_v.shape[0]):
         para_out_v_to_tet_v_map[i] = len(tet_after_para_vertices)
@@ -305,7 +317,7 @@ if __name__ == "__main__":
     surface_adj_tet_para_out = {}
     tet_surface_para_out = {}
 
-    print("Splitting tets according to para output ... ")
+    print("[{}] ".format(datetime.datetime.now()), "Splitting tets according to para output ... ")
     # update unsplitted faces
     for f_in in para_in_to_out_face_mapping:
         if f_in not in deleted_old_fids:
@@ -340,6 +352,9 @@ if __name__ == "__main__":
                         new_tet_vs[i] = f_out_vs_tet_base[local_ids[i]]
                 new_tets.append(new_tet_vs)
 
+            # propagate winding number
+            old_winding_number = winding_numbers[t]
+
             # update tet connectivity
             assert len(new_tets) > 1
             tet_after_para_tets[t] = new_tets[0]
@@ -349,6 +364,9 @@ if __name__ == "__main__":
             else:
                 surface_adj_tet_para_out[first_split_face].append(t)
             tet_surface_para_out[t] = [first_split_face]
+
+            # propagate winding number
+            winding_numbers[t] = winding_numbers[t]
 
             for i in range(1, len(new_tets)):
                 new_tid = len(tet_after_para_tets)
@@ -360,12 +378,17 @@ if __name__ == "__main__":
                 else:
                     surface_adj_tet_para_out[split_face].append(new_tid)
                 tet_surface_para_out[new_tid] = [split_face]
-    print("Done Para Split.")
+
+                # propagate winding number
+                winding_numbers[new_tid] = old_winding_number
+
+            
+    print("[{}] ".format(datetime.datetime.now()), "Done Para Split.")
 
     ####################################################
     #                     Face Split                   #
     ####################################################
-    print("Face splitting ...")
+    print("[{}] ".format(datetime.datetime.now()), "Face splitting ...")
     # face split
     tet_after_face_split_tets = []
     tet_after_face_split_vertices = copy.deepcopy(tet_after_para_vertices)
@@ -376,9 +399,14 @@ if __name__ == "__main__":
     surface_tet_cnt = 0
     visited_list = []
 
+    # new winding numbers
+    new_winding_numbers = {}
+
     for tid in range(len(tet_after_para_tets)):
         # non surface case
         if tid not in tet_surface_para_out:
+            # propagate winding number
+            new_winding_numbers[len(tet_after_face_split_tets)] = winding_numbers[tid]
             tet_after_face_split_tets.append(tet_after_para_tets[tid])
             continue
 
@@ -422,9 +450,12 @@ if __name__ == "__main__":
         assert len(new_tets) == 3
 
         for new_t in new_tets:
+            # propagate winding number
+            new_winding_numbers[len(tet_after_face_split_tets)] = winding_numbers[tid]
             tet_after_face_split_tets.append(new_t)
 
-    print("Done Face Split.")
+
+    print("[{}] ".format(datetime.datetime.now()), "Done Face Split.")
     # save tetmesh to msh, use gmsh to create high order nodes
     tet_points_after_face_split = np.array(tet_after_face_split_vertices)
     tet_cells_after_face_split = [('tetra', np.array(tet_after_face_split_tets))]
@@ -434,7 +465,7 @@ if __name__ == "__main__":
     ####################################################
     #                     Call Gmsh                    #
     ####################################################
-    print("Calling Gmsh ... ")
+    print("[{}] ".format(datetime.datetime.now()), "Calling Gmsh ... ")
     gmsh.initialize()
     gmsh.open(workspace_path + "tetmesh_after_face_split.msh")
     gmsh.model.mesh.setOrder(3)
@@ -444,7 +475,7 @@ if __name__ == "__main__":
     #                   Call CT Code                   #
     ####################################################
 
-    print("Calling Clough Tocher code")
+    print("[{}] ".format(datetime.datetime.now()), "Calling Clough Tocher code")
     ct_command = path_to_ct_exe + " --input " + workspace_path + "parameterized_mesh.obj -o CT"
     subprocess.run(ct_command,  shell=True, check=True)
     # subprocess.run(ct_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -456,7 +487,7 @@ if __name__ == "__main__":
     ct_interpolants_file = "CT_from_lagrange_nodes.msh"
     ct_input_v_to_output_v_file = "CT_from_lagrange_nodes_input_v_to_output_v_map.txt"
 
-    print("Doing high order tri to tet mapping ...")
+    print("[{}] ".format(datetime.datetime.now()), "Doing high order tri to tet mapping ...")
     # assume converted to third order in gmsh
     tetmesh_high_order = mio.read(workspace_path + "tetmesh_after_face_split_high_order_tet.msh")
     # assume ct interpolant
@@ -499,7 +530,7 @@ if __name__ == "__main__":
         bc_surface_to_tet_map[surface_high_order_conn_with_input_v_idx[i*3+0][2]] = tet_split_vid
         bc_tet_to_surface_map[tet_split_vid] = surface_high_order_conn_with_input_v_idx[i*3+0][2]
 
-    print("breaking done high order tet conn into face/edge to vertex mappings")
+    print("[{}] ".format(datetime.datetime.now()), "breaking done high order tet conn into face/edge to vertex mappings")
     # break down high order tets into face and edge representation
     tet_edge_to_vertices = {}
     tet_face_to_vertices = {}
@@ -567,7 +598,7 @@ if __name__ == "__main__":
         tet_face_to_vertices[str(f023)] = tet[18]
         tet_face_to_vertices[str(f123)] = tet[19]
     
-    print("constructing tri <-> tet v mappings")
+    print("[{}] ".format(datetime.datetime.now()), "constructing tri <-> tet v mappings")
     # map high order tri vertices to tet vertices
     tri_to_tet_high_order_v_map = {}
     tet_to_tri_high_order_v_map = {}
@@ -610,7 +641,7 @@ if __name__ == "__main__":
         curved_tet_vertices[key] = surface_high_order_vertices_with_input_v_idx[tet_to_tri_high_order_v_map[key]]
 
     # write files
-    print("writing outputs ...")
+    print("[{}] ".format(datetime.datetime.now()), "writing outputs ...")
     # TODO: file names
     curved_tet_file_name = output_name + "_curved_tetmesh.msh"  
     linear_tet_file_name = output_name + "_initial_tetmesh.msh"  
@@ -654,7 +685,7 @@ if __name__ == "__main__":
     ####################################################
     #           Constuct Constraint Matrix             #
     ####################################################
-    print("constructing full hard constraint matrix ...")
+    print("[{}] ".format(datetime.datetime.now()), "constructing full hard constraint matrix ...")
 
     interior_matix = scipy.io.mmread('CT_interior_constraint_matrix.txt') 
     edge_end_point_matrix = scipy.io.mmread('CT_edge_endpoint_constraint_matrix_eliminated.txt') 
@@ -675,7 +706,7 @@ if __name__ == "__main__":
         f.create_dataset("A_triplets/rows", data=A.row)
         f.create_dataset("b", data=b)
 
-    print("constructing soft constraint matrix ...")
+    print("[{}] ".format(datetime.datetime.now()), "constructing soft constraint matrix ...")
 
     # A_1 = L    b_1 = -L x_0
     # A_2 = I    b_2 = x0 - xtrg (for now xtrg can be zero to run some experiments)
@@ -720,7 +751,7 @@ if __name__ == "__main__":
     # ####################################################
     # #            create json  for Polyfem              #
     # ####################################################
-    print("create json for polyfem")
+    print("[{}] ".format(datetime.datetime.now()), "create json for polyfem")
 
     c_json = {'space': {'discr_order': 3}, 'geometry': [{'mesh': output_name + '_initial_tetmesh.msh', 'volume_selection': 1, 'surface_selection': 1}], 'constraints': {'hard': ['CT_full_constraint_matrix.hdf5'], 'soft': [{'weight': 10000.0, 'data': 'soft_1.hdf5'}, {'weight': 10000.0, 'data': 'soft_2.hdf5'}]}, 'materials': [{'id': 1, 'type': 'NeoHookean', 'E': 20000000.0, 'nu': 0.3}], 'solver': {'nonlinear': {'x_delta': 1e-10, 'solver': 'Newton', 'grad_norm': 1e-08, 'advanced': {'f_delta': 1e-10}}, 'augmented_lagrangian': {'initial_weight': 100000000.0}}, 'boundary_conditions': {'dirichlet_boundary': {'id': 1, 'value': [0, 0, 0]}}, 'output': {'paraview': {'file_name': output_name + '_final.vtu', 'surface': True, 'wireframe': True, 'points': True, 'options': {'material': True, 'force_high_order': True}, 'vismesh_rel_area': 1e-05}}}
     with open('constraints.json', 'w') as f:
@@ -729,7 +760,7 @@ if __name__ == "__main__":
     # ####################################################
     # #                    Call Polyfem                  #
     # ####################################################
-    print("calling polyfem")
+    print("[{}] ".format(datetime.datetime.now()), "calling polyfem")
     
     # print("Calling Polyfem")
     polyfem_command = path_to_polyfem_exe + " -j " + workspace_path + "constraints.json"
@@ -740,6 +771,16 @@ if __name__ == "__main__":
     # #             extraxt inside tets                  #
     # ####################################################
     polyfem_mesh = mio.read(output_name + '_final.vtu')
+
+    new_winding_number_list = []
+    for i in range(len(polyfem_mesh.cells[0])):
+        assert i in new_winding_numbers
+        new_winding_number_list.append(new_winding_numbers[i])
+    new_winding_number_list = np.array(new_winding_number_list)
+
+    polyfem_mesh.cell_data['winding'] = new_winding_number_list[:,None]
+    polyfem_mesh.write(output_name + '_final_winding.vtu')
+
 
 
 

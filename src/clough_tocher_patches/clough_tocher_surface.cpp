@@ -1,6 +1,7 @@
 #include "clough_tocher_surface.hpp"
 
 #include <fstream>
+#include <igl/Timer.h>
 #include <igl/edges.h>
 #include <igl/per_vertex_normals.h>
 
@@ -755,6 +756,7 @@ void CloughTocherSurface::C_F_int(Eigen::SparseMatrix<double> &m) {
       }
     }
   }
+  C_diag.makeCompressed();
 
   m.resize(7 * F_cnt, N_L);
   // std::cout << 7 * F_cnt << " " << N_L << std::endl;
@@ -832,6 +834,18 @@ std::array<int, 4> P_dE_helper(int a, int b) {
   return {{-1, -1, -1, -1}};
 }
 
+Eigen::Matrix2d inverse_2by2(const Eigen::Matrix2d &m) {
+  const double &a = m(0, 0);
+  const double &b = m(0, 1);
+  const double &c = m(1, 0);
+  const double &d = m(1, 1);
+  double det = (a * d - b * c);
+  Eigen::Matrix2d r;
+  r << d, -b, -c, a;
+  r /= det;
+  return r;
+}
+
 void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
                                   Eigen::SparseMatrix<double> &m_elim) {
   const auto N_L = m_affine_manifold.m_lagrange_nodes.size();
@@ -855,9 +869,11 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
   Eigen::SparseMatrix<double> C_E_L;
   C_E_L.resize(2 * E_cnt, 24 * E_cnt);
 
-  std::vector<int> visited(v_charts.size(), 0);
+  // std::vector<int> visited(v_charts.size(), 0);
   std::vector<int> skip(2 * E_cnt, 0);
   int64_t skip_cnt = 0;
+
+  std::vector<int64_t> row_vertex_id_map;
 
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
@@ -866,21 +882,27 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
       continue;
     }
 
-    if (visited[e.left_vertex_index] == 0 &&
-        !v_charts[e.left_vertex_index].is_cone) {
-      // if first time access this vertex and is not cone
-      visited[e.left_vertex_index] = 1;
-      skip[2 * eid + 0] = 1;
-      skip_cnt++;
+    const auto &v0_chart = v_charts[e.left_vertex_index];
+    if (!v0_chart.is_cone) {
+      // if other vertex is the first or second vertex in one ring
+      if (e.right_vertex_index == v0_chart.vertex_one_ring[0] ||
+          e.right_vertex_index == v0_chart.vertex_one_ring[1]) {
+        skip[2 * eid + 0] = 1;
+        skip_cnt++;
+      }
     }
 
-    if (visited[e.right_vertex_index] == 0 &&
-        !v_charts[e.right_vertex_index].is_cone) {
-      // if first time access this vertex and is not cone
-      visited[e.right_vertex_index] = 1;
-      skip[2 * eid + 1] = 1;
-      skip_cnt++;
+    const auto &v1_chart = v_charts[e.right_vertex_index];
+    if (!v1_chart.is_cone) {
+      if (e.left_vertex_index == v1_chart.vertex_one_ring[0] ||
+          e.left_vertex_index == v1_chart.vertex_one_ring[1]) {
+        skip[2 * eid + 1] = 1;
+        skip_cnt++;
+      }
     }
+
+    row_vertex_id_map.push_back(e.left_vertex_index);
+    row_vertex_id_map.push_back(e.right_vertex_index);
 
     // T and T'
     const auto &T = Fv.row(e.top_face_index);
@@ -1014,14 +1036,14 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
     Eigen::Vector2d u_01_prep_prime(-u_01_prime[1], u_01_prime[0]);
 
     // g0 g1
-    Eigen::Matrix<double, 1, 2> g0 = u_01_prep.transpose() * D0.inverse();
-    Eigen::Matrix<double, 1, 2> g1 = u_01_prep.transpose() * D1.inverse();
+    Eigen::Matrix<double, 1, 2> g0 = u_01_prep.transpose() * inverse_2by2(D0);
+    Eigen::Matrix<double, 1, 2> g1 = u_01_prep.transpose() * inverse_2by2(D1);
 
     // g0_prime g1_prime
     Eigen::Matrix<double, 1, 2> g0_prime =
-        u_01_prep.transpose() * D0_prime.inverse();
+        u_01_prep.transpose() * inverse_2by2(D0_prime);
     Eigen::Matrix<double, 1, 2> g1_prime =
-        u_01_prep.transpose() * D1_prime.inverse();
+        u_01_prep.transpose() * inverse_2by2(D1_prime);
 
     // C_dE(e)
     Eigen::Matrix<double, 2, 8> C_dE;
@@ -1101,10 +1123,16 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
     }
   }
 
+  C_E_L.makeCompressed();
+
   Eigen::SparseMatrix<double> p_g2e;
   P_G2E(p_g2e);
 
+  auto timer = igl::Timer();
+  timer.start();
   m = C_E_L * p_g2e;
+  std::cout << "C_E_L * p_g2e time: " << timer.getElapsedTime() << "s"
+            << std::endl;
 
   // compute C_E_L_elim
   Eigen::SparseMatrix<double> C_E_L_elim;
@@ -1134,10 +1162,18 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
       }
     }
   }
+  C_E_L_elim.makeCompressed();
 
   // get m_elim
   m_elim.resize(2 * E_cnt - skip_cnt, N_L);
   m_elim = C_E_L_elim * p_g2e;
+
+  // debug use
+  std::ofstream file("endpoint_row_to_vid.txt");
+  for (size_t i = 0; i < row_vertex_id_map.size(); ++i) {
+    file << row_vertex_id_map[i] << std::endl;
+  }
+  file.close();
 }
 
 std::array<int, 5> P_dM_helper(int a, int b) {
@@ -1308,9 +1344,14 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
       C_M_L.insert(eid, eid * 24 + i) = C_M_L_e(0, i);
     }
   }
+  C_M_L.makeCompressed();
 
   Eigen::SparseMatrix<double> p_g2e;
   P_G2E(p_g2e);
 
+  auto timer = igl::Timer();
+  timer.start();
   m = C_M_L * p_g2e;
+  std::cout << "C_M_L * p_g2e time: " << timer.getElapsedTime() << "s"
+            << std::endl;
 }
