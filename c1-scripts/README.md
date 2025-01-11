@@ -1,47 +1,24 @@
 # C1 Meshing
 
-### Requirements / Dependencies
+#### Installation
 
-**Requires CMake 3.30**
+The installation process was only tested on Mac.
 
-- Parametrization: https://github.com/rjc8237/seamless-parametrization-penner.git
-  - binary: ./build/bin/parametrize_seamless
-- Polyfem: https://github.com/polyfem/polyfem.git
-  - branch: generic_al
-  - binary: ./build/PolyFEM_bin
-
-Required Python packages:
-
-- igl
-- meshio
-- numpy
-- copy
-- subprocess
-- sys
-- gmsh
-- h5py
-- scipy
-- json
-
-#### Installing dependencies
-
-Parametrization
+Install and activate the conda environment
 
 ```
-git clone --recurse-submodules https://github.com/rjc8237/seamless-parametrization-penner.git
-cd seamless-parametrization-penner/
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j 4
+conda env create -f c1meshing.yml
+conda activate c1meshing
 ```
 
-Polyfem
+Run the install script that downloads and installs the dependencies, and creates a JSON file with all the executables listed. **Requires CMake 3.30!**
 
 ```
-git clone https://github.com/polyfem/polyfem.git
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j 4
+python3 install_dependencies.py
 ```
+
+The last line of the output should be "All executables were located. Installation successful"
+
+#### Run
+
+Use the script `run_c1_meshing.py`
