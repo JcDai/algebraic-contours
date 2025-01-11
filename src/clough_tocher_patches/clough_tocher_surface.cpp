@@ -749,6 +749,7 @@ void CloughTocherSurface::C_F_int(Eigen::SparseMatrix<double> &m) {
 
   Eigen::SparseMatrix<double> C_diag;
   C_diag.resize(7 * F_cnt, 19 * F_cnt);
+  C_diag.reserve(Eigen::VectorXi::Constant(19 * F_cnt, 7));
 
   for (size_t i = 0; i < F_cnt; ++i) {
     for (int j = 0; j < 7; ++j) {
@@ -760,6 +761,7 @@ void CloughTocherSurface::C_F_int(Eigen::SparseMatrix<double> &m) {
   C_diag.makeCompressed();
 
   m.resize(7 * F_cnt, N_L);
+  m.reserve(Eigen::VectorXi::Constant(N_L, 7));
   // std::cout << 7 * F_cnt << " " << N_L << std::endl;
 
   m = C_diag * p_g2f;
@@ -870,6 +872,7 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
 
   Eigen::SparseMatrix<double> C_E_L;
   C_E_L.resize(2 * E_cnt, 24 * E_cnt);
+  C_E_L.reserve(Eigen::VectorXi::Constant(24 * E_cnt, 2));
 
   // std::vector<int> visited(v_charts.size(), 0);
   std::vector<int> skip(2 * E_cnt, 0);
@@ -1139,6 +1142,7 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
   // compute C_E_L_elim
   Eigen::SparseMatrix<double> C_E_L_elim;
   C_E_L_elim.resize(2 * E_cnt - skip_cnt, 24 * E_cnt);
+  C_E_L_elim.reserve(Eigen::VectorXi::Constant(24 * E_cnt, 2));
 
   std::vector<int> cones;
   m_affine_manifold.compute_cones(cones);
@@ -1239,6 +1243,7 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
 
   Eigen::SparseMatrix<double> C_M_L;
   C_M_L.resize(E_cnt, 24 * E_cnt);
+  C_M_L.reserve(Eigen::VectorXi::Constant(24 * E_cnt, 1));
 
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
