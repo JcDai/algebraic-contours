@@ -107,3 +107,16 @@ if __name__ == "__main__":
     print("Generate", executables_json_filename)
     with open(executables_json_filename, "w") as f:
         f.write(executable_paths_json)
+
+    successfull_installation = True
+    for x in executable_paths:
+        if os.path.isfile(executable_paths[x]):
+            print("*", x, "located")
+        else:
+            print("*", x, "NOT FOUND!!!")
+            successfull_installation = False
+
+    if successfull_installation:
+        print("All executables were located. Installation successfull")
+    else:
+        print("Some executables were not found. INSTALLATION FAILED!!!")
