@@ -1,4 +1,5 @@
 #include "apply_transformation.h"
+#include "clough_tocher_surface.hpp"
 #include "common.h"
 #include "compute_boundaries.h"
 #include "contour_network.h"
@@ -9,8 +10,7 @@
 #include <fstream>
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
-
-#include "clough_tocher_surface.hpp"
+#include <unsupported/Eigen/SparseExtra>
 
 int main(int argc, char *argv[]) {
   // Build maps from strings to enums
@@ -115,21 +115,31 @@ int main(int argc, char *argv[]) {
   Eigen::SparseMatrix<double> C_e_mid;
   ct_surface.C_E_mid(C_e_mid);
 
-  std::ofstream file(output_name + "_interior_constraint_matrix.txt");
-  file << std::setprecision(16) << c_f_int;
-  std::ofstream file_2(output_name + "_edge_endpoint_constraint_matrix.txt");
-  file_2 << std::setprecision(16) << C_e_end;
-  std::ofstream file_3(output_name + "_edge_midpoint_constraint_matrix.txt");
-  file_3 << std::setprecision(16) << C_e_mid;
+  // save sparse matrix
+  Eigen::saveMarket(c_f_int, output_name + "_interior_constraint_matrix.txt");
+  Eigen::saveMarket(C_e_end,
+                    output_name + "_edge_endpoint_constraint_matrix.txt");
+  Eigen::saveMarket(C_e_end_elim,
+                    output_name +
+                        "_edge_endpoint_constraint_matrix_eliminated.txt");
+  Eigen::saveMarket(C_e_mid,
+                    output_name + "_edge_midpoint_constraint_matrix.txt");
 
-  std::ofstream file_4(output_name +
-                       "_edge_endpoint_constraint_matrix_eliminated.txt");
-  file_4 << std::setprecision(16) << C_e_end_elim;
+  // std::ofstream file(output_name + "_interior_constraint_matrix.txt");
+  // file << std::setprecision(16) << c_f_int;
+  // std::ofstream file_2(output_name + "_edge_endpoint_constraint_matrix.txt");
+  // file_2 << std::setprecision(16) << C_e_end;
+  // std::ofstream file_3(output_name + "_edge_midpoint_constraint_matrix.txt");
+  // file_3 << std::setprecision(16) << C_e_mid;
 
-  file.close();
-  file_2.close();
-  file_3.close();
-  file_4.close();
+  // std::ofstream file_4(output_name +
+  //                      "_edge_endpoint_constraint_matrix_eliminated.txt");
+  // file_4 << std::setprecision(16) << C_e_end_elim;
+
+  // file.close();
+  // file_2.close();
+  // file_3.close();
+  // file_4.close();
 
   if (have_external_boundary_data) {
     // TODO
