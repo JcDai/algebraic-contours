@@ -4,6 +4,10 @@ import os
 import subprocess
 
 
+run_script_path = os.path.dirname(__file__)
+executables_json = os.path.join(run_script_path, "executables.json")
+
+
 def run_command(command):
     try:
         subprocess.run(command, shell=True, check=True)
@@ -12,11 +16,12 @@ def run_command(command):
 
 
 # read executables json
-with open("executables.json", "r") as f:
+with open(executables_json, "r") as f:
     executables = json.load(f)
 
 seamless_parametrization_binary = executables["seamless_parametrization_binary"]
 polyfem_binary = executables["polyfem_binary"]
+smooth_contours_binary = executables["smooth_contours_binary"]
 c1_meshing_script = executables["c1_meshing_script"]
 
 c1_meshing_import = os.path.splitext(c1_meshing_script)[0]
@@ -42,7 +47,7 @@ if __name__ == "__main__":
             input_file,
             output_name,
             seamless_parametrization_binary,
-            "CONSTRAINTS MISSING!!!",
+            smooth_contours_binary,
             polyfem_binary,
         ]
     )

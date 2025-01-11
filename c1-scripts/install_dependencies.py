@@ -21,6 +21,9 @@ c1_meshing_script = os.path.join(
     "clough_tocher_patches",
     "c1_meshing_pipeline.py",
 )
+smooth_countours_bin = os.path.join(
+    dependencies_folder, "algebraic-contours", "build", "bin", "generate_cubic_surface"
+)
 
 
 def run_command(command, logging=True):
@@ -69,6 +72,26 @@ if __name__ == "__main__":
         if not os.path.isfile(seamless_bin):
             print("=== Installation of seamless parametrization failed !!! ===")
 
+    # Algebraic Smooth Occluding Contours
+    if os.path.isfile(smooth_countours_bin):
+        print("=== Binary for Smooth Contours found ===")
+    else:
+        print("=== Installing Smooth Contours ===")
+        run_command(
+            """
+            cd dependencies
+            git clone https://github.com/JcDai/algebraic-contours.git
+            cd algebraic-contours
+            mkdir build
+            cd build
+            cmake -DCMAKE_BUILD_TYPE=Release ..
+            make -j
+            """
+        )
+
+        if not os.path.isfile(polyfem_bin):
+            print("=== Installation of Smooth Contours failed !!! ===")
+
     # Polyfem
     if os.path.isfile(polyfem_bin):
         print("=== Binary for PolyFEM found ===")
@@ -98,6 +121,7 @@ if __name__ == "__main__":
     executable_paths = {
         "seamless_parametrization_binary": seamless_bin,
         "polyfem_binary": polyfem_bin,
+        "smooth_contours_binary": smooth_countours_bin,
         "c1_meshing_script": c1_meshing_script,
     }
 
