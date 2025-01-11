@@ -6,6 +6,23 @@ import multiprocessing
 install_script_path = os.path.dirname(__file__)
 executables_json_filename = "executables.json"
 
+dependencies_folder = os.path.join(install_script_path, "dependencies")
+seamless_bin = os.path.join(
+    dependencies_folder,
+    "seamless-parametrization-penner",
+    "build",
+    "bin",
+    "parametrize_seamless",
+)
+polyfem_bin = os.path.join(dependencies_folder, "polyfem", "build", "PolyFEM_bin")
+c1_meshing_script = os.path.join(
+    install_script_path,
+    "..",
+    "src",
+    "clough_tocher_patches",
+    "c1_meshing_pipeline.py",
+)
+
 
 def run_command(command, logging=True):
     try:
@@ -33,70 +50,51 @@ if __name__ == "__main__":
     # create dependencies folder
     os.makedirs("dependencies", exist_ok=True)
 
-    commands = []
     # Seamless Parametrization
-    commands.append(
-        """
-        cd dependencies
-        git clone --recurse-submodules https://github.com/rjc8237/seamless-parametrization-penner.git
-        cd seamless-parametrization-penner
-        mkdir build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=Release ..
-        make -j
-        """
-    )
-    # Polyfem
-    commands.append(
-        """
-        cd dependencies
-        git clone https://github.com/polyfem/polyfem.git
-        cd polyfem
-        git checkout -b generic_al origin/generic_al
-        mkdir build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=Release ..
-        make -j
-        """
-    )
-
-    for command in commands:
-        run_command(command)
-
-    # get all paths to executables
-    dependencies_folder = os.path.join(install_script_path, "dependencies")
-    seamless_bin = os.path.join(
-        dependencies_folder,
-        "seamless-parametrization-penner",
-        "build",
-        "bin",
-        "parametrize_seamless",
-    )
-    print("Path seamless parametrization:", seamless_bin)
     if os.path.isfile(seamless_bin):
-        print("\t=== Binary for seamless parametrization found ===")
+        print("=== Binary for seamless parametrization found ===")
     else:
-        print("\t=== Binary for seamless parametrization NOT FOUND!!! ===")
+        print("=== Installing seamless parametrization ===")
+        run_command(
+            """
+            cd dependencies
+            git clone --recurse-submodules https://github.com/rjc8237/seamless-parametrization-penner.git
+            cd seamless-parametrization-penner
+            mkdir build
+            cd build
+            cmake -DCMAKE_BUILD_TYPE=Release ..
+            make -j
+            """
+        )
 
-    polyfem_bin = os.path.join(dependencies_folder, "polyfem", "build", "PolyFEM_bin")
-    print("Path PolyFEM:", polyfem_bin)
+        if not os.path.isfile(seamless_bin):
+            print("=== Installation of seamless parametrization failed !!! ===")
+
+    # Polyfem
     if os.path.isfile(polyfem_bin):
-        print("\t=== Binary for PolyFEM found ===")
+        print("=== Binary for PolyFEM found ===")
     else:
-        print("\t=== Binary for PolyFEM NOT FOUND!!! ===")
+        print("=== Installing PolyFEM ===")
+        run_command(
+            """
+            cd dependencies
+            git clone https://github.com/polyfem/polyfem.git
+            cd polyfem
+            git checkout -b generic_al origin/generic_al
+            mkdir build
+            cd build
+            cmake -DCMAKE_BUILD_TYPE=Release ..
+            make -j
+            """
+        )
 
-    c1_meshing_script = os.path.join(
-        install_script_path,
-        "..",
-        "src",
-        "clough_tocher_patches",
-        "c1_meshing_pipeline.py",
-    )
-    print("Path c1 meshing script:", c1_meshing_script)
+        if not os.path.isfile(polyfem_bin):
+            print("=== Installation of PolyFEM failed !!! ===")
+
     if os.path.isfile(c1_meshing_script):
-        print("\t=== Script for c1 meshing found ===")
+        print("=== Script for c1 meshing found ===")
     else:
-        print("\t=== Script for c1 meshing NOT FOUND!!! ===")
+        print("=== Script for c1 meshing NOT FOUND!!! ===")
 
     executable_paths = {
         "seamless_parametrization_binary": seamless_bin,
