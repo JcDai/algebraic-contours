@@ -592,11 +592,15 @@ if __name__ == "__main__":
         f013.sort()
         f023.sort()
         f123.sort()
+        f012_str = str(f012[0]) + "+" + str(f012[1]) + "+" + str(f012[2])
+        f013_str = str(f013[0]) + "+" + str(f013[1]) + "+" + str(f013[2])
+        f023_str = str(f023[0]) + "+" + str(f023[1]) + "+" + str(f023[2])
+        f123_str = str(f123[0]) + "+" + str(f123[1]) + "+" + str(f123[2])
 
-        tet_face_to_vertices[str(f012)] = tet[16]
-        tet_face_to_vertices[str(f013)] = tet[17]
-        tet_face_to_vertices[str(f023)] = tet[18]
-        tet_face_to_vertices[str(f123)] = tet[19]
+        tet_face_to_vertices[f012_str] = tet[16]
+        tet_face_to_vertices[f013_str] = tet[17]
+        tet_face_to_vertices[f023_str] = tet[18]
+        tet_face_to_vertices[f123_str] = tet[19]
     
     print("[{}] ".format(datetime.datetime.now()), "constructing tri <-> tet v mappings")
     # map high order tri vertices to tet vertices
@@ -608,7 +612,7 @@ if __name__ == "__main__":
         vs = [para_out_v_to_tet_v_map[tri[0]], para_out_v_to_tet_v_map[tri[1]], bc_surface_to_tet_map[tri[2]]] # vertices in tet idx
         face = [vs[0], vs[1], vs[2]] 
         face.sort()
-        face = str(face)
+        face = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
 
         e01 = str([vs[0], vs[1]])
         e12 = str([vs[1], vs[2]])
