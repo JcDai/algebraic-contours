@@ -548,41 +548,53 @@ if __name__ == "__main__":
     # 19 f123
 
     for tet in tetmesh_high_order_conn:
-        if str([tet[0], tet[1]]) in tet_edge_to_vertices:
-            assert tet_edge_to_vertices[str([tet[0], tet[1]])] == [tet[4], tet[5]]
+        e01 = str(tet[0]) + "+" + str(tet[1])
+        e10 = str(tet[1]) + "+" + str(tet[0])
+        if e01 in tet_edge_to_vertices:
+            assert tet_edge_to_vertices[e01] == [tet[4], tet[5]]
         else:
-            tet_edge_to_vertices[str([tet[0], tet[1]])] = [tet[4], tet[5]]
-            tet_edge_to_vertices[str([tet[1], tet[0]])] = [tet[5], tet[4]]
+            tet_edge_to_vertices[e01] = [tet[4], tet[5]]
+            tet_edge_to_vertices[e10] = [tet[5], tet[4]]
 
-        if str([tet[1], tet[2]]) in tet_edge_to_vertices:
-            assert tet_edge_to_vertices[str([tet[1], tet[2]])] == [tet[6], tet[7]]
+        e12 = str(tet[1]) + "+" + str(tet[2])
+        e21 = str(tet[2]) + "+" + str(tet[1])
+        if e12 in tet_edge_to_vertices:
+            assert tet_edge_to_vertices[e12] == [tet[6], tet[7]]
         else:
-            tet_edge_to_vertices[str([tet[1], tet[2]])] = [tet[6], tet[7]]
-            tet_edge_to_vertices[str([tet[2], tet[1]])] = [tet[7], tet[6]]
+            tet_edge_to_vertices[e12] = [tet[6], tet[7]]
+            tet_edge_to_vertices[e21] = [tet[7], tet[6]]
     
-        if str([tet[2], tet[0]]) in tet_edge_to_vertices:
-            assert tet_edge_to_vertices[str([tet[2], tet[0]])] == [tet[8], tet[9]]
+        e20 = str(tet[2]) + "+" + str(tet[0])
+        e02 = str(tet[0]) + "+" + str(tet[2])
+        if e20 in tet_edge_to_vertices:
+            assert tet_edge_to_vertices[e20] == [tet[8], tet[9]]
         else:
-            tet_edge_to_vertices[str([tet[2], tet[0]])] = [tet[8], tet[9]]
-            tet_edge_to_vertices[str([tet[0], tet[2]])] = [tet[9], tet[8]]
+            tet_edge_to_vertices[e20] = [tet[8], tet[9]]
+            tet_edge_to_vertices[e02] = [tet[9], tet[8]]
         
-        if str([tet[3], tet[0]]) in tet_edge_to_vertices:
-            assert tet_edge_to_vertices[str([tet[3], tet[0]])] == [tet[10], tet[11]]
+        e30 = str(tet[3]) + "+" + str(tet[0])
+        e03 = str(tet[0]) + "+" + str(tet[3])
+        if e30 in tet_edge_to_vertices:
+            assert tet_edge_to_vertices[e30] == [tet[10], tet[11]]
         else:
-            tet_edge_to_vertices[str([tet[3], tet[0]])] = [tet[10], tet[11]]
-            tet_edge_to_vertices[str([tet[0], tet[3]])] = [tet[11], tet[10]]
+            tet_edge_to_vertices[e30] = [tet[10], tet[11]]
+            tet_edge_to_vertices[e03] = [tet[11], tet[10]]
 
-        if str([tet[3], tet[2]]) in tet_edge_to_vertices:
-            assert tet_edge_to_vertices[str([tet[3], tet[2]])] == [tet[12], tet[13]]
+        e32 = str(tet[3]) + "+" + str(tet[2])
+        e23 = str(tet[2]) + "+" + str(tet[3])
+        if e32 in tet_edge_to_vertices:
+            assert tet_edge_to_vertices[e32] == [tet[12], tet[13]]
         else:
-            tet_edge_to_vertices[str([tet[3], tet[2]])] = [tet[12], tet[13]]
-            tet_edge_to_vertices[str([tet[2], tet[3]])] = [tet[13], tet[12]]
+            tet_edge_to_vertices[e32] = [tet[12], tet[13]]
+            tet_edge_to_vertices[e23] = [tet[13], tet[12]]
         
-        if str([tet[3], tet[1]]) in tet_edge_to_vertices:
-            assert tet_edge_to_vertices[str([tet[3], tet[1]])] == [tet[14], tet[15]]
+        e31 = str(tet[3]) + "+" + str(tet[1])
+        e13 = str(tet[1]) + "+" + str(tet[3])
+        if e31 in tet_edge_to_vertices:
+            assert tet_edge_to_vertices[e31] == [tet[14], tet[15]]
         else:
-            tet_edge_to_vertices[str([tet[3], tet[1]])] = [tet[14], tet[15]]
-            tet_edge_to_vertices[str([tet[1], tet[3]])] = [tet[15], tet[14]]
+            tet_edge_to_vertices[e31] = [tet[14], tet[15]]
+            tet_edge_to_vertices[e13] = [tet[15], tet[14]]
 
         f012 = [tet[0], tet[1], tet[2]]
         f013 = [tet[0], tet[1], tet[3]]
@@ -614,9 +626,9 @@ if __name__ == "__main__":
         face.sort()
         face = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
 
-        e01 = str([vs[0], vs[1]])
-        e12 = str([vs[1], vs[2]])
-        e20 = str([vs[2], vs[0]])
+        e01 = str(vs[0]) + "+" +  str(vs[1])
+        e12 = str(vs[1]) + "+" +  str(vs[2])
+        e20 = str(vs[2]) + "+" +  str(vs[0])
 
         # face 
         tri_to_tet_high_order_v_map[tri[9]] = tet_face_to_vertices[face]
