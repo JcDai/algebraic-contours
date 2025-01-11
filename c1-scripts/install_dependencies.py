@@ -1,7 +1,6 @@
 import json
 import os
 import subprocess
-import multiprocessing
 
 install_script_path = os.path.dirname(__file__)
 executables_json_filename = "executables.json"
@@ -117,6 +116,6 @@ if __name__ == "__main__":
             successfull_installation = False
 
     if successfull_installation:
-        print("All executables were located. Installation successfull")
+        print("All executables were located. Installation successful")
     else:
         print("Some executables were not found. INSTALLATION FAILED!!!")
