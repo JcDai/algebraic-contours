@@ -717,6 +717,7 @@ void CloughTocherSurface::P_G2F(Eigen::SparseMatrix<double> &m) {
   m.resize(19 * F_cnt, N_L);
 
   std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(F_cnt * 19);
 
   const auto &face_charts = m_affine_manifold.m_face_charts;
   for (size_t i = 0; i < face_charts.size(); ++i) {
@@ -775,6 +776,7 @@ void CloughTocherSurface::P_G2E(Eigen::SparseMatrix<double> &m) {
   const auto &f_charts = m_affine_manifold.m_face_charts;
 
   std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(E_cnt * 24);
   for (size_t i = 0; i < e_charts.size(); ++i) {
     // std::cout << "edge " << e_charts[i].left_vertex_index << " "
     //           << e_charts[i].right_vertex_index << ": " << std::endl;
@@ -873,7 +875,7 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
   std::vector<int> skip(2 * E_cnt, 0);
   int64_t skip_cnt = 0;
 
-  std::vector<int64_t> row_vertex_id_map;
+  // std::vector<int64_t> row_vertex_id_map;
 
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
@@ -901,8 +903,8 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
       }
     }
 
-    row_vertex_id_map.push_back(e.left_vertex_index);
-    row_vertex_id_map.push_back(e.right_vertex_index);
+    // row_vertex_id_map.push_back(e.left_vertex_index);
+    // row_vertex_id_map.push_back(e.right_vertex_index);
 
     // T and T'
     const auto &T = Fv.row(e.top_face_index);
@@ -1169,11 +1171,11 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
   m_elim = C_E_L_elim * p_g2e;
 
   // debug use
-  std::ofstream file("endpoint_row_to_vid.txt");
-  for (size_t i = 0; i < row_vertex_id_map.size(); ++i) {
-    file << row_vertex_id_map[i] << std::endl;
-  }
-  file.close();
+  // std::ofstream file("endpoint_row_to_vid.txt");
+  // for (size_t i = 0; i < row_vertex_id_map.size(); ++i) {
+  //   file << row_vertex_id_map[i] << std::endl;
+  // }
+  // file.close();
 }
 
 std::array<int, 5> P_dM_helper(int a, int b) {
