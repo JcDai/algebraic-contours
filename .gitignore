@@ -10,3 +10,4 @@ logs*
 *pycache*
 *.obj
 c1-scripts/dependencies
+c1-scripts/executables.json
