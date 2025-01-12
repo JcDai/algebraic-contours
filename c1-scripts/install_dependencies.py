@@ -24,6 +24,16 @@ c1_meshing_script = os.path.join(
 smooth_countours_bin = os.path.join(
     dependencies_folder, "algebraic-contours", "build", "bin", "generate_cubic_surface"
 )
+wmtk_bin = os.path.join(
+    dependencies_folder,
+    "wildmeshing-toolkit",
+    "build",
+    "applications",
+    "tetwild_msh_converter_app",
+)
+tetwild_bin = os.path.join(dependencies_folder, "TetWild", "build", "TetWild")
+
+print(wmtk_bin)
 
 
 def run_command(command, logging=True):
@@ -113,6 +123,46 @@ if __name__ == "__main__":
         if not os.path.isfile(polyfem_bin):
             print("=== Installation of PolyFEM failed !!! ===")
 
+    # Wildmeshing Toolkit
+    if os.path.isfile(wmtk_bin):
+        print("=== Binary for Wildmeshing Toolkit found ===")
+    else:
+        print("=== Installing Wildmeshing Toolkit ===")
+        run_command(
+            """
+            cd dependencies
+            git clone https://github.com/wildmeshing/wildmeshing-toolkit.git
+            cd wildmeshing-toolkit
+            mkdir build
+            cd build
+            cmake -DCMAKE_BUILD_TYPE=Release ..
+            make -j
+            """
+        )
+
+        if not os.path.isfile(wmtk_bin):
+            print("=== Installation of Wildmeshing Toolkit failed !!! ===")
+
+    # Tetwild
+    if os.path.isfile(tetwild_bin):
+        print("=== Binary for TetWild found ===")
+    else:
+        print("=== Installing TetWild ===")
+        run_command(
+            """
+            cd dependencies
+            git clone https://github.com/daniel-zint/TetWild.git
+            cd TetWild
+            mkdir build
+            cd build
+            cmake -DCMAKE_BUILD_TYPE=Release ..
+            make -j
+            """
+        )
+
+        if not os.path.isfile(tetwild_bin):
+            print("=== Installation of TetWild failed !!! ===")
+
     if os.path.isfile(c1_meshing_script):
         print("=== Script for c1 meshing found ===")
     else:
@@ -123,6 +173,8 @@ if __name__ == "__main__":
         "polyfem_binary": polyfem_bin,
         "smooth_contours_binary": smooth_countours_bin,
         "c1_meshing_script": c1_meshing_script,
+        "wmtk_msh_converter_binary": wmtk_bin,
+        "tetwild_binary": tetwild_bin,
     }
 
     executable_paths_json = json.dumps(executable_paths, indent=4)

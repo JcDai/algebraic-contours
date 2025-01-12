@@ -24,8 +24,6 @@ polyfem_binary = executables["polyfem_binary"]
 smooth_contours_binary = executables["smooth_contours_binary"]
 c1_meshing_script = executables["c1_meshing_script"]
 
-c1_meshing_import = os.path.splitext(c1_meshing_script)[0]
-
 if __name__ == "__main__":
     args = sys.argv
 
@@ -39,6 +37,14 @@ if __name__ == "__main__":
 
     input_file = args[1]
     output_name = args[2]
+
+    if not os.path.isfile(input_file):
+        print("Input file", input_file, " does not exist")
+        exit()
+
+    # compute output_name from input_file
+    # create folder within working directory
+    # cd to that folder and run from there
 
     command = " ".join(
         [
