@@ -11,6 +11,12 @@ conda env create -f c1meshing.yml
 conda activate c1meshing
 ```
 
+Install suite-sparse
+
+```
+brew install suite-sparse
+```
+
 Run the install script that downloads and installs the dependencies, and creates a JSON file with all the executables listed. **Requires CMake 3.30!**
 
 ```

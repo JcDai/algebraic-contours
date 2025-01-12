@@ -4,6 +4,9 @@ import os
 import subprocess
 import traceback
 import shutil
+import meshio as mio
+import numpy as np
+import igl
 
 run_script_path = os.path.dirname(__file__)
 executables_json = os.path.join(run_script_path, "executables.json")
@@ -91,14 +94,26 @@ if __name__ == "__main__":
     wmtk_output = os.path.splitext(tetwild_output_msh)[0] + "_tets.vtu"
     print("wmtk output:", wmtk_output)
     # copy output files
-    shutil.copyfile(
-        os.path.join(tmp_folder, wmtk_output),
-        input_file_basename_stem + "_tets.vtu",
-    )
+    # shutil.copyfile(
+    #     os.path.join(tmp_folder, wmtk_output),
+    #     input_file_basename_stem + "_tets.vtu",
+    # )
     shutil.copyfile(
         os.path.join(tmp_folder, tetwild_output_obj),
         tetwild_output_obj,
     )
+
+    v, _, n, f, _, _ = igl.read_obj(tetwild_output_obj)
+    if not igl.is_edge_manifold(f):
+        print("Mesh is not manifold!!!")
+    else:
+        # invert winding number
+        tm = mio.read(os.path.join(tmp_folder, wmtk_output))
+        tets = tm.cells_dict["tetra"]
+        a = tm.cell_data["winding_number"][0].copy()
+        a = np.max(a) - a
+        tm.cell_data["winding_number"] = a[:, None]
+        mio.write(input_file_basename_stem + "_tets.vtu", tm)
 
     # remove tmp folder
     shutil.rmtree(input_file_basename_stem)
