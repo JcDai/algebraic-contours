@@ -981,25 +981,41 @@ if __name__ == "__main__":
     matlab_b_m = read_matlab_sparse("matlab_b_m.txt")
     matlab_M = read_matlab_sparse("matlab_M.txt")
 
-    with h5py.File(workspace_path  + "matlab_C_trip_matrix.hdf5", 'w') as f:
+    with h5py.File(workspace_path  + "matlab_constraint_matrix.hdf5", 'w') as f:
         f.create_dataset("C_trip/values", data=matlab_C_trip.data)
         f.create_dataset("C_trip/cols", data=matlab_C_trip.col)
         f.create_dataset("C_trip/rows", data=matlab_C_trip.row)
-    
-    with h5py.File(workspace_path  + "matlab_b_matrix.hdf5", 'w') as f:
+        f.create_dataset("C_trip/shape", data=matlab_C_trip.shape)
+
         f.create_dataset("b/values", data=matlab_b.data)
         f.create_dataset("b/cols", data=matlab_b.col)
         f.create_dataset("b/rows", data=matlab_b.row)
-    
-    with h5py.File(workspace_path  + "matlab_b_m_matrix.hdf5", 'w') as f:
+        f.create_dataset("b/shape", data=matlab_b.shape)
+
         f.create_dataset("matlab_b_m/values", data=matlab_b_m.data)
         f.create_dataset("matlab_b_m/cols", data=matlab_b_m.col)
         f.create_dataset("matlab_b_m/rows", data=matlab_b_m.row)
-    
-    with h5py.File(workspace_path  + "matlab_M_matrix.hdf5", 'w') as f:
+        f.create_dataset("matlab_b_m/shape", data=matlab_b_m.shape)
+
         f.create_dataset("matlab_M/values", data=matlab_M.data)
         f.create_dataset("matlab_M/cols", data=matlab_M.col)
         f.create_dataset("matlab_M/rows", data=matlab_M.row)
+        f.create_dataset("matlab_M/shape", data=matlab_M.shape)
+    
+    # with h5py.File(workspace_path  + "matlab_b_matrix.hdf5", 'w') as f:
+    #     f.create_dataset("b/values", data=matlab_b.data)
+    #     f.create_dataset("b/cols", data=matlab_b.col)
+    #     f.create_dataset("b/rows", data=matlab_b.row)
+    
+    # with h5py.File(workspace_path  + "matlab_b_m_matrix.hdf5", 'w') as f:
+    #     f.create_dataset("matlab_b_m/values", data=matlab_b_m.data)
+    #     f.create_dataset("matlab_b_m/cols", data=matlab_b_m.col)
+    #     f.create_dataset("matlab_b_m/rows", data=matlab_b_m.row)
+    
+    # with h5py.File(workspace_path  + "matlab_M_matrix.hdf5", 'w') as f:
+    #     f.create_dataset("matlab_M/values", data=matlab_M.data)
+    #     f.create_dataset("matlab_M/cols", data=matlab_M.col)
+    #     f.create_dataset("matlab_M/rows", data=matlab_M.row)
 
     print("[{}] ".format(datetime.datetime.now()), "Matlab finished.")
     ####################################################
