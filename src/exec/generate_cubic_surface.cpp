@@ -8,6 +8,7 @@
 #include "twelve_split_spline.h"
 #include <CLI/CLI.hpp>
 #include <fstream>
+#include <igl/per_vertex_normals.h>
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
 #include <unsupported/Eigen/SparseExtra>
@@ -115,6 +116,14 @@ int main(int argc, char *argv[]) {
   Eigen::SparseMatrix<double> C_e_mid;
   ct_surface.C_E_mid(C_e_mid);
 
+  Eigen::MatrixXd v_normals;
+  // TODO: change weight
+  igl::per_vertex_normals(V, F, igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_AREA,
+                          v_normals);
+
+  Eigen::SparseMatrix<double> c_cone;
+  ct_surface.C_F_cone(c_cone, v_normals);
+
   // save sparse matrix
   Eigen::saveMarket(c_f_int, output_name + "_interior_constraint_matrix.txt");
   Eigen::saveMarket(C_e_end,
@@ -124,6 +133,7 @@ int main(int argc, char *argv[]) {
                         "_edge_endpoint_constraint_matrix_eliminated.txt");
   Eigen::saveMarket(C_e_mid,
                     output_name + "_edge_midpoint_constraint_matrix.txt");
+  Eigen::saveMarket(c_cone, output_name + "_cone_constraint_matrix.txt");
 
   // std::ofstream file(output_name + "_interior_constraint_matrix.txt");
   // file << std::setprecision(16) << c_f_int;
