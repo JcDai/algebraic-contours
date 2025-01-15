@@ -67,9 +67,12 @@ def write_matlab_script(file):
     with open(file, 'w') as f:
         f.write(
 """
-C_filename = "/Users/jiachengdai/Desktop/algebraic-contours/build/test_pipeline_icosphere/CT_C_matrix.hdf5";
-P_T_filename = "/Users/jiachengdai/Desktop/algebraic-contours/build/test_pipeline_icosphere/CT_P_T_matrix.hdf5";
-points_filename = "/Users/jiachengdai/Desktop/algebraic-contours/build/test_pipeline_icosphere/matlab_mesh.hdf5";
+C_filename = "matlab_input_C1_constraint_matrix.hdf5";
+P_T_filename = "CT_P_T_matrix.hdf5";
+points_filename = "matlab_mesh.hdf5";
+Cone_filename = "matlab_input_cone_matrix.hdf5";
+Di_filename = "matlab_input_dirichlet_matrix.hdf5";
+
 
 % C
 C_c = h5read(C_filename, "/C/cols");
@@ -85,7 +88,21 @@ p_t_v = h5read(P_T_filename, "/P_T/values");
 p_t_shape = h5read(P_T_filename, "/P_T/shape");
 P_T = sparse(p_t_r+1, p_t_c+1, p_t_v, p_t_shape(1), p_t_shape(2));
 
-% triple Cons
+% Dirichlet
+Di_c = h5read(Di_filename, "/Di/cols");
+Di_r = h5read(Di_filename, "/Di/rows");
+Di_v = h5read(Di_filename, "/Di/values");
+Di_shape = h5read(Di_filename, "/Di/shape");
+Di = sparse(Di_r+1,Di_c+1,Di_v,Di_shape(1), Di_shape(2));
+
+% Cone
+Cone_c = h5read(Cone_filename, "/C_cone/cols");
+Cone_r = h5read(Cone_filename, "/C_cone/rows");
+Cone_v = h5read(Cone_filename, "/C_cone/values");
+Cone_shape = h5read(Cone_filename, "/C_cone/shape");
+Cone = sparse(Cone_r+1,Cone_c+1,Cone_v,Cone_shape(1), Cone_shape(2));
+
+% triple C
 C_c_trip = zeros(size(C_c, 1)*3, 1);
 C_r_trip = zeros(size(C_r, 1)*3, 1);
 C_v_trip = zeros(size(C_v, 1)*3, 1);
@@ -109,23 +126,84 @@ for i = 1:size(C_v, 1)
 end
 
 C_trip = sparse(C_r_trip+1,C_c_trip+1,C_v_trip, C_shape(1)*3, C_shape(2)*3);
-C_trip_permuted = C_trip * P_T';
 
-% QR decomposition
-[Q, R, P_qr] = qr(C_trip_permuted);
+% reorder Cone
+Cone_ro_c = zeros(size(Cone_c, 1), 1);
+Cone_ro_r = zeros(size(Cone_r, 1), 1);
+Cone_ro_v = zeros(size(Cone_v, 1), 1);
 
-R1 = R(1:end, 1:size(R,1));
-R2 = R(1:end, size(R,1) + 1:end);
+Cone_ro_r = Cone_r;
+Cone_ro_v = Cone_v;
+
+for i = 1:size(Cone_c, 1)
+    old_c = Cone_c(i);
+    new_c = -1;
+    if old_c < Cone_shape(2)/3
+        new_c = old_c * 3;
+    elseif old_c < Cone_shape(2)/3*2
+        new_c = (old_c - Cone_shape(2)/3) * 3 + 1;
+    else
+        new_c = (old_c - Cone_shape(2)/3*2) * 3 + 2;
+    end
+    Cone_ro_c(i) = new_c;
+end
+
+Cone_ro_c = int64(Cone_ro_c);
+
+Cone_ro = sparse(Cone_ro_r+1,Cone_ro_c+1,Cone_ro_v,Cone_shape(1), Cone_shape(2));
+
+
+% triple Dirichlet
+Di_c_trip = zeros(size(Di_c, 1)*3, 1);
+Di_r_trip = zeros(size(Di_r, 1)*3, 1);
+Di_v_trip = zeros(size(Di_v, 1)*3, 1);
+
+for i = 1:size(Di_r, 1)
+    Di_r_trip((i - 1) * 3 + 1, 1) = (Di_r(i,1)) * 3 + 0;
+    Di_r_trip((i - 1) * 3 + 2, 1) = (Di_r(i,1)) * 3 + 1;
+    Di_r_trip((i - 1) * 3 + 3, 1) = (Di_r(i,1)) * 3 + 2;
+end
+
+for i = 1:size(Di_c, 1)
+    Di_c_trip((i - 1) * 3 + 1, 1) = (Di_c(i,1)) * 3 + 0;
+    Di_c_trip((i - 1) * 3 + 2, 1) = (Di_c(i,1)) * 3 + 1;
+    Di_c_trip((i - 1) * 3 + 3, 1) = (Di_c(i,1)) * 3 + 2;
+end
+
+for i = 1:size(Di_v, 1)
+    Di_v_trip((i - 1) * 3 + 1, 1) = Di_v(i,1);
+    Di_v_trip((i - 1) * 3 + 2, 1) = Di_v(i,1);
+    Di_v_trip((i - 1) * 3 + 3, 1) = Di_v(i,1);
+end
+
+Di_trip = sparse(Di_r_trip+1,Di_c_trip+1,Di_v_trip, Di_shape(1)*3, Di_shape(2)*3);
+
+Full_cons = [C_trip; Di_trip];
+% Full_cons = [C_trip; Cone_ro; Di_trip];
+% Full_cons = Di_trip;
+Full_cons_permuted = Full_cons * P_T';
 
 % points
 points = h5read(points_filename, "/points");
 points = points';
 node_vector = reshape(points', 1, []);
 
+b_cons = - C_trip * node_vector';
+% b_cons = - [C_trip; Cone_ro] * node_vector';
+b_di = zeros(size(Di_r_trip, 1), 1);
+b = [b_cons; b_di];
+% b = b_di + 10;
+
+% QR decomposition
+
+[Q, R, P_qr] = qr(Full_cons_permuted);
+
+R1 = R(1:end, 1:size(R,1));
+R2 = R(1:end, size(R,1) + 1:end);
+
 % useful things
 P = P_qr' * P_T;
 R1invR2 = R1\R2;
-b = - C_trip * node_vector';
 R1invQTb = R1 \ (Q' * b);
 b_m = zeros(size(node_vector, 2), 1);
 b_m(1:size(R1invQTb, 1)) = R1invQTb;
@@ -144,9 +222,32 @@ writematrix(b_m_file_data, "matlab_b_m.txt");
 b_file_data = [size(b, 1) size(b, 2) size(b_row, 1);b_row b_col b_v];
 writematrix(b_file_data, "matlab_b.txt");
 
-[C_trip_row, C_trip_col, C_trip_v] = find(C_trip);
-C_trip_file_data = [size(C_trip, 1) size(C_trip, 2) size(C_trip_row, 1);C_trip_row C_trip_col C_trip_v];
-writematrix(C_trip_file_data, "matlab_C_trip.txt");
+[Full_cons_row, Full_cons_col, Full_cons_v] = find(Full_cons);
+Full_cons_file_data = [size(Full_cons, 1) size(Full_cons, 2) size(Full_cons_row, 1);Full_cons_row Full_cons_col Full_cons_v];
+writematrix(Full_cons_file_data, "matlab_C_trip.txt");
+
+h5create("matlab_M.hdf5", "/A_proj_triplets/values", size(M_v, 1));
+h5write("matlab_M.hdf5", "/A_proj_triplets/values", M_v');
+h5create("matlab_M.hdf5", "/A_proj_triplets/rows", size(M_v, 1), Datatype="int32");
+h5write("matlab_M.hdf5", "/A_proj_triplets/rows", int32(M_row - 1)');
+h5create("matlab_M.hdf5", "/A_proj_triplets/cols", size(M_col, 1), Datatype="int32");
+h5write("matlab_M.hdf5", "/A_proj_triplets/cols", int32(M_col - 1)');
+h5create("matlab_M.hdf5", "/A_proj_triplets/shape", 2);
+h5write("matlab_M.hdf5", "/A_proj_triplets/shape", [size(M, 1); size(M, 2)]');
+
+h5create("matlab_M.hdf5", "/A_triplets/values", size(Full_cons_v, 1));
+h5write("matlab_M.hdf5", "/A_triplets/values", Full_cons_v');
+h5create("matlab_M.hdf5", "/A_triplets/rows", size(Full_cons_v, 1), Datatype="int32");
+h5write("matlab_M.hdf5", "/A_triplets/rows", int32(Full_cons_row - 1)');
+h5create("matlab_M.hdf5", "/A_triplets/cols", size(Full_cons_col, 1), Datatype="int32");
+h5write("matlab_M.hdf5", "/A_triplets/cols", int32(Full_cons_col - 1)');
+h5create("matlab_M.hdf5", "/A_triplets/shape", 2);
+h5write("matlab_M.hdf5", "/A_triplets/shape", [size(Full_cons, 1); size(Full_cons, 2)]');
+
+h5create("matlab_M.hdf5", "/b", [1,size(b, 1)]);
+h5write("matlab_M.hdf5", "/b", b');
+h5create("matlab_M.hdf5", "/b_proj", [1,size(b_m, 1)]);
+h5write("matlab_M.hdf5", "/b_proj", b_m');
 
 exit;
 """
@@ -891,12 +992,33 @@ if __name__ == "__main__":
         f.create_dataset("A_triplets/rows", data=A.row)
         f.create_dataset("b", data=b)
 
-    # build P_T, left mul x  i.e. P_T x
-    # P right mul C i.e. C P
+    # compute boundary nodes
     cells_ho = m.cells_dict['tetra20']
     cells = cells_ho[:,:4]
     bd_f = igl.boundary_facets(cells)
-    bd_v = np.unique(bd_f)
+    bd_v = []
+    for ff in bd_f:
+        # corners
+        for i in range(3):
+            bd_v.append(ff[i])
+        # edges
+        e01 = str(ff[0]) + "+" +  str(ff[1])
+        e12 = str(ff[1]) + "+" +  str(ff[2])
+        e20 = str(ff[2]) + "+" +  str(ff[0])
+        bd_v.extend(tet_edge_to_vertices[e01])
+        bd_v.extend(tet_edge_to_vertices[e12])
+        bd_v.extend(tet_edge_to_vertices[e20])
+        # faces
+        ff_sorted = [ff[0], ff[1], ff[2]]
+        ff_sorted.sort()
+        ff_str = str(ff_sorted[0]) + "+" + str(ff_sorted[1]) + "+" + str(ff_sorted[2])
+        bd_v.append(tet_face_to_vertices[ff_str])
+    bd_v = np.unique(np.array(bd_v))
+
+    # bd_v = np.unique(bd_f)
+
+    # build P_T, left mul x  i.e. P_T x
+    # P right mul C i.e. C P
     l2g_r = np.flip(local2global)
 
     constrained = [False for i in range(v.shape[0])]
@@ -959,14 +1081,41 @@ if __name__ == "__main__":
     full_matrix_tet = scipy.sparse.coo_array((full_matrix_tet_data, (full_matrix_tet_row, full_matrix_tet_col)), shape=(full_matrix.shape[0], v.shape[0]))
 
     # constraint matrix with boundary conditions
-    C_matrix = scipy.sparse.vstack((full_matrix_tet, di_matrix))
+    # C_matrix = scipy.sparse.vstack((full_matrix_tet, di_matrix))
 
-    with h5py.File(workspace_path  + "CT_C_matrix.hdf5", 'w') as f:
-        f.create_dataset("C/values", data=np.array(C_matrix.data))
-        f.create_dataset("C/cols", data=np.array(C_matrix.col))
-        f.create_dataset("C/rows", data=np.array(C_matrix.row))
-        f.create_dataset("C/shape", data=np.array([C_matrix.shape[0], C_matrix.shape[1]]))
+    with h5py.File(workspace_path  + "matlab_input_C1_constraint_matrix.hdf5", 'w') as f:
+        f.create_dataset("C/values", data=np.array(full_matrix_tet.data))
+        f.create_dataset("C/cols", data=np.array(full_matrix_tet.col))
+        f.create_dataset("C/rows", data=np.array(full_matrix_tet.row))
+        f.create_dataset("C/shape", data=np.array([full_matrix_tet.shape[0], full_matrix_tet.shape[1]]))
 
+    with h5py.File(workspace_path  + "matlab_input_dirichlet_matrix.hdf5", 'w') as f:
+        f.create_dataset("Di/values", data=np.array(di_matrix.data))
+        f.create_dataset("Di/cols", data=np.array(di_matrix.col))
+        f.create_dataset("Di/rows", data=np.array(di_matrix.row))
+        f.create_dataset("Di/shape", data=np.array([di_matrix.shape[0], di_matrix.shape[1]]))
+
+    # expand cone constraint on tetmesh
+    cone_matrix = scipy.io.mmread('CT_cone_constraint_matrix.txt')
+    cone_matrix = cone_matrix.tocoo(True)
+    cone_matrix_row = cone_matrix.row
+    cone_matrix_col = cone_matrix.col
+    cone_matrix_data = cone_matrix.data
+    local2global_cone = np.array(local2global.tolist() + (local2global+v.shape[0]).tolist() + (local2global+v.shape[0]*2).tolist())
+    # print(local2global_cone.shape)
+    # print(local2global_cone)
+    
+    cone_matrix_tet_row = cone_matrix_row
+    cone_matrix_tet_col = np.array([local2global_cone[cone_matrix_col[i]] for i in range(cone_matrix_col.shape[0])])
+    cone_matrix_tet_data = cone_matrix_data
+    cone_matrix_tet = scipy.sparse.coo_array((cone_matrix_tet_data, (cone_matrix_tet_row, cone_matrix_tet_col)), shape=(cone_matrix.shape[0], v.shape[0]*3))
+
+    with h5py.File(workspace_path  + "matlab_input_cone_matrix.hdf5", 'w') as f:
+        f.create_dataset("C_cone/values", data=np.array(cone_matrix_tet.data))
+        f.create_dataset("C_cone/cols", data=np.array(cone_matrix_tet.col))
+        f.create_dataset("C_cone/rows", data=np.array(cone_matrix_tet.row))
+        f.create_dataset("C_cone/shape", data=np.array([cone_matrix_tet.shape[0], cone_matrix_tet.shape[1]]))
+    
     ####################################################
     #                    Call Matlab                   #
     ####################################################
@@ -978,29 +1127,25 @@ if __name__ == "__main__":
 
     matlab_C_trip = read_matlab_sparse("matlab_C_trip.txt")
     matlab_b = read_matlab_sparse("matlab_b.txt")
+    matlab_b = matlab_b.todense()
     matlab_b_m = read_matlab_sparse("matlab_b_m.txt")
+    matlab_b_m = matlab_b_m.todense()
     matlab_M = read_matlab_sparse("matlab_M.txt")
 
     with h5py.File(workspace_path  + "matlab_constraint_matrix.hdf5", 'w') as f:
-        f.create_dataset("C_trip/values", data=matlab_C_trip.data)
-        f.create_dataset("C_trip/cols", data=matlab_C_trip.col)
-        f.create_dataset("C_trip/rows", data=matlab_C_trip.row)
-        f.create_dataset("C_trip/shape", data=matlab_C_trip.shape)
+        f.create_dataset("A_triplets/values", data=matlab_C_trip.data)
+        f.create_dataset("A_triplets/cols", data=matlab_C_trip.col.astype(np.int32))
+        f.create_dataset("A_triplets/rows", data=matlab_C_trip.row.astype(np.int32))
+        f.create_dataset("A_triplets/shape", data=matlab_C_trip.shape)
 
-        f.create_dataset("b/values", data=matlab_b.data)
-        f.create_dataset("b/cols", data=matlab_b.col)
-        f.create_dataset("b/rows", data=matlab_b.row)
-        f.create_dataset("b/shape", data=matlab_b.shape)
+        f.create_dataset("b", data=matlab_b)
 
-        f.create_dataset("matlab_b_m/values", data=matlab_b_m.data)
-        f.create_dataset("matlab_b_m/cols", data=matlab_b_m.col)
-        f.create_dataset("matlab_b_m/rows", data=matlab_b_m.row)
-        f.create_dataset("matlab_b_m/shape", data=matlab_b_m.shape)
+        f.create_dataset("b_proj", data=matlab_b_m)
 
-        f.create_dataset("matlab_M/values", data=matlab_M.data)
-        f.create_dataset("matlab_M/cols", data=matlab_M.col)
-        f.create_dataset("matlab_M/rows", data=matlab_M.row)
-        f.create_dataset("matlab_M/shape", data=matlab_M.shape)
+        f.create_dataset("A_proj_triplets/values", data=matlab_M.data)
+        f.create_dataset("A_proj_triplets/cols", data=matlab_M.col.astype(np.int32))
+        f.create_dataset("A_proj_triplets/rows", data=matlab_M.row.astype(np.int32))
+        f.create_dataset("A_proj_triplets/shape", data=matlab_M.shape)
     
     # with h5py.File(workspace_path  + "matlab_b_matrix.hdf5", 'w') as f:
     #     f.create_dataset("b/values", data=matlab_b.data)
@@ -1021,21 +1166,21 @@ if __name__ == "__main__":
     ####################################################
     #                    TODO: integrate               #
     ####################################################
-    # cone constraint
-    print("[{}] ".format(datetime.datetime.now()), "constructing cone hard constraint matrix ...")
-    cone_matrix = scipy.io.mmread('CT_cone_constraint_matrix.txt')
+    # # cone constraint
+    # print("[{}] ".format(datetime.datetime.now()), "constructing cone hard constraint matrix ...")
+    # cone_matrix = scipy.io.mmread('CT_cone_constraint_matrix.txt')
 
-    v_copy = v[local2global, :]
-    v_vec = np.concatenate((v_copy[:,0], v_copy[:,1], v_copy[:,2]))
-    A_cone = cone_matrix.tocoo(True)
-    b_cone = -(A_cone @ v_vec)
+    # v_copy = v[local2global, :]
+    # v_vec = np.concatenate((v_copy[:,0], v_copy[:,1], v_copy[:,2]))
+    # A_cone = cone_matrix.tocoo(True)
+    # b_cone = -(A_cone @ v_vec)
 
-    with h5py.File(workspace_path  + "CT_cone_constraint_matrix.hdf5", 'w') as f:
-        f.create_dataset("local2global", data=local2global.astype(np.int32)) # TODO: pending change
-        f.create_dataset("A_triplets/values", data=A_cone.data)
-        f.create_dataset("A_triplets/cols", data=A_cone.col)
-        f.create_dataset("A_triplets/rows", data=A_cone.row)
-        f.create_dataset("b", data=b_cone)
+    # with h5py.File(workspace_path  + "CT_cone_constraint_matrix.hdf5", 'w') as f:
+    #     f.create_dataset("local2global", data=local2global.astype(np.int32)) # TODO: pending change
+    #     f.create_dataset("A_triplets/values", data=A_cone.data)
+    #     f.create_dataset("A_triplets/cols", data=A_cone.col)
+    #     f.create_dataset("A_triplets/rows", data=A_cone.row)
+    #     f.create_dataset("b", data=b_cone)
 
     # soft constraint
     print("[{}] ".format(datetime.datetime.now()), "constructing soft constraint matrix ...")
