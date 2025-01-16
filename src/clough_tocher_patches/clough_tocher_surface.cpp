@@ -878,7 +878,7 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
   std::vector<int> skip(2 * E_cnt, 0);
   int64_t skip_cnt = 0;
 
-  // std::vector<int64_t> row_vertex_id_map;
+  std::vector<int64_t> row_vertex_id_map;
 
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
@@ -906,8 +906,8 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
       }
     }
 
-    // row_vertex_id_map.push_back(e.left_vertex_index);
-    // row_vertex_id_map.push_back(e.right_vertex_index);
+    row_vertex_id_map.push_back(e.left_vertex_index);
+    row_vertex_id_map.push_back(e.right_vertex_index);
 
     // T and T'
     const auto &T = Fv.row(e.top_face_index);
@@ -1175,11 +1175,11 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
   m_elim = C_E_L_elim * p_g2e;
 
   // debug use
-  // std::ofstream file("endpoint_row_to_vid.txt");
-  // for (size_t i = 0; i < row_vertex_id_map.size(); ++i) {
-  //   file << row_vertex_id_map[i] << std::endl;
-  // }
-  // file.close();
+  std::ofstream file("endpoint_row_to_vid.txt");
+  for (size_t i = 0; i < row_vertex_id_map.size(); ++i) {
+    file << row_vertex_id_map[i] << std::endl;
+  }
+  file.close();
 }
 
 std::array<int, 5> P_dM_helper(int a, int b) {
@@ -1401,11 +1401,14 @@ void CloughTocherSurface::P_3D(Eigen::SparseMatrix<double> &m) {
 
   for (size_t i = 0; i < F_cnt; ++i) {
     for (int j = 0; j < 19; ++j) {
-      triplets.emplace_back(i * 19 * 3 + 0 * 19 + j, 0 * F_cnt + i * 19 + j,
+      triplets.emplace_back(i * 19 * 3 + 0 * 19 + j,
+                            0 * F_cnt * 19 + i * 19 + j,
                             1); // x
-      triplets.emplace_back(i * 19 * 3 + 1 * 19 + j, 1 * F_cnt + i * 19 + j,
+      triplets.emplace_back(i * 19 * 3 + 1 * 19 + j,
+                            1 * F_cnt * 19 + i * 19 + j,
                             1); // y
-      triplets.emplace_back(i * 19 * 3 + 2 * 19 + j, 2 * F_cnt + i * 19 + j,
+      triplets.emplace_back(i * 19 * 3 + 2 * 19 + j,
+                            2 * F_cnt * 19 + i * 19 + j,
                             1); // z
     }
   }
@@ -1438,6 +1441,34 @@ std::array<int64_t, 57> P_C_2_helper(const int &lid) {
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 19; ++j) {
       row_col[i * 19 + j] = row_col_1D[j] + i * 19;
+    }
+  }
+
+  return row_col;
+}
+
+std::array<int64_t, 36> P_C_2_alt_helper(const int &lid) {
+  // return (row, col) where row is 0 to 56
+  std::array<int64_t, 36> row_col;
+  std::array<int64_t, 12> row_col_1D;
+  switch (lid) {
+  case 0:
+    row_col_1D = {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}};
+    break;
+  case 1:
+    row_col_1D = {{1, 2, 0, 5, 6, 7, 8, 3, 4, 10, 11, 9}};
+    break;
+  case 2:
+    row_col_1D = {{2, 0, 1, 7, 8, 3, 4, 5, 6, 11, 9, 10}};
+    break;
+  default:
+    assert(false);
+    break;
+  }
+
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 12; ++j) {
+      row_col[i * 12 + j] = row_col_1D[j] + i * 12;
     }
   }
 
@@ -1489,6 +1520,7 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
   std::vector<Eigen::Triplet<double>> P_C_1_triplets;
   // P_C_2
   std::vector<Eigen::Triplet<double>> P_C_2_triplets;
+  // std::vector<Eigen::Triplet<double>> P_C_2_triplets_alt;
 
   int64_t N_FC = 0; // number of blocks
   for (size_t vid = 0; vid < v_charts.size(); ++vid) {
@@ -1497,6 +1529,9 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
     }
     N_FC += v_charts[vid].face_one_ring.size();
   }
+
+  std::vector<int64_t> cone_vids;
+  std::vector<int64_t> edge_vids;
 
   int64_t cone_adj_face_cnt = 0; // face can appear many times in this, plays
                                  // the block id role, == N_FC at last
@@ -1507,6 +1542,7 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
       // skip non cones
       continue;
     }
+    cone_vids.push_back(vid);
 
     const Eigen::Vector3d v_normal =
         v_normals.row(vid); // normal of this cone vertex
@@ -1531,10 +1567,14 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
     C_cone_vid.block<1, 12>(3, 0) = nx * c_t[2][1];
     C_cone_vid.block<1, 12>(3, 12) = ny * c_t[2][1];
     C_cone_vid.block<1, 12>(3, 24) = nz * c_t[2][1];
+    // std::cout << nx * c_t[0][0] << std::endl;
+    // std::cout << nx * c_t[2][0] << std::endl;
 
     // std::cout << C_cone_vid << std::endl << std::endl;
 
     for (const auto &fid : v_one_ring_face) {
+      // std::cout << "------------------------" << std::endl;
+      // std::cout << "cone " << vid << " face " << fid << std::endl;
       const auto &T = Fv.row(fid);
       int lid = -1; // local vid of the cone in T
       for (int i = 0; i < 3; ++i) {
@@ -1544,6 +1584,12 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
         }
       }
       assert(lid > -1);
+
+      edge_vids.push_back(vid);
+      edge_vids.push_back(T[(lid + 2) % 3]);
+
+      // std::cout << "T: " << T << std::endl;
+      // std::cout << "lid: " << lid << std::endl;
 
       // add an identity block for P_C_1
       for (int i = 0; i < 57; ++i) { // 57 = 19 * 3 = all x, y, z of a face
@@ -1558,6 +1604,18 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
             cone_adj_face_cnt * 57 + i,
             cone_adj_face_cnt * 57 + p_c_2_local_row_col[i], 1);
       }
+
+      // alt
+      // const auto &p_c_2_local_row_col_alt = P_C_2_alt_helper(lid);
+      // // for (int i = 0; i < 36; ++i) {
+      // //   std::cout << p_c_2_local_row_col_alt[i] << " ";
+      // // }
+      // // std::cout << std::endl;
+      // for (int i = 0; i < 36; ++i) {
+      //   P_C_2_triplets_alt.emplace_back(
+      //       cone_adj_face_cnt * 36 + i,
+      //       cone_adj_face_cnt * 36 + p_c_2_local_row_col_alt[i], 1);
+      // }
 
       // diag_L_L2d
       for (int i = 0; i < 12; ++i) {
@@ -1577,8 +1635,12 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
       // diag_C_cone
       for (int i = 0; i < 4; ++i) {
         // TODO: drop a row
+        if (i == 0) {
+          // drop the first row
+          continue;
+        }
         for (int j = 0; j < 36; ++j) {
-          diag_C_cone_triplets.emplace_back(cone_adj_face_cnt * 4 + i,
+          diag_C_cone_triplets.emplace_back(cone_adj_face_cnt * 3 + i - 1,
                                             cone_adj_face_cnt * 36 + j,
                                             C_cone_vid(i, j));
         }
@@ -1591,7 +1653,7 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
 
   // diag_C_cone
   Eigen::SparseMatrix<double> diag_C_cone;
-  diag_C_cone.resize(N_FC * 4, N_FC * 36);
+  diag_C_cone.resize(N_FC * 3, N_FC * 36);
   diag_C_cone.setFromTriplets(diag_C_cone_triplets.begin(),
                               diag_C_cone_triplets.end());
 
@@ -1606,10 +1668,29 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
   p_c_2.resize(N_FC * 57, N_FC * 57);
   p_c_2.setFromTriplets(P_C_2_triplets.begin(), P_C_2_triplets.end());
 
+  // P_C_2 alt
+  // Eigen::SparseMatrix<double> p_c_2_alt;
+  // p_c_2_alt.resize(N_FC * 36, N_FC * 36);
+  // p_c_2_alt.setFromTriplets(P_C_2_triplets_alt.begin(),
+  //                           P_C_2_triplets_alt.end());
+
   // P_C_1
   Eigen::SparseMatrix<double> p_c_1;
   p_c_1.resize(N_FC * 57, F_cnt * 57);
   p_c_1.setFromTriplets(P_C_1_triplets.begin(), P_C_1_triplets.end());
 
   m = diag_C_cone * diag_L_L2d * p_c_2 * p_c_1 * p_3d * diag_p_g2f;
+  // m = diag_C_cone * p_c_2_alt * diag_L_L2d * p_c_1 * p_3d * diag_p_g2f;
+
+  // debug use
+  std::ofstream file("cone_vids.txt");
+  for (size_t i = 0; i < cone_vids.size(); ++i) {
+    file << cone_vids[i] << std::endl;
+  }
+  file.close();
+  std::ofstream file2("cone_edge_vids.txt");
+  for (size_t i = 0; i < edge_vids.size(); ++i) {
+    file2 << edge_vids[i] << std::endl;
+  }
+  file2.close();
 }

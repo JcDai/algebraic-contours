@@ -49,14 +49,14 @@ def on_tri(A, B, C, D, eps=1e-10):
     AC_n = AC/np.linalg.norm(AC)
     AD_n = AD/np.linalg.norm(AD)
 
-    r = AD_n @ (AB_n.cross(AC_n))
+    r = AD_n @ np.cross(AB_n, AC_n)
     if abs(r) > eps:
         return False
     
     # check in shape
-    c1 = (B-A).cross(D-A)
-    c2 = (C-B).cross(D-B)
-    c3 = (A-C).cross(D-C)
+    c1 = np.cross(B-A, D-A)
+    c2 = np.cross(C-B, D-B)
+    c3 = np.cross(A-C, D-C)
 
     if c1 @ c2 > 0 and c1 @ c3 > 0:
         return True
@@ -486,7 +486,7 @@ if __name__ == "__main__":
     # para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field --output " + workspace_path
     para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field"
     # print(para_command.split())
-    subprocess.run(para_command,  shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # subprocess.run(para_command,  shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # subprocess.run(para_command,  shell=True, check=True)
 
     # subprocess.run(para_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -573,9 +573,12 @@ if __name__ == "__main__":
 
     # add new vertices to tet mesh
     print("[{}] ".format(datetime.datetime.now()), "Adding parametrized new vertices to tetmesh ... ")
-    para_out_v_to_tet_v_map = copy.deepcopy(para_in_v_to_tet_v_map)
+    para_out_v_to_tet_v_map = copy.deepcopy(para_in_v_to_tet_v_map).tolist()
+    print(para_in_v.shape)
+    print(para_out_v.shape)
     for i in range(para_in_v.shape[0], para_out_v.shape[0]):
-        para_out_v_to_tet_v_map[i] = len(tet_after_para_vertices)
+        # para_out_v_to_tet_v_map[i] = len(tet_after_para_vertices)
+        para_out_v_to_tet_v_map.append(len(tet_after_para_vertices))
         tet_after_para_vertices.append(para_out_v[i].tolist())
 
     # para_out to tet_out surface mappings
@@ -591,6 +594,7 @@ if __name__ == "__main__":
                 tet_surface_para_out[tid] = [para_in_to_out_face_mapping[f_in][0]]
 
     # split corresponding tets
+    print("para deleted fids: ", deleted_old_fids)
     for f_in in deleted_old_fids:
         f_vs = surface_tet_faces[f_in] # vid in tet regular index
         adj_tets = surface_adj_tet[f_in]
@@ -1024,20 +1028,35 @@ if __name__ == "__main__":
     constrained = [False for i in range(v.shape[0])]
     for i in range(l2g_r.shape[0]):
         constrained[l2g_r[i]] = True
+    appear_in_two = [False for i in range(v.shape[0])]
     for i in range(bd_v.shape[0]):
+        if constrained[bd_v[i]] == True:
+            print(bd_v[i], " is both boundary node and surface node!!")
+            appear_in_two[bd_v[i]] = True
         constrained[bd_v[i]] = True
     unconstrained_v = []
     for i in range(len(constrained)):
         if not constrained[i]:
             unconstrained_v.append(i)
 
+    print("tet v: ", v.shape[0])
+    print("c1 cons v: ", l2g_r.shape[0])
+    print("dirichlet cons v: ", bd_v.shape[0])
+    print("unconstrained v: ", len(unconstrained_v))
+
     P_T = [-1 for i in range(v.shape[0])]
+    cur_idx = 0
     for i in range(l2g_r.shape[0]):
-        P_T[i] = l2g_r[i]
+        P_T[cur_idx] = l2g_r[i]
+        cur_idx += 1
     for i in range(bd_v.shape[0]):
-        P_T[l2g_r.shape[0] + i] = bd_v[i]
+        if not (appear_in_two[bd_v[i]]):
+            P_T[cur_idx] = bd_v[i]
+            cur_idx+=1
     for i in range(len(unconstrained_v)):
-        P_T[l2g_r.shape[0] + bd_v.shape[0] + i] = unconstrained_v[i]
+        P_T[cur_idx] = unconstrained_v[i]
+        cur_idx+=1
+    assert cur_idx == v.shape[0]
 
     assert all(P_T[i]>-1 for i in range(len(P_T)))
 

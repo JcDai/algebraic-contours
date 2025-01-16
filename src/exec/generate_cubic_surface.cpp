@@ -121,6 +121,19 @@ int main(int argc, char *argv[]) {
   igl::per_vertex_normals(V, F, igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_AREA,
                           v_normals);
 
+  // // debug use
+  // Eigen::MatrixXd test_normals(v_normals.rows(), v_normals.cols());
+  // for (int64_t i = 0; i < v_normals.rows(); ++i) {
+  //   for (int64_t j = 0; j < v_normals.cols(); ++j)
+  //     if (j == 2) {
+  //       test_normals(i, j) = 1;
+  //     } else {
+  //       test_normals(i, j) = 1;
+  //     }
+  // }
+
+  // v_normals = test_normals;
+
   Eigen::SparseMatrix<double> c_cone;
   ct_surface.C_F_cone(c_cone, v_normals);
 
