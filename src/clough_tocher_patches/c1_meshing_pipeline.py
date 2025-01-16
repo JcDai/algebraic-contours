@@ -192,9 +192,23 @@ b_cons = - C_trip * node_vector';
 % b_cons = - [C_trip; Cone_ro] * node_vector';
 b_di = zeros(size(Di_r_trip, 1), 1);
 b = [b_cons; b_di];
-% b = b_di + 10;
 
 % QR decomposition
+% row_norm = 1 ./ max(abs(Full_cons_permuted), [], 2);
+% row_norm = sparse(diag(row_norm));
+% Full_cons_permuted = row_norm * Full_cons_permuted;
+% b = row_norm * b;
+
+% [Q, R_tmp, P_qr] = qr(Full_cons_permuted);
+% 
+% ind_rows = [];
+% for i = 1:size(R_tmp, 1)
+%     if sum(abs(R_tmp(i, :))) <= 1e-16
+%         ind_rows = [ind_rows i];
+%     end
+% end
+% 
+% R = R_tmp(ind_rows, :);
 
 [Q, R, P_qr] = qr(Full_cons_permuted);
 
