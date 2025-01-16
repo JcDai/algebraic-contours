@@ -1033,6 +1033,18 @@ if __name__ == "__main__":
         bd_v.append(tet_face_to_vertices[ff_str])
     bd_v = np.unique(np.array(bd_v))
 
+    bd_v_tag = np.array([int(i in bd_v) for i in range(v.shape[0])])
+
+    print(bd_v_tag)
+
+    m_test_nodes_points = m.points
+    
+    m_test_nodes_cells = [('tetra', cells)]
+    m_test_nodes = mio.Mesh(m_test_nodes_points, m_test_nodes_cells)
+    m_test_nodes.point_data['boundary'] = bd_v_tag
+    # m.write('test_boundary_nodes.msh', file_format='gmsh')
+    m_test_nodes.write('test_boundary_nodes.vtu')
+
     # bd_v = np.unique(bd_f)
 
     # build P_T, left mul x  i.e. P_T x
