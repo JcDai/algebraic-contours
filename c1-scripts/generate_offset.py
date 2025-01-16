@@ -28,7 +28,10 @@ def convert_to_msh(vtu_file, msh_file):
 
     m = mio.read(vtu_file)
     a = m.cell_data["winding_number"][0].copy()
-    a = a - np.min(a)
+    if np.max(a) > 0.5:
+        a = np.max(a) - a
+    else:
+        a = a - np.min(a)
     m.cell_data["in_out"] = a[:, None]
 
     m.cell_data = {"in_out": m.cell_data["in_out"]}
