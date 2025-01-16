@@ -501,7 +501,7 @@ if __name__ == "__main__":
     para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field"
     # print(para_command.split())
     # subprocess.run(para_command,  shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    # subprocess.run(para_command,  shell=True, check=True)
+    subprocess.run(para_command,  shell=True, check=True)
 
     # subprocess.run(para_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     # print("here")
