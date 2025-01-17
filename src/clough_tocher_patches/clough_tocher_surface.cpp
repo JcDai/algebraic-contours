@@ -765,6 +765,7 @@ void CloughTocherSurface::C_F_int(Eigen::SparseMatrix<double> &m) {
   // std::cout << 7 * F_cnt << " " << N_L << std::endl;
 
   m = C_diag * p_g2f;
+  m.makeCompressed();
   // std::cout << m.rows() << " " << m.cols() << std::endl;
 }
 
@@ -1136,6 +1137,7 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
   auto timer = igl::Timer();
   timer.start();
   m = C_E_L * p_g2e;
+  m.makeCompressed();
   std::cout << "C_E_L * p_g2e time: " << timer.getElapsedTime() << "s"
             << std::endl;
 
@@ -1173,6 +1175,8 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
   // get m_elim
   m_elim.resize(2 * E_cnt - skip_cnt, N_L);
   m_elim = C_E_L_elim * p_g2e;
+
+  m_elim.makeCompressed();
 
   // debug use
   std::ofstream file("endpoint_row_to_vid.txt");
@@ -1359,6 +1363,7 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
   auto timer = igl::Timer();
   timer.start();
   m = C_M_L * p_g2e;
+  m.makeCompressed();
   std::cout << "C_M_L * p_g2e time: " << timer.getElapsedTime() << "s"
             << std::endl;
 }
@@ -1634,13 +1639,13 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
 
       // diag_C_cone
       for (int i = 0; i < 4; ++i) {
-        // TODO: drop a row
-        if (i == 0) {
-          // drop the first row
+        // TODO: drop two rows
+        if (i == 2 || i == 3) {
+          // drop the third and forth row
           continue;
         }
         for (int j = 0; j < 36; ++j) {
-          diag_C_cone_triplets.emplace_back(cone_adj_face_cnt * 3 + i - 1,
+          diag_C_cone_triplets.emplace_back(cone_adj_face_cnt * 2 + i,
                                             cone_adj_face_cnt * 36 + j,
                                             C_cone_vid(i, j));
         }
@@ -1653,7 +1658,7 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
 
   // diag_C_cone
   Eigen::SparseMatrix<double> diag_C_cone;
-  diag_C_cone.resize(N_FC * 3, N_FC * 36);
+  diag_C_cone.resize(N_FC * 2, N_FC * 36);
   diag_C_cone.setFromTriplets(diag_C_cone_triplets.begin(),
                               diag_C_cone_triplets.end());
 
@@ -1681,6 +1686,7 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
 
   m = diag_C_cone * diag_L_L2d * p_c_2 * p_c_1 * p_3d * diag_p_g2f;
   // m = diag_C_cone * p_c_2_alt * diag_L_L2d * p_c_1 * p_3d * diag_p_g2f;
+  m.makeCompressed();
 
   // debug use
   std::ofstream file("cone_vids.txt");
