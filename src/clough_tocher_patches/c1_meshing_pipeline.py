@@ -1430,15 +1430,15 @@ if __name__ == "__main__":
                 "CT_constraint_with_cone_tet_ids.hdf5"
             ],
             'soft': [
-                {'weight': 10000.0, 'data': 'soft_1.hdf5'}, 
-                {'weight': 10000.0, 'data': 'soft_2.hdf5'}
+                {'weight': 100000.0, 'data': 'soft_1.hdf5'}, 
+                {'weight': 100.0, 'data': 'soft_2.hdf5'}
                 ]
         },
         "materials": [
             {
                 "id": 1,
                 "type": "NeoHookean",
-                "E": 200000.0,
+                "E": 200000000000.0,
                 "nu": 0.3
             }
         ],
@@ -1459,6 +1459,7 @@ if __name__ == "__main__":
                 "barrier_stiffness": 1e8
             },
             "nonlinear": {
+                "first_grad_norm_tol": 0,
                 "grad_norm": 1e-07,
                 "solver": "Newton",
                 "Newton": {
