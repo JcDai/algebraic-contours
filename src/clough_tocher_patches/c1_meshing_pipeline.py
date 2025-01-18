@@ -11,6 +11,7 @@ import os
 import json
 import scipy
 import datetime
+from argparse import ArgumentParser
 
 
 # check orient3d > 0
@@ -306,19 +307,58 @@ def read_matlab_sparse(filename):
     return spm
 
 
-if __name__ == "__main__":
-    args = sys.argv
+# open JSON after validifying it
+def is_valid_json(parser, arg):
+    if not os.path.exists(arg):
+        parser.error("The file %s does not exist!" % arg)
+    elif os.path.splitext(arg)[1] != ".json":
+        parser.error("The file %s is not a .json file!" % arg)
+    else:
+        with open(arg, "r") as f:
+            arg_json = json.load(f)
+        return arg_json
 
-    if len(args) < 8:
-        print("Too few arguments. Expect 6")
-        exit()
-    input_file = args[1]  # vtu tetmesh file with 'winding_number' as cell data
-    output_name = args[2]  # output name
-    path_to_para_exe = args[3]  # path to parametrization bin
-    path_to_ct_exe = args[4]  # path to Clough Tocher constraints bin
-    path_to_polyfem_exe = args[5]  # path to polyfem bin
-    path_to_matlab_exe = args[6]  # path to matlab exe
-    offset_file = args[7]  # offset file
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument(
+        "-j", dest="spec", required=True, type=lambda x: is_valid_json(parser, x)
+    )
+    parser.add_argument(
+        "-b", dest="bins", required=True, type=lambda x: is_valid_json(parser, x)
+    )
+
+    args = parser.parse_args()
+
+    input_file = args.spec[
+        "input"
+    ]  # vtu tetmesh file with 'winding_number' as cell data
+    output_name = args.spec["output"]  # output name
+    offset_file = args.spec["offset"]  # offset file
+
+    path_to_para_exe = args.bins[
+        "seamless_parametrization_binary"
+    ]  # path to parametrization bin
+    path_to_ct_exe = args.bins[
+        "smooth_contours_binary"
+    ]  # path to Clough Tocher constraints bin
+    path_to_polyfem_exe = args.bins["polyfem_binary"]  # path to polyfem bin
+    path_to_matlab_exe = args.bins["matlab_binary"]  # path to matlab exe
+
+    # exit(0)
+
+    # args = sys.argv
+
+    # if len(args) < 8:
+    #     print("Too few arguments. Expect 7")
+    #     exit()
+    # input_file = args[1]  # vtu tetmesh file with 'winding_number' as cell data
+    # output_name = args[2]  # output name
+    # path_to_para_exe = args[3]  # path to parametrization bin
+    # path_to_ct_exe = args[4]  # path to Clough Tocher constraints bin
+    # path_to_polyfem_exe = args[5]  # path to polyfem bin
+    # path_to_matlab_exe = args[6]  # path to matlab exe
+    # offset_file = args[7]  # offset file
 
     # workspace_path = args[4] # workspace path
     workspace_path = "./"
@@ -560,8 +600,14 @@ if __name__ == "__main__":
         + "embedded_surface.obj --fit_field"
     )
     # print(para_command.split())
-    # subprocess.run(para_command,  shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    subprocess.run(para_command, shell=True, check=True)
+    subprocess.run(
+        para_command,
+        shell=True,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    # subprocess.run(para_command, shell=True, check=True)
 
     # subprocess.run(para_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     # print("here")
@@ -1284,8 +1330,8 @@ if __name__ == "__main__":
 
     with h5py.File("CT_constraint_with_cone_tet_ids.hdf5", "w") as f:
         f.create_dataset("A_triplets/values", data=full_trip.data)
-        f.create_dataset("A_triplets/cols", data=full_trip.col)
-        f.create_dataset("A_triplets/rows", data=full_trip.row)
+        f.create_dataset("A_triplets/cols", data=full_trip.col.astype(np.int32))
+        f.create_dataset("A_triplets/rows", data=full_trip.row.astype(np.int32))
         f.create_dataset("A_triplets/shape", data=full_trip.shape)
         f.create_dataset("b", data=b[:, None])
 
@@ -1592,8 +1638,8 @@ if __name__ == "__main__":
     # c_json = {'space': {'discr_order': 3}, 'geometry': [{'mesh': output_name + '_initial_tetmesh.msh', 'volume_selection': 1, 'surface_selection': 1}], 'constraints': {'hard': ['CT_full_constraint_matrix.hdf5'], 'soft': [{'weight': 10000.0, 'data': 'soft_1.hdf5'}, {'weight': 10000.0, 'data': 'soft_2.hdf5'}]}, 'materials': [{'id': 1, 'type': 'NeoHookean', 'E': 20000000.0, 'nu': 0.3}], 'solver': {'nonlinear': {'x_delta': 1e-10, 'solver': 'Newton', 'grad_norm': 1e-08, 'advanced': {'f_delta': 1e-10}}, 'augmented_lagrangian': {'initial_weight': 100000000.0}}, 'boundary_conditions': {'dirichlet_boundary': {'id': 1, 'value': [0, 0, 0]}}, 'output': {'paraview': {'file_name': output_name + '_final.vtu', 'surface': True, 'wireframe': True, 'points': True, 'options': {'material': True, 'force_high_order': True}, 'vismesh_rel_area': 1e-05}}}
     c_json = {
         "contact": {
-            "dhat": 0.01,
-            "enabled": False,
+            "dhat": 0.03,
+            "enabled": True,
             "collision_mesh": {
                 "mesh": "CT_bilaplacian_nodes.obj",
                 "linear_map": "local2global_matrix.hdf5",
@@ -1606,16 +1652,14 @@ if __name__ == "__main__":
                 "volume_selection": 1,
                 "surface_selection": 1,
             },
-            # {
-            #     "mesh": offset_file,
-            #     "is_obstacle": True
-            # }
+            {"mesh": offset_file, "is_obstacle": True},
         ],
         "constraints": {
-            "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
+            # "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
             "soft": [
-                {"weight": 100000.0, "data": "soft_1.hdf5"},
-                {"weight": 100.0, "data": "soft_2.hdf5"},
+                # {"weight": 10000000.0, "data": "CT_constraint_with_cone_tet_ids.hdf5"},
+                {"weight": 100.0, "data": "soft_1.hdf5"},
+                {"weight": 1.0, "data": "soft_2.hdf5"},
             ],
         },
         "materials": [{"id": 1, "type": "NeoHookean", "E": 200000000000.0, "nu": 0.3}],
@@ -1663,5 +1707,11 @@ if __name__ == "__main__":
         new_winding_number_list.append(new_winding_numbers[i])
     new_winding_number_list = np.array(new_winding_number_list)
 
-    polyfem_mesh.cell_data["winding"] = new_winding_number_list[:, None]
+    new_winding_number_total = np.zeros(
+        (len(polyfem_mesh.cells[0]) + len(polyfem_mesh.cells[1]), 1)
+    )
+    new_winding_number_total[: len(polyfem_mesh.cells[0])] = new_winding_number_list
+
+    polyfem_mesh.cell_data["winding"] = new_winding_number_total[:, None]
     polyfem_mesh.write(output_name + "_final_winding.vtu")
+    print("C1 Meshing DONE")
