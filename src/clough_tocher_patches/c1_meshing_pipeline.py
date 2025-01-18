@@ -54,14 +54,14 @@ def on_tri(A, B, C, D, eps=1e-10):
     AC_n = AC / np.linalg.norm(AC)
     AD_n = AD / np.linalg.norm(AD)
 
-    r = AD_n @ (AB_n.cross(AC_n))
+    r = AD_n @ np.cross(AB_n, AC_n)
     if abs(r) > eps:
         return False
 
     # check in shape
-    c1 = (B - A).cross(D - A)
-    c2 = (C - B).cross(D - B)
-    c3 = (A - C).cross(D - C)
+    c1 = np.cross(B - A, D - A)
+    c2 = np.cross(C - B, D - B)
+    c3 = np.cross(A - C, D - C)
 
     if c1 @ c2 > 0 and c1 @ c3 > 0:
         return True
@@ -69,14 +69,256 @@ def on_tri(A, B, C, D, eps=1e-10):
     return False
 
 
+def write_matlab_script(file):
+    with open(file, "w") as f:
+        f.write(
+            """
+C_filename = "matlab_input_C1_constraint_matrix.hdf5";
+P_T_filename = "CT_P_T_matrix.hdf5";
+points_filename = "matlab_mesh.hdf5";
+Cone_filename = "matlab_input_cone_matrix.hdf5";
+Di_filename = "matlab_input_dirichlet_matrix.hdf5";
+
+
+% C
+C_c = h5read(C_filename, "/C/cols");
+C_r = h5read(C_filename, "/C/rows");
+C_v = h5read(C_filename, "/C/values");
+C_shape = h5read(C_filename, "/C/shape");
+C = sparse(C_r+1,C_c+1,C_v,C_shape(1), C_shape(2));
+
+% P_T
+p_t_c = h5read(P_T_filename, "/P_T/cols");
+p_t_r = h5read(P_T_filename, "/P_T/rows");
+p_t_v = h5read(P_T_filename, "/P_T/values");
+p_t_shape = h5read(P_T_filename, "/P_T/shape");
+P_T = sparse(p_t_r+1, p_t_c+1, p_t_v, p_t_shape(1), p_t_shape(2));
+
+% Dirichlet
+Di_c = h5read(Di_filename, "/Di/cols");
+Di_r = h5read(Di_filename, "/Di/rows");
+Di_v = h5read(Di_filename, "/Di/values");
+Di_shape = h5read(Di_filename, "/Di/shape");
+Di = sparse(Di_r+1,Di_c+1,Di_v,Di_shape(1), Di_shape(2));
+
+% Cone
+Cone_c = h5read(Cone_filename, "/C_cone/cols");
+Cone_r = h5read(Cone_filename, "/C_cone/rows");
+Cone_v = h5read(Cone_filename, "/C_cone/values");
+Cone_shape = h5read(Cone_filename, "/C_cone/shape");
+Cone = sparse(Cone_r+1,Cone_c+1,Cone_v,Cone_shape(1), Cone_shape(2));
+
+% triple C
+C_c_trip = zeros(size(C_c, 1)*3, 1);
+C_r_trip = zeros(size(C_r, 1)*3, 1);
+C_v_trip = zeros(size(C_v, 1)*3, 1);
+
+for i = 1:size(C_r, 1)
+    C_r_trip((i - 1) * 3 + 1, 1) = (C_r(i,1)) * 3 + 0;
+    C_r_trip((i - 1) * 3 + 2, 1) = (C_r(i,1)) * 3 + 1;
+    C_r_trip((i - 1) * 3 + 3, 1) = (C_r(i,1)) * 3 + 2;
+end
+
+for i = 1:size(C_c, 1)
+    C_c_trip((i - 1) * 3 + 1, 1) = (C_c(i,1)) * 3 + 0;
+    C_c_trip((i - 1) * 3 + 2, 1) = (C_c(i,1)) * 3 + 1;
+    C_c_trip((i - 1) * 3 + 3, 1) = (C_c(i,1)) * 3 + 2;
+end
+
+for i = 1:size(C_v, 1)
+    C_v_trip((i - 1) * 3 + 1, 1) = C_v(i,1);
+    C_v_trip((i - 1) * 3 + 2, 1) = C_v(i,1);
+    C_v_trip((i - 1) * 3 + 3, 1) = C_v(i,1);
+end
+
+C_trip = sparse(C_r_trip+1,C_c_trip+1,C_v_trip, C_shape(1)*3, C_shape(2)*3);
+
+% reorder Cone
+Cone_ro_c = zeros(size(Cone_c, 1), 1);
+Cone_ro_r = zeros(size(Cone_r, 1), 1);
+Cone_ro_v = zeros(size(Cone_v, 1), 1);
+
+Cone_ro_r = Cone_r;
+Cone_ro_v = Cone_v;
+
+for i = 1:size(Cone_c, 1)
+    old_c = Cone_c(i);
+    new_c = -1;
+    if old_c < Cone_shape(2)/3
+        new_c = old_c * 3;
+    elseif old_c < Cone_shape(2)/3*2
+        new_c = (old_c - Cone_shape(2)/3) * 3 + 1;
+    else
+        new_c = (old_c - Cone_shape(2)/3*2) * 3 + 2;
+    end
+    Cone_ro_c(i) = new_c;
+end
+
+Cone_ro_c = int64(Cone_ro_c);
+
+Cone_ro = sparse(Cone_ro_r+1,Cone_ro_c+1,Cone_ro_v,Cone_shape(1), Cone_shape(2));
+
+
+% triple Dirichlet
+Di_c_trip = zeros(size(Di_c, 1)*3, 1);
+Di_r_trip = zeros(size(Di_r, 1)*3, 1);
+Di_v_trip = zeros(size(Di_v, 1)*3, 1);
+
+for i = 1:size(Di_r, 1)
+    Di_r_trip((i - 1) * 3 + 1, 1) = (Di_r(i,1)) * 3 + 0;
+    Di_r_trip((i - 1) * 3 + 2, 1) = (Di_r(i,1)) * 3 + 1;
+    Di_r_trip((i - 1) * 3 + 3, 1) = (Di_r(i,1)) * 3 + 2;
+end
+
+for i = 1:size(Di_c, 1)
+    Di_c_trip((i - 1) * 3 + 1, 1) = (Di_c(i,1)) * 3 + 0;
+    Di_c_trip((i - 1) * 3 + 2, 1) = (Di_c(i,1)) * 3 + 1;
+    Di_c_trip((i - 1) * 3 + 3, 1) = (Di_c(i,1)) * 3 + 2;
+end
+
+for i = 1:size(Di_v, 1)
+    Di_v_trip((i - 1) * 3 + 1, 1) = Di_v(i,1);
+    Di_v_trip((i - 1) * 3 + 2, 1) = Di_v(i,1);
+    Di_v_trip((i - 1) * 3 + 3, 1) = Di_v(i,1);
+end
+
+Di_trip = sparse(Di_r_trip+1,Di_c_trip+1,Di_v_trip, Di_shape(1)*3, Di_shape(2)*3);
+
+Full_cons = [C_trip; Di_trip];
+% Full_cons = [C_trip; Cone_ro; Di_trip];
+% Full_cons = Di_trip;
+Full_cons_permuted = Full_cons * P_T';
+
+% points
+points = h5read(points_filename, "/points");
+points = points';
+node_vector = reshape(points', 1, []);
+
+b_cons = - C_trip * node_vector';
+% b_cons = - [C_trip; Cone_ro] * node_vector';
+b_di = zeros(size(Di_r_trip, 1), 1);
+b = [b_cons; b_di];
+
+% QR decomposition
+% row_norm = 1 ./ max(abs(Full_cons_permuted), [], 2);
+% row_norm = sparse(diag(row_norm));
+% Full_cons_permuted = row_norm * Full_cons_permuted;
+% b = row_norm * b;
+
+% [Q, R_tmp, P_qr] = qr(Full_cons_permuted);
+% 
+% ind_rows = [];
+% for i = 1:size(R_tmp, 1)
+%     if sum(abs(R_tmp(i, :))) <= 1e-16
+%         ind_rows = [ind_rows i];
+%     end
+% end
+% 
+% R = R_tmp(ind_rows, :);
+
+[Q, R, P_qr] = qr(Full_cons_permuted);
+
+R1 = R(1:end, 1:size(R,1));
+R2 = R(1:end, size(R,1) + 1:end);
+
+% useful things
+P = P_qr' * P_T;
+R1invR2 = R1\R2;
+R1invQTb = R1 \ (Q' * b);
+b_m = zeros(size(node_vector, 2), 1);
+b_m(1:size(R1invQTb, 1)) = R1invQTb;
+b_m = P' * b_m;
+M = P' * [-R1invR2; speye(size(R1invR2, 2))];
+
+[M_row, M_col, M_v] = find(M);
+M_file_data = [size(M, 1) size(M, 2) size(M_row, 1);M_row M_col M_v];
+writematrix(M_file_data, "matlab_M.txt");
+
+[b_m_row, b_m_col, b_m_v] = find(b_m);
+b_m_file_data = [size(b_m, 1) size(b_m, 2) size(b_m_row, 1);b_m_row b_m_col b_m_v];
+writematrix(b_m_file_data, "matlab_b_m.txt");
+
+[b_row, b_col, b_v] = find(b);
+b_file_data = [size(b, 1) size(b, 2) size(b_row, 1);b_row b_col b_v];
+writematrix(b_file_data, "matlab_b.txt");
+
+[Full_cons_row, Full_cons_col, Full_cons_v] = find(Full_cons);
+Full_cons_file_data = [size(Full_cons, 1) size(Full_cons, 2) size(Full_cons_row, 1);Full_cons_row Full_cons_col Full_cons_v];
+writematrix(Full_cons_file_data, "matlab_C_trip.txt");
+
+h5create("matlab_M.hdf5", "/A_proj_triplets/values", size(M_v, 1));
+h5write("matlab_M.hdf5", "/A_proj_triplets/values", M_v');
+h5create("matlab_M.hdf5", "/A_proj_triplets/rows", size(M_v, 1), Datatype="int32");
+h5write("matlab_M.hdf5", "/A_proj_triplets/rows", int32(M_row - 1)');
+h5create("matlab_M.hdf5", "/A_proj_triplets/cols", size(M_col, 1), Datatype="int32");
+h5write("matlab_M.hdf5", "/A_proj_triplets/cols", int32(M_col - 1)');
+h5create("matlab_M.hdf5", "/A_proj_triplets/shape", 2);
+h5write("matlab_M.hdf5", "/A_proj_triplets/shape", [size(M, 1); size(M, 2)]');
+
+h5create("matlab_M.hdf5", "/A_triplets/values", size(Full_cons_v, 1));
+h5write("matlab_M.hdf5", "/A_triplets/values", Full_cons_v');
+h5create("matlab_M.hdf5", "/A_triplets/rows", size(Full_cons_v, 1), Datatype="int32");
+h5write("matlab_M.hdf5", "/A_triplets/rows", int32(Full_cons_row - 1)');
+h5create("matlab_M.hdf5", "/A_triplets/cols", size(Full_cons_col, 1), Datatype="int32");
+h5write("matlab_M.hdf5", "/A_triplets/cols", int32(Full_cons_col - 1)');
+h5create("matlab_M.hdf5", "/A_triplets/shape", 2);
+h5write("matlab_M.hdf5", "/A_triplets/shape", [size(Full_cons, 1); size(Full_cons, 2)]');
+
+h5create("matlab_M.hdf5", "/b", [1,size(b, 1)]);
+h5write("matlab_M.hdf5", "/b", b');
+h5create("matlab_M.hdf5", "/b_proj", [1,size(b_m, 1)]);
+h5write("matlab_M.hdf5", "/b_proj", b_m');
+
+exit;
+"""
+        )
+
+
+def read_matlab_sparse(filename):
+    rows = []
+    cols = []
+    values = []
+    r = -1
+    c = -1
+    size = -1
+    with open(filename, "r") as f:
+        row = 0
+        for line in f:
+            ss = line.rstrip("\n").split(",")
+            # print(ss)
+            assert len(ss) == 3
+            if row == 0:
+                r = int(ss[0])
+                c = int(ss[1])
+                size = int(ss[2])
+            else:
+                rows.append(int(ss[0]) - 1)
+                cols.append(int(ss[1]) - 1)
+                values.append(float(ss[2]))
+            row += 1
+    assert len(rows) == size
+    assert r > 0 and c > 0
+    rows = np.array(rows)
+    cols = np.array(cols)
+    values = np.array(values)
+    spm = scipy.sparse.coo_array((values, (rows, cols)), shape=(r, c))
+
+    return spm
+
+
 if __name__ == "__main__":
     args = sys.argv
 
+    if len(args) < 8:
+        print("Too few arguments. Expect 6")
+        exit()
     input_file = args[1]  # vtu tetmesh file with 'winding_number' as cell data
     output_name = args[2]  # output name
     path_to_para_exe = args[3]  # path to parametrization bin
     path_to_ct_exe = args[4]  # path to Clough Tocher constraints bin
     path_to_polyfem_exe = args[5]  # path to polyfem bin
+    path_to_matlab_exe = args[6]  # path to matlab exe
+    offset_file = args[7]  # offset file
 
     # workspace_path = args[4] # workspace path
     workspace_path = "./"
@@ -115,49 +357,50 @@ if __name__ == "__main__":
     surface_tet_faces = igl.boundary_facets(filtered_tets)
     surface_vertices = np.unique(surface_tet_faces)
 
-    tet_indices_touching_surface = np.unique(
-        np.argwhere(np.isin(tets_unsliced, surface_vertices))[:, 0]
-    )
-
-    tets = tets_unsliced[tet_indices_touching_surface]
-    winding_numbers_data = winding_numbers_data_unsliced[tet_indices_touching_surface]
+    # # use this code if want to keep the box
+    tets = tets_unsliced
     vertices = vertices_unsliced
-    vertices, tets, _, sliced_to_unsliced_v_map = igl.remove_unreferenced(
-        vertices_unsliced, tets
-    )
-
-    # print(winding_numbers_data.shape)
-    # print(tets.shape)
-    m_sliced = mio.Mesh(
-        vertices,
-        [("tetra", tets)],
-        cell_data={"winding_number": winding_numbers_data.T},
-    )
-    m_sliced.write("test_slice.vtu")
-
-    # extract surface
     winding_numbers = {}
+    winding_numbers_data = winding_numbers_data_unsliced
     for i in range(tets.shape[0]):
         winding_numbers[i] = winding_numbers_data[i]
+    # #and comment out the below
 
-    # filtered_tets = np.array(filtered_tets)
-    # filtered_tets = []
+    # tet_indices_touching_surface = np.unique(np.argwhere(np.isin(tets_unsliced, surface_vertices))[:,0])
+
+    # tets = tets_unsliced[tet_indices_touching_surface]
+    # winding_numbers_data = winding_numbers_data_unsliced[tet_indices_touching_surface]
+    # vertices = vertices_unsliced
+    # vertices, tets, _, sliced_to_unsliced_v_map = igl.remove_unreferenced(vertices_unsliced, tets)
+
+    # # print(winding_numbers_data.shape)
+    # # print(tets.shape)
+    # m_sliced = mio.Mesh(vertices, [('tetra', tets)], cell_data={"winding_number": winding_numbers_data.T})
+    # m_sliced.write("test_slice.vtu")
+
+    # # extract surface
+    # winding_numbers = {}
     # for i in range(tets.shape[0]):
-    #     if abs(winding_numbers_data[i]) >= 0.5:
-    #         filtered_tets.append(tets[i])
-    # filtered_tets = np.array(filtered_tets)
+    #     winding_numbers[i] = winding_numbers_data[i]
 
-    surface_tet_faces_unsliced = igl.boundary_facets(filtered_tets)
-    unsliced_to_sliced_v_map = {}
-    for i in range(len(sliced_to_unsliced_v_map)):
-        unsliced_to_sliced_v_map[sliced_to_unsliced_v_map[i]] = i
-    surface_tet_faces = surface_tet_faces_unsliced.copy().tolist()
-    for i in range(len(surface_tet_faces)):
-        for j in range(3):
-            # print(surface_tet_face[i][j])
-            surface_tet_faces[i][j] = unsliced_to_sliced_v_map[surface_tet_faces[i][j]]
-    surface_tet_faces = np.array(surface_tet_faces)
-    # print(surface_tet_faces)
+    # # filtered_tets = np.array(filtered_tets)
+    # # filtered_tets = []
+    # # for i in range(tets.shape[0]):
+    # #     if abs(winding_numbers_data[i]) >= 0.5:
+    # #         filtered_tets.append(tets[i])
+    # # filtered_tets = np.array(filtered_tets)
+
+    # surface_tet_faces_unsliced = igl.boundary_facets(filtered_tets)
+    # unsliced_to_sliced_v_map = {}
+    # for i in range(len(sliced_to_unsliced_v_map)):
+    #     unsliced_to_sliced_v_map[sliced_to_unsliced_v_map[i]] = i
+    # surface_tet_faces = surface_tet_faces_unsliced.copy().tolist()
+    # for i in range(len(surface_tet_faces)):
+    #     for j in range(3):
+    #         # print(surface_tet_face[i][j])
+    #         surface_tet_faces[i][j] = unsliced_to_sliced_v_map[surface_tet_faces[i][j]]
+    # surface_tet_faces = np.array(surface_tet_faces)
+    # # print(surface_tet_faces)
 
     # get surface mesh for parametrization
     # surface_tet_faces_filtered = igl.boundary_facets(filtered_tets)
@@ -429,9 +672,12 @@ if __name__ == "__main__":
         "[{}] ".format(datetime.datetime.now()),
         "Adding parametrized new vertices to tetmesh ... ",
     )
-    para_out_v_to_tet_v_map = copy.deepcopy(para_in_v_to_tet_v_map)
+    para_out_v_to_tet_v_map = copy.deepcopy(para_in_v_to_tet_v_map).tolist()
+    print(para_in_v.shape)
+    print(para_out_v.shape)
     for i in range(para_in_v.shape[0], para_out_v.shape[0]):
-        para_out_v_to_tet_v_map[i] = len(tet_after_para_vertices)
+        # para_out_v_to_tet_v_map[i] = len(tet_after_para_vertices)
+        para_out_v_to_tet_v_map.append(len(tet_after_para_vertices))
         tet_after_para_vertices.append(para_out_v[i].tolist())
 
     # para_out to tet_out surface mappings
@@ -452,6 +698,7 @@ if __name__ == "__main__":
                 tet_surface_para_out[tid] = [para_in_to_out_face_mapping[f_in][0]]
 
     # split corresponding tets
+    print("para deleted fids: ", deleted_old_fids)
     for f_in in deleted_old_fids:
         f_vs = surface_tet_faces[f_in]  # vid in tet regular index
         adj_tets = surface_adj_tet[f_in]
@@ -598,6 +845,7 @@ if __name__ == "__main__":
     gmsh.open(workspace_path + "tetmesh_after_face_split.msh")
     gmsh.model.mesh.setOrder(3)
     gmsh.write(workspace_path + "tetmesh_after_face_split_high_order_tet.msh")
+    gmsh.write(workspace_path + "tetmesh_after_face_split_high_order_tet.m")
 
     ####################################################
     #                   Call CT Code                   #
@@ -871,14 +1119,14 @@ if __name__ == "__main__":
         "constructing full hard constraint matrix ...",
     )
 
-    interior_matix = scipy.io.mmread("CT_interior_constraint_matrix.txt")
+    interior_matrix = scipy.io.mmread("CT_interior_constraint_matrix.txt")
     edge_end_point_matrix = scipy.io.mmread(
         "CT_edge_endpoint_constraint_matrix_eliminated.txt"
     )
     edge_mid_point_matrix = scipy.io.mmread("CT_edge_midpoint_constraint_matrix.txt")
 
     full_matrix = scipy.sparse.vstack(
-        (interior_matix, edge_end_point_matrix, edge_mid_point_matrix)
+        (interior_matrix, edge_end_point_matrix, edge_mid_point_matrix)
     )
 
     local2global = np.loadtxt(
@@ -886,6 +1134,10 @@ if __name__ == "__main__":
     ).astype(np.int32)
     A = full_matrix.tocoo(True)
     m = mio.read(workspace_path + linear_tet_file_name)
+    # write points hdf5 for matlab
+    with h5py.File(workspace_path + "matlab_mesh.hdf5", "w") as f:
+        f.create_dataset("points", data=m.points)
+
     v = m.points
     b = -(A @ v[local2global, :])
 
@@ -896,6 +1148,395 @@ if __name__ == "__main__":
         f.create_dataset("A_triplets/rows", data=A.row)
         f.create_dataset("b", data=b)
 
+    local2global_matrix_rows = [i for i in range(local2global.shape[0])]
+    local2global_matrix_cols = [local2global[i] for i in range(local2global.shape[0])]
+    local2global_matrix_data = [1.0] * local2global.shape[0]
+
+    with h5py.File(workspace_path + "local2global_matrix.hdf5", "w") as f:
+        f.create_dataset(
+            "weight_triplets/values", data=np.array(local2global_matrix_data)
+        )
+        f.create_dataset(
+            "weight_triplets/cols",
+            data=np.array(local2global_matrix_cols).astype(np.int32),
+        )
+        f.create_dataset(
+            "weight_triplets/rows",
+            data=np.array(local2global_matrix_rows).astype(np.int32),
+        )
+        f["weight_triplets"].attrs["shape"] = (local2global.shape[0], v.shape[0])
+
+    ####################################################
+    #           Expanding Constraint Matrix            #
+    ####################################################
+    interior = scipy.io.mmread("CT_interior_constraint_matrix.txt")
+    midpoint = scipy.io.mmread("CT_edge_midpoint_constraint_matrix.txt")
+    endpoint = scipy.io.mmread("CT_edge_endpoint_constraint_matrix_eliminated.txt")
+    cone = scipy.io.mmread("CT_cone_constraint_matrix.txt")
+
+    local2global = np.loadtxt(
+        workspace_path + tri_to_tet_index_mapping_file_name
+    ).astype(np.int32)
+
+    stacked = scipy.sparse.vstack((interior, endpoint, midpoint))
+
+    stacked = stacked.tocoo(True)
+    stacked_row = stacked.row
+    stacked_col = stacked.col
+    stacked_data = stacked.data
+
+    stacked_tet_row = stacked_row
+    stacked_tet_col = np.array(
+        [local2global[stacked_col[i]] for i in range(stacked_col.shape[0])]
+    )
+    stacked_tet_data = stacked_data
+
+    stacked_tet = scipy.sparse.coo_array(
+        (stacked_tet_data, (stacked_tet_row, stacked_tet_col)),
+        shape=(stacked.shape[0], v.shape[0]),
+    )
+
+    # stacked_tet_row = stacked_row
+    # stacked_tet_col = stacked_col
+    # stacked_tet_data = stacked_data
+
+    # stacked_tet = stacked
+
+    stacked_trip_row = [0 for i in range(stacked_tet_row.shape[0] * 3)]
+    stacked_trip_col = [0 for i in range(stacked_tet_col.shape[0] * 3)]
+    stacked_trip_data = [0 for i in range(stacked_tet_data.shape[0] * 3)]
+
+    for i in range(stacked_tet_row.shape[0]):
+        stacked_trip_row[i * 3 + 0] = stacked_tet_row[i] * 3 + 0
+        stacked_trip_row[i * 3 + 1] = stacked_tet_row[i] * 3 + 1
+        stacked_trip_row[i * 3 + 2] = stacked_tet_row[i] * 3 + 2
+
+        stacked_trip_col[i * 3 + 0] = stacked_tet_col[i] * 3 + 0
+        stacked_trip_col[i * 3 + 1] = stacked_tet_col[i] * 3 + 1
+        stacked_trip_col[i * 3 + 2] = stacked_tet_col[i] * 3 + 2
+
+        stacked_trip_data[i * 3 + 0] = stacked_tet_data[i]
+        stacked_trip_data[i * 3 + 1] = stacked_tet_data[i]
+        stacked_trip_data[i * 3 + 2] = stacked_tet_data[i]
+
+    stacked_trip = scipy.sparse.coo_array(
+        (stacked_trip_data, (stacked_trip_row, stacked_trip_col)),
+        shape=(stacked_tet.shape[0] * 3, stacked_tet.shape[1] * 3),
+    )
+
+    cone = cone.tocoo(True)
+    cone_row = cone.row
+    cone_col = cone.col
+    cone_data = cone.data
+    local2global_cone = np.array(
+        local2global.tolist()
+        + (local2global + v.shape[0]).tolist()
+        + (local2global + v.shape[0] * 2).tolist()
+    )
+
+    cone_tet_row = cone_row
+    cone_tet_col = np.array(
+        [local2global_cone[cone_col[i]] for i in range(cone_col.shape[0])]
+    )
+    cone_tet_data = cone_data
+    cone_tet = scipy.sparse.coo_array(
+        (cone_tet_data, (cone_tet_row, cone_tet_col)),
+        shape=(cone.shape[0], v.shape[0] * 3),
+    )
+
+    # cone_tet_row = cone_row
+    # cone_tet_col = cone_col
+    # cone_tet_data = cone_data
+    # cone_tet = cone
+
+    cone_trip_row = [0 for i in range(cone_tet_row.shape[0])]
+    cone_trip_col = [0 for i in range(cone_tet_col.shape[0])]
+    cone_trip_data = [0 for i in range(cone_tet_data.shape[0])]
+
+    cone_trip_row = cone_tet_row
+    cone_trip_data = cone_tet_data
+
+    for i in range(cone_tet_col.shape[0]):
+        old_c = cone_tet_col[i]
+        new_c = -1
+        if old_c < cone_tet.shape[1] / 3:
+            new_c = old_c * 3
+        elif old_c < cone_tet.shape[1] / 3 * 2:
+            new_c = (old_c - cone_tet.shape[1] / 3) * 3 + 1
+        else:
+            new_c = (old_c - cone_tet.shape[1] / 3 * 2) * 3 + 2
+        cone_trip_col[i] = new_c
+
+    cone_trip = scipy.sparse.coo_array(
+        (cone_trip_data, (cone_trip_row, cone_trip_col)),
+        shape=(cone_tet.shape[0], cone_tet.shape[1]),
+    )
+
+    print("cone constraints rows: ", cone_trip.shape[0])
+    full_trip = scipy.sparse.vstack((stacked_trip, cone_trip))
+    print("full trip rows: ", full_trip.shape[0])
+    # print("full trip rank: ", np.linalg.matrix_rank(full_trip.todense()))
+
+    # exit()
+
+    v_flatten = v.flatten()
+    b = -full_trip @ v_flatten
+
+    with h5py.File("CT_constraint_with_cone_tet_ids.hdf5", "w") as f:
+        f.create_dataset("A_triplets/values", data=full_trip.data)
+        f.create_dataset("A_triplets/cols", data=full_trip.col)
+        f.create_dataset("A_triplets/rows", data=full_trip.row)
+        f.create_dataset("A_triplets/shape", data=full_trip.shape)
+        f.create_dataset("b", data=b[:, None])
+
+    ####################################################
+    #                   Some old code                  #
+    ####################################################
+
+    # compute boundary nodes
+    cells_ho = m.cells_dict["tetra20"]
+    cells = cells_ho[:, :4]
+    bd_f = igl.boundary_facets(cells)
+    bd_v = []
+    for ff in bd_f:
+        # corners
+        for i in range(3):
+            bd_v.append(ff[i])
+        # edges
+        e01 = str(ff[0]) + "+" + str(ff[1])
+        e12 = str(ff[1]) + "+" + str(ff[2])
+        e20 = str(ff[2]) + "+" + str(ff[0])
+        bd_v.extend(tet_edge_to_vertices[e01])
+        bd_v.extend(tet_edge_to_vertices[e12])
+        bd_v.extend(tet_edge_to_vertices[e20])
+        # faces
+        ff_sorted = [ff[0], ff[1], ff[2]]
+        ff_sorted.sort()
+        ff_str = str(ff_sorted[0]) + "+" + str(ff_sorted[1]) + "+" + str(ff_sorted[2])
+        bd_v.append(tet_face_to_vertices[ff_str])
+    bd_v = np.unique(np.array(bd_v))
+
+    bd_v_tag = np.array([int(i in bd_v) for i in range(v.shape[0])])
+
+    print(bd_v_tag)
+
+    m_test_nodes_points = m.points
+
+    m_test_nodes_cells = [("tetra", cells)]
+    m_test_nodes = mio.Mesh(m_test_nodes_points, m_test_nodes_cells)
+    m_test_nodes.point_data["boundary"] = bd_v_tag
+    # m.write('test_boundary_nodes.msh', file_format='gmsh')
+    m_test_nodes.write("test_boundary_nodes.vtu")
+
+    # bd_v = np.unique(bd_f)
+
+    # build P_T, left mul x  i.e. P_T x
+    # P right mul C i.e. C P
+    l2g_r = np.flip(local2global)
+
+    constrained = [False for i in range(v.shape[0])]
+    for i in range(l2g_r.shape[0]):
+        constrained[l2g_r[i]] = True
+    appear_in_two = [False for i in range(v.shape[0])]
+    for i in range(bd_v.shape[0]):
+        if constrained[bd_v[i]] == True:
+            print(bd_v[i], " is both boundary node and surface node!!")
+            appear_in_two[bd_v[i]] = True
+        constrained[bd_v[i]] = True
+    unconstrained_v = []
+    for i in range(len(constrained)):
+        if not constrained[i]:
+            unconstrained_v.append(i)
+
+    print("tet v: ", v.shape[0])
+    print("c1 cons v: ", l2g_r.shape[0])
+    print("dirichlet cons v: ", bd_v.shape[0])
+    print("unconstrained v: ", len(unconstrained_v))
+
+    P_T = [-1 for i in range(v.shape[0])]
+    cur_idx = 0
+    for i in range(l2g_r.shape[0]):
+        P_T[cur_idx] = l2g_r[i]
+        cur_idx += 1
+    for i in range(bd_v.shape[0]):
+        if not (appear_in_two[bd_v[i]]):
+            P_T[cur_idx] = bd_v[i]
+            cur_idx += 1
+    for i in range(len(unconstrained_v)):
+        P_T[cur_idx] = unconstrained_v[i]
+        cur_idx += 1
+    assert cur_idx == v.shape[0]
+
+    assert all(P_T[i] > -1 for i in range(len(P_T)))
+
+    P_T_trip_row = []
+    P_T_trip_col = []
+    P_T_trip_value = [1.0 for i in range(len(P_T) * 3)]
+
+    for i in range(len(P_T)):
+        P_T_trip_row.append(i * 3 + 0)
+        P_T_trip_row.append(i * 3 + 1)
+        P_T_trip_row.append(i * 3 + 2)
+    for i in range(len(P_T)):
+        P_T_trip_col.append(P_T[i] * 3 + 0)
+        P_T_trip_col.append(P_T[i] * 3 + 1)
+        P_T_trip_col.append(P_T[i] * 3 + 2)
+
+    with h5py.File(workspace_path + "CT_P_T_matrix.hdf5", "w") as f:
+        f.create_dataset("P_T/values", data=np.array(P_T_trip_value))
+        f.create_dataset("P_T/cols", data=np.array(P_T_trip_col))
+        f.create_dataset("P_T/rows", data=np.array(P_T_trip_row))
+        f.create_dataset(
+            "P_T/shape", data=np.array([len(P_T_trip_value), len(P_T_trip_value)])
+        )
+
+    # add direchlet constraints
+    di_row = [i for i in range(bd_v.shape[0])]
+    di_col = [bd_v[i] for i in range(bd_v.shape[0])]
+    di_value = [1.0 for i in range(bd_v.shape[0])]
+
+    di_matrix = scipy.sparse.coo_array(
+        (di_value, (di_row, di_col)), shape=(bd_v.shape[0], v.shape[0])
+    )
+
+    # expand constraint on tetmesh
+    full_matrix_coo = full_matrix.tocoo(True)
+    full_matrix_row = full_matrix_coo.row
+    full_matrix_col = full_matrix_coo.col
+    full_matrix_data = full_matrix_coo.data
+
+    full_matrix_tet_row = full_matrix_row
+    full_matrix_tet_col = np.array(
+        [local2global[full_matrix_col[i]] for i in range(full_matrix_col.shape[0])]
+    )
+    full_matrix_tet_data = full_matrix_data
+
+    full_matrix_tet = scipy.sparse.coo_array(
+        (full_matrix_tet_data, (full_matrix_tet_row, full_matrix_tet_col)),
+        shape=(full_matrix.shape[0], v.shape[0]),
+    )
+
+    # constraint matrix with boundary conditions
+    # C_matrix = scipy.sparse.vstack((full_matrix_tet, di_matrix))
+
+    with h5py.File(workspace_path + "matlab_input_C1_constraint_matrix.hdf5", "w") as f:
+        f.create_dataset("C/values", data=np.array(full_matrix_tet.data))
+        f.create_dataset("C/cols", data=np.array(full_matrix_tet.col))
+        f.create_dataset("C/rows", data=np.array(full_matrix_tet.row))
+        f.create_dataset(
+            "C/shape",
+            data=np.array([full_matrix_tet.shape[0], full_matrix_tet.shape[1]]),
+        )
+
+    with h5py.File(workspace_path + "matlab_input_dirichlet_matrix.hdf5", "w") as f:
+        f.create_dataset("Di/values", data=np.array(di_matrix.data))
+        f.create_dataset("Di/cols", data=np.array(di_matrix.col))
+        f.create_dataset("Di/rows", data=np.array(di_matrix.row))
+        f.create_dataset(
+            "Di/shape", data=np.array([di_matrix.shape[0], di_matrix.shape[1]])
+        )
+
+    # expand cone constraint on tetmesh
+    cone_matrix = scipy.io.mmread("CT_cone_constraint_matrix.txt")
+    cone_matrix = cone_matrix.tocoo(True)
+    cone_matrix_row = cone_matrix.row
+    cone_matrix_col = cone_matrix.col
+    cone_matrix_data = cone_matrix.data
+    local2global_cone = np.array(
+        local2global.tolist()
+        + (local2global + v.shape[0]).tolist()
+        + (local2global + v.shape[0] * 2).tolist()
+    )
+    # print(local2global_cone.shape)
+    # print(local2global_cone)
+
+    cone_matrix_tet_row = cone_matrix_row
+    cone_matrix_tet_col = np.array(
+        [local2global_cone[cone_matrix_col[i]] for i in range(cone_matrix_col.shape[0])]
+    )
+    cone_matrix_tet_data = cone_matrix_data
+    cone_matrix_tet = scipy.sparse.coo_array(
+        (cone_matrix_tet_data, (cone_matrix_tet_row, cone_matrix_tet_col)),
+        shape=(cone_matrix.shape[0], v.shape[0] * 3),
+    )
+
+    with h5py.File(workspace_path + "matlab_input_cone_matrix.hdf5", "w") as f:
+        f.create_dataset("C_cone/values", data=np.array(cone_matrix_tet.data))
+        f.create_dataset("C_cone/cols", data=np.array(cone_matrix_tet.col))
+        f.create_dataset("C_cone/rows", data=np.array(cone_matrix_tet.row))
+        f.create_dataset(
+            "C_cone/shape",
+            data=np.array([cone_matrix_tet.shape[0], cone_matrix_tet.shape[1]]),
+        )
+
+    # exit()
+    ####################################################
+    #                    Call Matlab                   #
+    ####################################################
+    # print("[{}] ".format(datetime.datetime.now()), "start Matlab ...")
+    # write_matlab_script(workspace_path + "matlab_script.m")
+    # # /Applications/MATLAB_R2024b.app/bin/matlab -nojvm -nodesktop -nosplash -r c1_test_triple
+    # matlab_command = path_to_matlab_exe + " -nojvm -nodesktop -nosplash -r matlab_script"
+    # subprocess.run(matlab_command,  shell=True, check=True)
+
+    # matlab_C_trip = read_matlab_sparse("matlab_C_trip.txt")
+    # matlab_b = read_matlab_sparse("matlab_b.txt")
+    # matlab_b = matlab_b.todense()
+    # matlab_b_m = read_matlab_sparse("matlab_b_m.txt")
+    # matlab_b_m = matlab_b_m.todense()
+    # matlab_M = read_matlab_sparse("matlab_M.txt")
+
+    # with h5py.File(workspace_path  + "matlab_constraint_matrix.hdf5", 'w') as f:
+    #     f.create_dataset("A_triplets/values", data=matlab_C_trip.data)
+    #     f.create_dataset("A_triplets/cols", data=matlab_C_trip.col.astype(np.int32))
+    #     f.create_dataset("A_triplets/rows", data=matlab_C_trip.row.astype(np.int32))
+    #     f.create_dataset("A_triplets/shape", data=matlab_C_trip.shape)
+
+    #     f.create_dataset("b", data=matlab_b)
+
+    #     f.create_dataset("b_proj", data=matlab_b_m)
+
+    #     f.create_dataset("A_proj_triplets/values", data=matlab_M.data)
+    #     f.create_dataset("A_proj_triplets/cols", data=matlab_M.col.astype(np.int32))
+    #     f.create_dataset("A_proj_triplets/rows", data=matlab_M.row.astype(np.int32))
+    #     f.create_dataset("A_proj_triplets/shape", data=matlab_M.shape)
+
+    # # with h5py.File(workspace_path  + "matlab_b_matrix.hdf5", 'w') as f:
+    # #     f.create_dataset("b/values", data=matlab_b.data)
+    # #     f.create_dataset("b/cols", data=matlab_b.col)
+    # #     f.create_dataset("b/rows", data=matlab_b.row)
+
+    # # with h5py.File(workspace_path  + "matlab_b_m_matrix.hdf5", 'w') as f:
+    # #     f.create_dataset("matlab_b_m/values", data=matlab_b_m.data)
+    # #     f.create_dataset("matlab_b_m/cols", data=matlab_b_m.col)
+    # #     f.create_dataset("matlab_b_m/rows", data=matlab_b_m.row)
+
+    # # with h5py.File(workspace_path  + "matlab_M_matrix.hdf5", 'w') as f:
+    # #     f.create_dataset("matlab_M/values", data=matlab_M.data)
+    # #     f.create_dataset("matlab_M/cols", data=matlab_M.col)
+    # #     f.create_dataset("matlab_M/rows", data=matlab_M.row)
+
+    # print("[{}] ".format(datetime.datetime.now()), "Matlab finished.")
+    ####################################################
+    #                    TODO: integrate               #
+    ####################################################
+    # # cone constraint
+    # print("[{}] ".format(datetime.datetime.now()), "constructing cone hard constraint matrix ...")
+    # cone_matrix = scipy.io.mmread('CT_cone_constraint_matrix.txt')
+
+    # v_copy = v[local2global, :]
+    # v_vec = np.concatenate((v_copy[:,0], v_copy[:,1], v_copy[:,2]))
+    # A_cone = cone_matrix.tocoo(True)
+    # b_cone = -(A_cone @ v_vec)
+
+    # with h5py.File(workspace_path  + "CT_cone_constraint_matrix.hdf5", 'w') as f:
+    #     f.create_dataset("local2global", data=local2global.astype(np.int32)) # TODO: pending change
+    #     f.create_dataset("A_triplets/values", data=A_cone.data)
+    #     f.create_dataset("A_triplets/cols", data=A_cone.col)
+    #     f.create_dataset("A_triplets/rows", data=A_cone.row)
+    #     f.create_dataset("b", data=b_cone)
+
+    # soft constraint
     print(
         "[{}] ".format(datetime.datetime.now()),
         "constructing soft constraint matrix ...",
@@ -948,16 +1589,58 @@ if __name__ == "__main__":
     # ####################################################
     print("[{}] ".format(datetime.datetime.now()), "create json for polyfem")
 
-    run_script_path = os.path.dirname(__file__)
-    c_json_file = os.path.join(run_script_path, "c1constraints_base.json")
-    with open(c_json_file, "r") as f:
-        c_json = json.load(f)
-
-    c_json["geometry"][0]["mesh"] = output_name + "_initial_tetmesh.msh"
-    c_json["output"]["paraview"]["file_name"] = output_name + "_final.vtu"
-
+    # c_json = {'space': {'discr_order': 3}, 'geometry': [{'mesh': output_name + '_initial_tetmesh.msh', 'volume_selection': 1, 'surface_selection': 1}], 'constraints': {'hard': ['CT_full_constraint_matrix.hdf5'], 'soft': [{'weight': 10000.0, 'data': 'soft_1.hdf5'}, {'weight': 10000.0, 'data': 'soft_2.hdf5'}]}, 'materials': [{'id': 1, 'type': 'NeoHookean', 'E': 20000000.0, 'nu': 0.3}], 'solver': {'nonlinear': {'x_delta': 1e-10, 'solver': 'Newton', 'grad_norm': 1e-08, 'advanced': {'f_delta': 1e-10}}, 'augmented_lagrangian': {'initial_weight': 100000000.0}}, 'boundary_conditions': {'dirichlet_boundary': {'id': 1, 'value': [0, 0, 0]}}, 'output': {'paraview': {'file_name': output_name + '_final.vtu', 'surface': True, 'wireframe': True, 'points': True, 'options': {'material': True, 'force_high_order': True}, 'vismesh_rel_area': 1e-05}}}
+    c_json = {
+        "contact": {
+            "dhat": 0.01,
+            "enabled": False,
+            "collision_mesh": {
+                "mesh": "CT_bilaplacian_nodes.obj",
+                "linear_map": "local2global_matrix.hdf5",
+            },
+        },
+        "space": {"discr_order": 3},
+        "geometry": [
+            {
+                "mesh": output_name + "_initial_tetmesh.msh",
+                "volume_selection": 1,
+                "surface_selection": 1,
+            },
+            # {
+            #     "mesh": offset_file,
+            #     "is_obstacle": True
+            # }
+        ],
+        "constraints": {
+            "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
+            "soft": [
+                {"weight": 100000.0, "data": "soft_1.hdf5"},
+                {"weight": 100.0, "data": "soft_2.hdf5"},
+            ],
+        },
+        "materials": [{"id": 1, "type": "NeoHookean", "E": 200000000000.0, "nu": 0.3}],
+        "boundary_conditions": {
+            "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]
+        },
+        "solver": {
+            "contact": {"barrier_stiffness": 1e8},
+            "nonlinear": {
+                "first_grad_norm_tol": 0,
+                "grad_norm": 1e-07,
+                "solver": "Newton",
+                "Newton": {"residual_tolerance": 1e6},
+            },
+        },
+        "output": {
+            "paraview": {
+                "file_name": output_name + "_final.vtu",
+                "options": {"material": True, "force_high_order": True},
+                "vismesh_rel_area": 1e-05,
+            }
+        },
+    }
     with open("constraints.json", "w") as f:
-        f.write(json.dumps(c_json, indent=4))
+        json.dump(c_json, f)
 
     # ####################################################
     # #                    Call Polyfem                  #

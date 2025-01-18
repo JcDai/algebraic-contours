@@ -728,6 +728,7 @@ void generate_optimized_twelve_split_position_data(
       // std::cout << "cone skipped perturb" << std::endl;
       // std::cout << optimized_vertex_gradients[i] << std::endl;
 
+      // TODO: check if set or not
       optimized_vertex_gradients[i] << 0, 0, 0, 0, 0, 0;
       continue;
     }

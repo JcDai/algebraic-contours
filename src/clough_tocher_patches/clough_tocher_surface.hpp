@@ -64,4 +64,9 @@ public:
 
   // edge midpoint constraints
   void C_E_mid(Eigen::SparseMatrix<double> &m);
+
+  // cone constraints
+  void diag_P_G2F(Eigen::SparseMatrix<double> &m); // diag(p_g2f, p_g2f, p_g2f)
+  void P_3D(Eigen::SparseMatrix<double> &m);       // group x,y,z values by face
+  void C_F_cone(Eigen::SparseMatrix<double> &m, Eigen::MatrixXd &v_normals);
 };
