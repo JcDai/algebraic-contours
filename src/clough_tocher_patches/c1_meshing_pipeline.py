@@ -346,6 +346,7 @@ if __name__ == "__main__":
     path_to_polyfem_exe = args.bins["polyfem_binary"]  # path to polyfem bin
     path_to_matlab_exe = args.bins["matlab_binary"]  # path to matlab exe
     path_to_toolkit_exe = args.bins["wmtk_c1_cone_split_binary"]  # path to toolkit app
+    path_to_generate_cone_exe = args.bins["seamless_con_gen_binary"]
 
     # exit(0)
 

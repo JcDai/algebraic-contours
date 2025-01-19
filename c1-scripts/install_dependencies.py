@@ -13,6 +13,13 @@ seamless_bin = os.path.join(
     "bin",
     "parametrize_seamless",
 )
+seamless_cone_gen_bin = os.path.join(
+    dependencies_folder,
+    "seamless-parametrization-penner",
+    "build",
+    "bin",
+    "generate_frame_field",
+)
 polyfem_bin = os.path.join(dependencies_folder, "polyfem", "build", "PolyFEM_bin")
 c1_meshing_script = os.path.join(
     install_script_path,
@@ -30,6 +37,13 @@ wmtk_bin = os.path.join(
     "build",
     "applications",
     "tetwild_msh_converter_app",
+)
+wmtk_c1_bin = os.path.join(
+    dependencies_folder,
+    "wildmeshing-toolkit",
+    "build",
+    "applications",
+    "c1_meshing_split_app",
 )
 tetwild_bin = os.path.join(dependencies_folder, "TetWild", "build", "TetWild")
 
@@ -63,7 +77,7 @@ if __name__ == "__main__":
     os.makedirs("dependencies", exist_ok=True)
 
     # Seamless Parametrization
-    if os.path.isfile(seamless_bin):
+    if os.path.isfile(seamless_bin) and os.path.isfile(seamless_cone_gen_bin):
         print("=== Binary for seamless parametrization found ===")
     else:
         print("=== Installing seamless parametrization ===")
@@ -124,7 +138,7 @@ if __name__ == "__main__":
             print("=== Installation of PolyFEM failed !!! ===")
 
     # Wildmeshing Toolkit
-    if os.path.isfile(wmtk_bin):
+    if os.path.isfile(wmtk_bin) and os.path.isfile(wmtk_c1_bin):
         print("=== Binary for Wildmeshing Toolkit found ===")
     else:
         print("=== Installing Wildmeshing Toolkit ===")
@@ -133,6 +147,7 @@ if __name__ == "__main__":
             cd dependencies
             git clone https://github.com/wildmeshing/wildmeshing-toolkit.git
             cd wildmeshing-toolkit
+            git checkout jiacheng/c1-meshing-split
             mkdir build
             cd build
             cmake -DCMAKE_BUILD_TYPE=Release ..
@@ -170,11 +185,13 @@ if __name__ == "__main__":
 
     executable_paths = {
         "seamless_parametrization_binary": seamless_bin,
+        "seamless_con_gen_binary": seamless_cone_gen_bin,
         "polyfem_binary": polyfem_bin,
         "smooth_contours_binary": smooth_countours_bin,
         "c1_meshing_script": c1_meshing_script,
         "wmtk_msh_converter_binary": wmtk_bin,
         "tetwild_binary": tetwild_bin,
+        "wmtk_c1_cone_split_binary": wmtk_c1_bin,
     }
 
     executable_paths_json = json.dumps(executable_paths, indent=4)
