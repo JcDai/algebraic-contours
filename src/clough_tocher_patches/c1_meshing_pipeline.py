@@ -335,6 +335,7 @@ if __name__ == "__main__":
     ]  # vtu tetmesh file with 'winding_number' as cell data
     output_name = args.spec["output"]  # output name
     offset_file = args.spec["offset"]  # offset file
+    weight_soft_1 = args.spec["weight_soft_1"]
 
     path_to_para_exe = args.bins[
         "seamless_parametrization_binary"
@@ -1658,7 +1659,7 @@ if __name__ == "__main__":
             # "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
             "soft": [
                 # {"weight": 10000000.0, "data": "CT_constraint_with_cone_tet_ids.hdf5"},
-                {"weight": 100.0, "data": "soft_1.hdf5"},
+                {"weight": weight_soft_1, "data": "soft_1.hdf5"},
                 {"weight": 1.0, "data": "soft_2.hdf5"},
             ],
         },
