@@ -1611,8 +1611,10 @@ if __name__ == "__main__":
 
     A_1 = L
     b_1 = -L @ v[local2global, :]
-    A_2 = sparse.identity(len(local2global))
-    b_2 = v[local2global, :]  # TODO: add xtrg
+    # A_2 = sparse.identity(len(local2global))
+    A_2 = M_inv.copy()
+    # b_2 = v[local2global, :]  # TODO: add xtrg
+    b_2 = np.zeros_like(v[local2global, :])
 
     A_1_p = A_1.tocoo(True)
     A_2_p = A_2.tocoo(True)
@@ -1640,7 +1642,7 @@ if __name__ == "__main__":
     c_json = {
         "contact": {
             "dhat": 0.03,
-            "enabled": True,
+            "enabled": False,
             "collision_mesh": {
                 "mesh": "CT_bilaplacian_nodes.obj",
                 "linear_map": "local2global_matrix.hdf5",
@@ -1656,14 +1658,16 @@ if __name__ == "__main__":
             {"mesh": offset_file, "is_obstacle": True},
         ],
         "constraints": {
-            # "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
+            "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
             "soft": [
                 # {"weight": 10000000.0, "data": "CT_constraint_with_cone_tet_ids.hdf5"},
                 {"weight": weight_soft_1, "data": "soft_1.hdf5"},
-                {"weight": 1.0, "data": "soft_2.hdf5"},
+                {"weight": weight_soft_1, "data": "soft_2.hdf5"},
             ],
         },
-        "materials": [{"id": 1, "type": "NeoHookean", "E": 200000000000.0, "nu": 0.3}],
+        "materials": [
+            {"id": 1, "type": "LinearElasticity", "E": 200000000000.0, "nu": 0.3}
+        ],
         "boundary_conditions": {
             "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]
         },
