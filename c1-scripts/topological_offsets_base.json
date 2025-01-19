@@ -1,0 +1,9 @@
+{
+  "input": "FILENAME.msh",
+  "distance": 0.01,
+  "finite_offset": true,
+  "restrict_min_edge_length_to_input_avg": false,
+  "min_edge_length": 0.02,
+  "side": "double",
+  "report": ""
+}
