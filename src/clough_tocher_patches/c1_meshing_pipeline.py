@@ -345,6 +345,7 @@ if __name__ == "__main__":
     ]  # path to Clough Tocher constraints bin
     path_to_polyfem_exe = args.bins["polyfem_binary"]  # path to polyfem bin
     path_to_matlab_exe = args.bins["matlab_binary"]  # path to matlab exe
+    path_to_toolkit_exe = args.bins["wmtk_c1_cone_split_binary"]  # path to toolkit app
 
     # exit(0)
 
@@ -590,223 +591,584 @@ if __name__ == "__main__":
     )
 
     ####################################################
+    #             Call generate frame field            #
+    ####################################################
+    print("[{}] ".format(datetime.datetime.now()), "Calling generate frame field code")
+    para_command = (
+        path_to_generate_cone_exe
+        + " --mesh "
+        + workspace_path
+        + "embedded_surface.obj --input ./"
+    )
+    # para_command = path_to_generate_cone_exe + " --mesh " + workspace_path + "tet.obj --input ./"
+
+    subprocess.run(para_command, shell=True, check=True)
+
+    ####################################################
     #             Call Parametrization Code            #
     ####################################################
     print("[{}] ".format(datetime.datetime.now()), "Calling parametrization code")
-    # para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field --output " + workspace_path
+    # para_command = path_to_para_exe + " --mesh " + workspace_path + "embedded_surface.obj --fit_field"
     para_command = (
         path_to_para_exe
         + " --mesh "
         + workspace_path
-        + "embedded_surface.obj --fit_field"
+        + "embedded_surface.obj --cones embedded_surface_Th_hat --field embedded_surface_kappa_hat"
     )
-    # print(para_command.split())
+    # para_command = path_to_para_exe + " --mesh " + workspace_path + "tet.obj --cones tet_Th_hat --field tet_kappa_hat"
+
     subprocess.run(
         para_command,
         shell=True,
         check=True,
+        stderr=subprocess.STDOUT,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
     )
-    # subprocess.run(para_command, shell=True, check=True)
 
-    # subprocess.run(para_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    # print("here")
+    ####################################################
+    #             Call c1_meshing_split_app            #
+    ####################################################
+    para_out_file = (
+        workspace_path + "parameterized_mesh.obj"
+    )  # the file name para code should generate
+
+    p_v, p_tc, _, p_f, p_ftc, _ = igl.read_obj(para_out_file)
+    if p_v.shape[0] > para_in_v.shape[0]:
+        print("do not support parametrization new vertex")
+
+    with open("toolkit_map.txt", "w") as file:
+        # {{1, 2, 3}, {0, 2, 3}, {0, 1, 3}, {0, 1, 2}}
+        for i in range(p_f.shape[0]):
+            tid = surface_adj_tet[i][0]
+            tet = tets_regular[tid]
+            f = p_f[i]
+            f_tet_base = np.array([para_in_v_to_tet_v_map[f[i]] for i in range(3)])
+            tfs = np.array(
+                [
+                    [tet[1], tet[2], tet[3]],
+                    [tet[0], tet[2], tet[3]],
+                    [tet[0], tet[1], tet[3]],
+                    [tet[0], tet[1], tet[2]],
+                ]
+            )
+            found = False
+            for k in range(4):
+                if face_equal(f_tet_base, tfs[k]):
+                    file.write("{} {}\n".format(tid, k))
+                    found = True
+            assert found
+
+    angles = np.loadtxt("embedded_surface_Th_hat")
+
+    cone_vids = []
+    for i, angle in enumerate(angles):
+        if angle < 6.0 or angle > 6.5:  # less or more than 2 * pi
+            cone_vids.append(i)
+    print("cone cnt: ", len(cone_vids))
+
+    with open("toolkit_cone_edges.txt", "w") as f:
+        edges = igl.edges(p_f)
+        for e in edges:
+            if e[0] in cone_vids and e[1] in cone_vids:
+                f.write("{} {}\n".format(e[0], e[1]))
+
+    with open("toolkit_para_edges.txt", "w") as f:
+        a = 1
+
+    toolkit_tet_points = tets_vertices_regular
+    toolkit_tet_cells = [("tetra", tets_regular)]
+    toolkit_tet = mio.Mesh(toolkit_tet_points, toolkit_tet_cells)
+    toolkit_tet.write("toolkit_tet.msh", file_format="gmsh")
+
+    toolkit_surface_points = p_v
+    toolkit_surface_cells = [("triangle", p_f)]
+    toolkit_surface = mio.Mesh(toolkit_surface_points, toolkit_surface_cells)
+    toolkit_surface.write("toolkit_surface.msh", file_format="gmsh")
+
+    toolkit_uv_points = p_tc
+    toolkit_uv_cells = [("triangle", p_ftc)]
+    toolkit_uv = mio.Mesh(toolkit_uv_points, toolkit_uv_cells)
+    toolkit_uv.write("toolkit_uv.msh", file_format="gmsh")
+
+    toolkit_json = {
+        "tetmesh": "toolkit_tet.msh",
+        "surface_mesh": "toolkit_surface.msh",
+        "uv_mesh": "toolkit_uv.msh",
+        "tet_surface_map": "toolkit_map.txt",
+        "parametrization_edges": "toolkit_para_edges.txt",
+        "adjacent_cone_edges": "toolkit_cone_edges.txt",
+        "output": "toolkit",
+    }
+
+    with open("cone_split_json.json", "w") as f:
+        json.dump(toolkit_json, f)
+
+    print("[{}] ".format(datetime.datetime.now()), "Calling toolkit c1 cone splitting")
+    toolkit_command = (
+        path_to_toolkit_exe + " -j " + workspace_path + "cone_split_json.json"
+    )
+    subprocess.run(toolkit_command, shell=True, check=True)
+
+    # exit()
+
+    ####################################################
+    #          Split if two cones are adjacent         #
+    ####################################################
+    # para_out_file = workspace_path + "parameterized_mesh.obj" # the file name para code should generate
+    # # para_out_file = workspace_path + "parameterized_tet.obj" # the file name para code should generate
+
+    # p_v, p_tc, _, p_f, p_ftc, _ = igl.read_obj(para_out_file)
+
+    # angles = np.loadtxt("embedded_surface_Th_hat")
+    # # angles = np.loadtxt("tet_Th_hat")
+
+    # cone_vids = []
+    # for i, angle in enumerate(angles):
+    #     if angle < 6.0 or angle > 6.5: # less or more than 2 * pi
+    #         cone_vids.append(i)
+    # print(cone_vids)
+
+    # e2f_map = {}
+    # v2tc_map = {}
+    # for i in range(p_v.shape[0]):
+    #     v2tc_map[i] = []
+
+    # for i in range(p_f.shape[0]):
+    #     f = p_f[i]
+
+    #     # e to f map
+    #     e01 = str(f[0])+"+"+str(f[1])
+    #     e10 = str(f[1])+"+"+str(f[0])
+    #     e12 = str(f[1])+"+"+str(f[2])
+    #     e21 = str(f[2])+"+"+str(f[1])
+    #     e20 = str(f[2])+"+"+str(f[0])
+    #     e02 = str(f[0])+"+"+str(f[2])
+    #     es = [e01,e10,e12,e21,e20,e02]
+    #     for e in es:
+    #         if e not in e2f_map:
+    #             e2f_map[e] = [i]
+    #         else:
+    #             e2f_map[e].append(i)
+
+    #     # v to tc map
+    #     for k in range(3):
+    #         # print("p_ftc[i][k]", p_ftc[i][k])
+    #         # print("v2tc_map[f[k]]", v2tc_map[f[k]])
+    #         if p_ftc[i][k] not in v2tc_map[f[k]]:
+    #             v2tc_map[f[k]].append(p_ftc[i][k])
+
+    # new_vs = copy.deepcopy(p_v.tolist())
+    # new_fs = copy.deepcopy(p_f.tolist())
+    # new_tc = copy.deepcopy(p_tc.tolist())
+    # new_ftc = copy.deepcopy(p_ftc.tolist())
+
+    # p_edges = igl.edges(p_f)
+
+    # affected_fids = []
+
+    # for i in range(p_edges.shape[0]):
+    #     e = p_edges[i]
+    #     if e[0] in cone_vids and e[1] in cone_vids:
+    #         print("split edge with two cones {} {}".format(e[0], e[1]))
+    #         # edge connecting two cones, need to split
+    #         v_new = (p_v[e[0]] + p_v[e[1]]) /2.0
+    #         v_new_id = len(new_vs)
+    #         new_vs.append(v_new)
+
+    #         e2f_map[str(e[1]) + "+" + str(v_new_id)] = []
+    #         e2f_map[str(e[0]) + "+" + str(v_new_id)] = []
+    #         e2f_map[str(v_new_id) + "+" + str(e[0])] = []
+    #         e2f_map[str(v_new_id) + "+" + str(e[1])] = []
+
+    #         e_str = str(e[0]) + "+" + str(e[1])
+
+    #         # split uv
+    #         # consider different mapping for the two faces
+    #         last_pair = [-1,-1]
+    #         new_uvs = []
+    #         new_uv_vids = []
+
+    #         assert len(e2f_map[e_str])<=2
+
+    #         affected_fids.extend(e2f_map[e_str])
+    #         for fid in e2f_map[e_str]:
+    #             tc_v0 = -1
+    #             tc_v1 = -1
+    #             # print(new_fs[fid])
+    #             for k in range(3):
+    #                 if new_fs[fid][k] == e[0]:
+    #                     tc_v0 = new_ftc[fid][k]
+    #                 if new_fs[fid][k] == e[1]:
+    #                     tc_v1 = new_ftc[fid][k]
+    #             assert tc_v0 > -1
+    #             assert tc_v1 > -1
+    #             new_uv = None
+    #             new_uv_vid = -1
+    #             if (tc_v0 in last_pair) and (tc_v1 in last_pair):
+    #                 # use last
+    #                 new_uv = new_uvs[0]
+    #                 new_uv_vid = new_uv_vids[0]
+    #             else:
+    #                 # use new
+    #                 new_uv = (p_tc[tc_v0] + p_tc[tc_v1])/2.0
+    #                 new_uv_vid = len(new_tc)
+    #                 new_tc.append(new_uv)
+    #                 last_pair = [tc_v0, tc_v1]
+    #             assert new_uv is not None
+    #             assert new_uv_vid > -1
+
+    #             new_uvs.append(new_uv)
+    #             new_uv_vids.append(new_uv_vid)
+
+    #             ftc_new_2 = copy.deepcopy(new_ftc[fid])
+    #             # ftc_new_id = len(new_fs)
+
+    #             # in place change
+    #             for k in range(3):
+    #                 if new_ftc[fid][k] == tc_v0:
+    #                     new_ftc[fid][k] = new_uv_vid
+
+    #             # change in ftc2
+    #             for k in range(3):
+    #                 if ftc_new_2[k] == tc_v1:
+    #                     ftc_new_2[k] = new_uv_vid
+
+    #             new_ftc.append(ftc_new_2)
+
+    #         # split 3d
+    #         for fid in e2f_map[e_str]:
+    #             f_new_2 = copy.deepcopy(new_fs[fid])
+    #             f_new_id = len(new_fs)
+
+    #             other_vid = -1
+    #             for k in range(3):
+    #                 if new_fs[fid][k] != e[0] and new_fs[fid][k] != e[1]:
+    #                     other_vid = new_fs[fid][k]
+    #             assert other_vid>-1
+
+    #             #in place change for f_new_1 for e[0]
+    #             found = False
+    #             for k in range(3):
+    #                 if new_fs[fid][k] == e[0]:
+    #                     found = True
+    #                     new_fs[fid][k] = v_new_id
+    #             assert found
+    #             e2f_map[str(e[1]) + "+" + str(v_new_id)].append(fid)
+    #             e2f_map[str(v_new_id) + "+" + str(e[1])].append(fid)
+    #             # change in f_new_2 for e[1]
+    #             found = False
+    #             for k in range(3):
+    #                 if f_new_2[k] == e[1]:
+    #                     found = True
+    #                     f_new_2[k] = v_new_id
+    #             assert found
+    #             e2f_map[str(e[0]) + "+" + str(v_new_id)].append(f_new_id)
+    #             e2f_map[str(v_new_id) + "+" + str(e[0])].append(f_new_id)
+
+    #             # update map for edge e0e2
+    #             e2f_map[str(e[0]) + "+" + str(other_vid)].append(f_new_id)
+    #             e2f_map[str(other_vid) + "+" + str(e[0])].append(f_new_id)
+    #             e2f_map[str(e[0]) + "+" + str(other_vid)].remove(fid)
+    #             e2f_map[str(other_vid) + "+" + str(e[0])].remove(fid)
+
+    #             # append f_new_2
+    #             new_fs.append(f_new_2)
+
+    #             print(fid, " --> ", [fid, f_new_id])
+
+    # new_vs = np.array(new_vs)
+    # new_fs = np.array(new_fs)
+    # new_tc = np.array(new_tc)
+    # new_ftc = np.array(new_ftc)
+
+    # assert new_fs.shape[0] == new_ftc.shape[0]
+
+    # with open("parameterized_mesh_splitted.obj", 'w') as f:
+    #     for i in range(new_vs.shape[0]):
+    #         f.write("v {} {} {}\n".format(new_vs[i][0], new_vs[i][1], new_vs[i][2]))
+    #     for i in range(new_tc.shape[0]):
+    #         f.write("vt {} {}\n".format(new_tc[i][0], new_tc[i][1]))
+    #     for i in range(new_fs.shape[0]):
+    #         f.write("f {}/{} {}/{} {}/{}\n".format(new_fs[i][0]+1, new_ftc[i][0]+1, new_fs[i][1]+1, new_ftc[i][1]+1, new_fs[i][2]+1, new_ftc[i][2]+1))
+
+    # print("affected fids: ", affected_fids)
+
+    # # exit()
+
+    # bd_f = igl.boundary_facets(tets_regular)
+    # bd_v = []
+    # for ff in bd_f:
+    #     # corners
+    #     for i in range(3):
+    #         bd_v.append(ff[i])
+    # bd_v = np.unique(np.array(bd_v))
+
+    # bd_v_tag = np.array([int(i in bd_v) for i in range(tets_vertices_regular.shape[0])])
+    # sf_v_tag = np.array([int(i in para_in_v_to_tet_v_map) for i in range(tets_vertices_regular.shape[0])])
+    # both_v_tag = np.array([int(i in bd_v and i in para_in_v_to_tet_v_map) for i in range(tets_vertices_regular.shape[0])])
+
+    # print("both before para split: ", np.sum(both_v_tag))
+
+    # m_test_nodes_points = tets_vertices_regular
+    # m_test_nodes_cells = [('tetra', tets_regular)]
+    # m_test_nodes = mio.Mesh(m_test_nodes_points, m_test_nodes_cells)
+    # m_test_nodes.point_data['boundary'] = bd_v_tag
+    # m_test_nodes.point_data['surface_v'] = sf_v_tag
+    # m_test_nodes.point_data['both'] = both_v_tag
+    # # m.write('test_boundary_nodes.msh', file_format='gmsh')
+    # m_test_nodes.write('test_before_para_split.vtu')
 
     ####################################################
     #                     Para Split                   #
     ####################################################
-    # get para in and out mapping
-    print(
-        "[{}] ".format(datetime.datetime.now()),
-        "Doing parametrization input to output mapping ...",
-    )
-    para_out_file = (
-        workspace_path + "parameterized_mesh.obj"
-    )  # the file name para code should generate
-    para_out_v, para_out_tc, _, para_out_f, para_out_ftc, _ = igl.read_obj(
-        para_out_file
-    )
+    # # get para in and out mapping
+    # print("[{}] ".format(datetime.datetime.now()), "Doing parametrization input to output mapping ...")
+    # # para_out_file = workspace_path + "parameterized_mesh.obj" # the file name para code should generate
+    # para_out_file = workspace_path + "parameterized_mesh_splitted.obj"
+    # para_out_v, para_out_tc, _, para_out_f, para_out_ftc, _ = igl.read_obj(para_out_file)
 
-    print(
-        "[{}] ".format(datetime.datetime.now()),
-        "after para #v: {0}, before para #v: {1}".format(
-            para_in_v.shape[0], para_out_v.shape[0]
-        ),
-    )
-    v_thres = para_in_v.shape[0]
+    # print("[{}] ".format(datetime.datetime.now()), "after para #v: {0}, before para #v: {1}".format(para_out_v.shape[0], para_in_v.shape[0]))
+    # v_thres = para_in_v.shape[0]
 
-    # old face existance
-    new_face_ids = []
-    for i in range(para_out_f.shape[0]):
-        if any(v_out >= v_thres for v_out in para_out_f[i]):
-            new_face_ids.append(i)
+    # # old face existance
+    # new_face_ids = []
+    # for i in range(para_out_f.shape[0]):
+    #     if any(v_out >= v_thres for v_out in para_out_f[i]):
+    #         new_face_ids.append(i)
 
-    deleted_old_fids = []
-    used_new_fids = [False for f in para_out_f]
+    # deleted_old_fids = []
+    # used_new_fids = [False for f in para_out_f]
 
-    # face dict existance
-    para_in_face_existance = {}
-    para_out_face_existance = {}
+    # # face dict existance
+    # para_in_face_existance = {}
+    # para_out_face_existance = {}
+    # # for i in range(para_in_f.shape[0]):
+    # #     face = [para_in_f[i][0], para_in_f[i][1], para_in_f[i][2]]
+    # #     face.sort()
+    # #     face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
+    # #     para_in_face_existance[face_str] = i
+
+    # for i in range(para_out_f.shape[0]):
+    #     face = [para_out_f[i][0], para_out_f[i][1], para_out_f[i][2]]
+    #     face.sort()
+    #     face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
+    #     para_out_face_existance[face_str] = i
+
+    # para_in_to_out_face_mapping = {}
+
     # for i in range(para_in_f.shape[0]):
     #     face = [para_in_f[i][0], para_in_f[i][1], para_in_f[i][2]]
     #     face.sort()
     #     face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
-    #     para_in_face_existance[face_str] = i
-
-    for i in range(para_out_f.shape[0]):
-        face = [para_out_f[i][0], para_out_f[i][1], para_out_f[i][2]]
-        face.sort()
-        face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
-        para_out_face_existance[face_str] = i
-
-    para_in_to_out_face_mapping = {}
-
-    for i in range(para_in_f.shape[0]):
-        face = [para_in_f[i][0], para_in_f[i][1], para_in_f[i][2]]
-        face.sort()
-        face_str = str(face[0]) + "+" + str(face[1]) + "+" + str(face[2])
-        if face_str in para_out_face_existance:
-            para_in_to_out_face_mapping[i] = [para_out_face_existance[face_str]]
-        else:
-            deleted_old_fids.append(i)
-
-    # for i in range(para_in_f.shape[0]):
-    #     found = False
-    #     for j in range(para_out_f.shape[0]):
-    #         if used_new_fids[j]:
-    #             continue
-    #         if face_equal(para_in_f[i], para_out_f[j]):
-    #             found = True
-    #             used_new_fids[j] = True
-    #             para_in_to_out_face_mapping[i] = [j]
-    #     if not found:
+    #     if face_str in para_out_face_existance:
+    #         para_in_to_out_face_mapping[i] = [para_out_face_existance[face_str]]
+    #     else:
     #         deleted_old_fids.append(i)
 
-    print("[{}] ".format(datetime.datetime.now()), "Done parametrization mapping.")
+    # # for i in range(para_in_f.shape[0]):
+    # #     found = False
+    # #     for j in range(para_out_f.shape[0]):
+    # #         if used_new_fids[j]:
+    # #             continue
+    # #         if face_equal(para_in_f[i], para_out_f[j]):
+    # #             found = True
+    # #             used_new_fids[j] = True
+    # #             para_in_to_out_face_mapping[i] = [j]
+    # #     if not found:
+    # #         deleted_old_fids.append(i)
 
-    # match new faces to old faces
-    print(
-        "[{}] ".format(datetime.datetime.now()), "Compute old -> new face containment"
-    )
-    for f_out in new_face_ids:
-        bc = (
-            para_out_v[para_out_f[f_out][0]]
-            + para_out_v[para_out_f[f_out][1]]
-            + para_out_v[para_out_f[f_out][2]]
-        ) / 3.0
-        found = False
-        for f_in in deleted_old_fids:
-            if on_tri(
-                para_in_v[para_in_f[f_in][0]],
-                para_in_v[para_in_f[f_in][1]],
-                para_in_v[para_in_f[f_in][2]],
-                bc,
-            ):
-                if f_in in para_in_to_out_face_mapping:
-                    para_in_to_out_face_mapping[f_in].append(f_out)
-                else:
-                    para_in_to_out_face_mapping[f_in] = [f_out]
-                found = True
-                break
-        assert found  # must find an f_in that contains f_out
+    # print("[{}] ".format(datetime.datetime.now()), "Done parametrization mapping.")
 
-    tet_after_para_vertices = copy.deepcopy(tets_vertices_regular.tolist())
-    tet_after_para_tets = copy.deepcopy(tets_regular.tolist())
+    # # match new faces to old faces
+    # print("[{}] ".format(datetime.datetime.now()), "Compute old -> new face containment")
+    # for f_out in new_face_ids:
+    #     bc = (para_out_v[para_out_f[f_out][0]] + para_out_v[para_out_f[f_out][1]] + para_out_v[para_out_f[f_out][2]]) / 3.0
+    #     found = False
+    #     for f_in in deleted_old_fids:
+    #         if on_tri(para_in_v[para_in_f[f_in][0]], para_in_v[para_in_f[f_in][1]], para_in_v[para_in_f[f_in][2]], bc):
+    #             if f_in in para_in_to_out_face_mapping:
+    #                 para_in_to_out_face_mapping[f_in].append(f_out)
+    #             else:
+    #                 para_in_to_out_face_mapping[f_in] = [f_out]
+    #             found = True
+    #             break
+    #     assert found # must find an f_in that contains f_out
 
-    # add new vertices to tet mesh
-    print(
-        "[{}] ".format(datetime.datetime.now()),
-        "Adding parametrized new vertices to tetmesh ... ",
-    )
-    para_out_v_to_tet_v_map = copy.deepcopy(para_in_v_to_tet_v_map).tolist()
-    print(para_in_v.shape)
-    print(para_out_v.shape)
-    for i in range(para_in_v.shape[0], para_out_v.shape[0]):
-        # para_out_v_to_tet_v_map[i] = len(tet_after_para_vertices)
-        para_out_v_to_tet_v_map.append(len(tet_after_para_vertices))
-        tet_after_para_vertices.append(para_out_v[i].tolist())
+    # print("deleted_old_fids: ", deleted_old_fids)
+    # for fid in deleted_old_fids:
+    #     print(fid, ": ", para_in_to_out_face_mapping[fid])
 
-    # para_out to tet_out surface mappings
-    surface_adj_tet_para_out = {}
-    tet_surface_para_out = {}
+    # tet_after_para_vertices = copy.deepcopy(tets_vertices_regular.tolist())
+    # tet_after_para_tets = copy.deepcopy(tets_regular.tolist())
 
-    print(
-        "[{}] ".format(datetime.datetime.now()),
-        "Splitting tets according to para output ... ",
-    )
-    # update unsplitted faces
-    for f_in in para_in_to_out_face_mapping:
-        if f_in not in deleted_old_fids:
-            surface_adj_tet_para_out[para_in_to_out_face_mapping[f_in][0]] = (
-                surface_adj_tet[f_in]
-            )
-            for tid in surface_adj_tet_para_out[para_in_to_out_face_mapping[f_in][0]]:
-                tet_surface_para_out[tid] = [para_in_to_out_face_mapping[f_in][0]]
+    # # add new vertices to tet mesh
+    # print("[{}] ".format(datetime.datetime.now()), "Adding parametrized new vertices to tetmesh ... ")
+    # para_out_v_to_tet_v_map = copy.deepcopy(para_in_v_to_tet_v_map).tolist()
+    # print(para_in_v.shape)
+    # print(para_out_v.shape)
+    # for i in range(para_in_v.shape[0], para_out_v.shape[0]):
+    #     # para_out_v_to_tet_v_map[i] = len(tet_after_para_vertices)
+    #     para_out_v_to_tet_v_map.append(len(tet_after_para_vertices))
+    #     tet_after_para_vertices.append(para_out_v[i].tolist())
 
-    # split corresponding tets
-    print("para deleted fids: ", deleted_old_fids)
-    for f_in in deleted_old_fids:
-        f_vs = surface_tet_faces[f_in]  # vid in tet regular index
-        adj_tets = surface_adj_tet[f_in]
-        for t in adj_tets:
-            t_vs = tets_regular[t]
+    # # exit()
+    # assert len(para_out_v_to_tet_v_map) == para_out_v.shape[0]
 
-            # get local ids for f_vs and other point
-            local_ids = [-1, -1, -1, -1]
-            for i in range(3):
-                for j in range(4):
-                    if f_vs[i] == t_vs[j]:
-                        local_ids[j] = i
-                        break
-            assert local_ids.count(-1) == 1
+    # # para_out to tet_out surface mappings
+    # surface_adj_tet_para_out = {}
+    # tet_surface_para_out = {}
 
-            new_tets = []
-            assert len(para_in_to_out_face_mapping[f_in]) > 1
-            for f_out in para_in_to_out_face_mapping[f_in]:
-                f_out_vs = para_out_f[f_out]
-                f_out_vs_tet_base = [para_out_v_to_tet_v_map[vid] for vid in f_out_vs]
-                new_tet_vs = copy.deepcopy(t_vs)
-                for i in range(4):
-                    if local_ids[i] != -1:
-                        new_tet_vs[i] = f_out_vs_tet_base[local_ids[i]]
-                new_tets.append(new_tet_vs)
+    # check_cnt = 0
+    # for key in para_in_to_out_face_mapping:
+    #     check_cnt += len(para_in_to_out_face_mapping[key])
+    # assert check_cnt == para_out_f.shape[0]
 
-            # propagate winding number
-            old_winding_number = winding_numbers[t]
+    # print("[{}] ".format(datetime.datetime.now()), "Splitting tets according to para output ... ")
+    # # update unsplitted faces
+    # for f_in in para_in_to_out_face_mapping:
+    #     if f_in not in deleted_old_fids:
+    #         assert len(para_in_to_out_face_mapping[f_in]) == 1
+    #         surface_adj_tet_para_out[para_in_to_out_face_mapping[f_in][0]] = surface_adj_tet[f_in]
+    #         for tid in surface_adj_tet_para_out[para_in_to_out_face_mapping[f_in][0]]:
+    #             tet_surface_para_out[tid] = [para_in_to_out_face_mapping[f_in][0]]
 
-            # update tet connectivity
-            assert len(new_tets) > 1
-            tet_after_para_tets[t] = new_tets[0]
-            first_split_face = para_in_to_out_face_mapping[f_in][0]
-            if first_split_face not in surface_adj_tet_para_out:
-                surface_adj_tet_para_out[first_split_face] = [t]
-            else:
-                surface_adj_tet_para_out[first_split_face].append(t)
-            tet_surface_para_out[t] = [first_split_face]
+    # # split corresponding tets
+    # print("para deleted fids: ", deleted_old_fids)
+    # for f_in in deleted_old_fids:
+    #     f_vs = surface_tet_faces[f_in] # vid in tet regular index
+    #     print("-------------------------------------")
+    #     print("old fid: ", f_in, "  f_vs: ", f_vs)
+    #     adj_tets = surface_adj_tet[f_in]
+    #     assert len(adj_tets) == 2
+    #     for t in adj_tets:
+    #         t_vs = tets_regular[t]
 
-            # propagate winding number
-            winding_numbers[t] = winding_numbers[t]
+    #         # get local ids for f_vs and other point
+    #         local_ids = [-1,-1,-1,-1]
+    #         for i in range(3):
+    #             for j in range(4):
+    #                 if f_vs[i] == t_vs[j]:
+    #                     local_ids[j] = i
+    #                     break
+    #         assert local_ids.count(-1) == 1
 
-            for i in range(1, len(new_tets)):
-                new_tid = len(tet_after_para_tets)
-                # print(new_tid)
-                tet_after_para_tets.append(new_tets[i])
-                split_face = para_in_to_out_face_mapping[f_in][i]
-                if split_face not in surface_adj_tet_para_out:
-                    surface_adj_tet_para_out[split_face] = [new_tid]
-                else:
-                    surface_adj_tet_para_out[split_face].append(new_tid)
-                tet_surface_para_out[new_tid] = [split_face]
+    #         new_tets = []
+    #         assert len(para_in_to_out_face_mapping[f_in]) > 1
+    #         for f_out in para_in_to_out_face_mapping[f_in]:
+    #             f_out_vs = para_out_f[f_out]
+    #             f_out_vs_tet_base = [para_out_v_to_tet_v_map[vid] for vid in f_out_vs]
+    #             print("f_out_vs_tet_base: ", f_out_vs_tet_base)
+    #             new_tet_vs = copy.deepcopy(t_vs)
+    #             for i in range(4):
+    #                 if local_ids[i] != -1:
+    #                     new_tet_vs[i] = f_out_vs_tet_base[local_ids[i]]
+    #             new_tets.append(new_tet_vs)
 
-                # propagate winding number
-                winding_numbers[new_tid] = old_winding_number
+    #         print("old tet: ", t_vs)
+    #         print("new_tets: ", new_tets)
 
-    print("[{}] ".format(datetime.datetime.now()), "Done Para Split.")
+    #         # propagate winding number
+    #         old_winding_number = winding_numbers[t]
+
+    #         # update tet connectivity
+    #         assert len(new_tets) > 1
+    #         tet_after_para_tets[t] = new_tets[0]
+    #         first_split_face = para_in_to_out_face_mapping[f_in][0]
+    #         if first_split_face not in surface_adj_tet_para_out:
+    #             surface_adj_tet_para_out[first_split_face] = [t]
+    #         else:
+    #             surface_adj_tet_para_out[first_split_face].append(t)
+    #         tet_surface_para_out[t] = [first_split_face]
+
+    #         # propagate winding number
+    #         winding_numbers[t] = winding_numbers[t]
+
+    #         for i in range(1, len(new_tets)):
+    #             new_tid = len(tet_after_para_tets)
+    #             # print(new_tid)
+    #             tet_after_para_tets.append(new_tets[i])
+    #             split_face = para_in_to_out_face_mapping[f_in][i]
+    #             if split_face not in surface_adj_tet_para_out:
+    #                 surface_adj_tet_para_out[split_face] = [new_tid]
+    #             else:
+    #                 surface_adj_tet_para_out[split_face].append(new_tid)
+    #             tet_surface_para_out[new_tid] = [split_face]
+
+    #             # propagate winding number
+    #             winding_numbers[new_tid] = old_winding_number
+
+    #     # figure out how edges are splitted
+
+    # # split tets surrounding the splitted
+
+    # print("[{}] ".format(datetime.datetime.now()), "Done Para Split.")
+
+    # bd_f = igl.boundary_facets(np.array(tet_after_para_tets))
+    # bd_v = []
+    # for ff in bd_f:
+    #     # corners
+    #     for i in range(3):
+    #         bd_v.append(ff[i])
+    #     if any(ff[k] in para_out_v_to_tet_v_map for k in range(3)):
+    #         print("has vertex on boundary: ", ff)
+    # bd_v = np.unique(np.array(bd_v))
+
+    # bd_v_tag = np.array([int(i in bd_v) for i in range(len(tet_after_para_vertices))])
+    # sf_v_tag = np.array([int(i in para_out_v_to_tet_v_map) for i in range(len(tet_after_para_vertices))])
+    # both_v_tag = np.array([int(i in bd_v and i in para_out_v_to_tet_v_map) for i in range(len(tet_after_para_vertices))])
+
+    # print("both after para split: ", np.sum(both_v_tag))
+
+    # m_test_nodes_points = np.array(tet_after_para_vertices)
+    # m_test_nodes_cells = [('tetra', np.array(tet_after_para_tets))]
+    # m_test_nodes = mio.Mesh(m_test_nodes_points, m_test_nodes_cells)
+    # m_test_nodes.point_data['boundary'] = bd_v_tag
+    # m_test_nodes.point_data['surface_v'] = sf_v_tag
+    # m_test_nodes.point_data['both'] = both_v_tag
+    # # m.write('test_boundary_nodes.msh', file_format='gmsh')
+    # m_test_nodes.write('test_after_para_split.vtu')
 
     ####################################################
     #                     Face Split                   #
     ####################################################
+    tet_after_para_mesh = mio.read("toolkit_tetmesh_tets.vtu")
+    tet_after_para_vertices = tet_after_para_mesh.points.tolist()
+    # tet_after_para_tets = tet_after_para_mesh.cells_dict['tetra'].tolist()
+
+    tet_after_para_tets = tet_after_para_mesh.cells_dict["tetra"]
+    tet_after_para_tets = tet_after_para_tets[:, [1, 0, 2, 3]]
+    tet_after_para_tets = tet_after_para_tets.tolist()
+
+    para_out_v, para_out_tc, _, para_out_f, para_out_ftc, _ = igl.read_obj(
+        "surface_uv_after_cone_split.obj"
+    )
+
+    para_out_v_to_tet_v_map = np.loadtxt(
+        "surface_v_to_tet_v_after_cone_split.txt"
+    ).astype(np.int64)
+
+    print("para_out_v_to_tet_v_map.shape", para_out_v_to_tet_v_map.shape)
+
+    surface_adj_tet_para_out = {}
+    tet_surface_para_out = {}
+    surface_adj_tet_from_file = np.loadtxt(
+        "surface_adj_tet_after_cone_split.txt"
+    ).astype(np.int64)
+    print("surface_adj_tet_from_file.shape", surface_adj_tet_from_file.shape)
+    for i in range(surface_adj_tet_from_file.shape[0]):
+        surface_adj_tet_para_out[surface_adj_tet_from_file[i][0]] = [
+            surface_adj_tet_from_file[i][1],
+            surface_adj_tet_from_file[i][2],
+        ]
+        tet_surface_para_out[surface_adj_tet_from_file[i][1]] = [
+            surface_adj_tet_from_file[i][0]
+        ]
+        tet_surface_para_out[surface_adj_tet_from_file[i][2]] = [
+            surface_adj_tet_from_file[i][0]
+        ]
+
+    winding_numbers = tet_after_para_mesh.cell_data["winding_number"][0]
+
     print("[{}] ".format(datetime.datetime.now()), "Face splitting ...")
     # face split
     tet_after_face_split_tets = []
@@ -835,6 +1197,7 @@ if __name__ == "__main__":
 
         # surface case
         t_sf = tet_surface_para_out[tid][0]
+        # print(t_sf)
         f_vs = para_out_f[t_sf]
         f_vs_tet_base = [para_out_v_to_tet_v_map[vid] for vid in f_vs]
         f_vs_coords = [np.array(para_out_v[vid]) for vid in f_vs]
@@ -899,9 +1262,14 @@ if __name__ == "__main__":
     ####################################################
 
     print("[{}] ".format(datetime.datetime.now()), "Calling Clough Tocher code")
+    # ct_command = path_to_ct_exe + " --input " + workspace_path + "parameterized_mesh_splitted.obj -o CT"
     ct_command = (
-        path_to_ct_exe + " --input " + workspace_path + "parameterized_mesh.obj -o CT"
+        path_to_ct_exe
+        + " --input "
+        + workspace_path
+        + "surface_uv_after_cone_split.obj -o CT"
     )
+
     subprocess.run(ct_command, shell=True, check=True)
     # subprocess.run(ct_command.split(' '), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -1364,6 +1732,10 @@ if __name__ == "__main__":
     bd_v = np.unique(np.array(bd_v))
 
     bd_v_tag = np.array([int(i in bd_v) for i in range(v.shape[0])])
+    sf_v_tag = np.array([int(i in local2global) for i in range(v.shape[0])])
+    both_v_tag = np.array(
+        [int(i in bd_v and i in local2global) for i in range(v.shape[0])]
+    )
 
     print(bd_v_tag)
 
@@ -1372,6 +1744,8 @@ if __name__ == "__main__":
     m_test_nodes_cells = [("tetra", cells)]
     m_test_nodes = mio.Mesh(m_test_nodes_points, m_test_nodes_cells)
     m_test_nodes.point_data["boundary"] = bd_v_tag
+    m_test_nodes.point_data["surface_v"] = sf_v_tag
+    m_test_nodes.point_data["both"] = both_v_tag
     # m.write('test_boundary_nodes.msh', file_format='gmsh')
     m_test_nodes.write("test_boundary_nodes.vtu")
 
@@ -1613,8 +1987,19 @@ if __name__ == "__main__":
     b_1 = -L @ v[local2global, :]
     # A_2 = sparse.identity(len(local2global))
     A_2 = M_inv.copy()
-    # b_2 = v[local2global, :]  # TODO: add xtrg
-    b_2 = np.zeros_like(v[local2global, :])
+    b_2 = np.zeros_like(v[local2global, :])  # TODO: add xtrg
+
+    # dis_file = np.load(output_name+"_displacements.txt")
+    # A_2_rows = []
+    # A_2_cols = []
+    # A_2_values = []
+    # for i in range(dis_file.shape[0]):
+    #     A_2_rows.append(i)
+    #     A_2_cols.append(int(dis_file[i][0]))
+    #     A_2_values.append(1.0)
+
+    # A_2 = scipy.sparse.coo_array((A_2_values, (A_2_rows, A_2_cols)), shape=(dis_file.shape[0], v.shape[0]))
+    # b_2 = delta_mesh_points
 
     A_1_p = A_1.tocoo(True)
     A_2_p = A_2.tocoo(True)
@@ -1675,7 +2060,7 @@ if __name__ == "__main__":
             "contact": {"barrier_stiffness": 1e8},
             "nonlinear": {
                 "first_grad_norm_tol": 0,
-                "grad_norm": 1e-07,
+                "grad_norm": 1e-06,
                 "solver": "Newton",
                 "Newton": {"residual_tolerance": 1e6},
             },
