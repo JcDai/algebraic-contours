@@ -452,6 +452,10 @@ if __name__ == "__main__":
     output_name = args.spec["output"]  # output name
     offset_file = args.spec["offset"]  # offset file
     weight_soft_1 = args.spec["weight_soft_1"]
+    bilap_k_ring_neighbor = args.spec["bilap_k_ring_neighbor"] # int, bilaplacian on k ring 5 to 20
+    bilap_sample_factor = args.spec["bilap_sample_factor"] # int, put 2
+    elasticity_mode = args.spec["elasticity_mode"] # LinearElasticity or Neohookean
+    enable_offset = args.spec["enable_offset"]
 
     path_to_para_exe = args.bins[
         "seamless_parametrization_binary"
@@ -463,6 +467,7 @@ if __name__ == "__main__":
     path_to_matlab_exe = args.bins["matlab_binary"]  # path to matlab exe
     path_to_toolkit_exe = args.bins["wmtk_c1_cone_split_binary"]  # path to toolkit app
     path_to_generate_cone_exe = args.bins["seamless_con_gen_binary"]
+
 
     # exit(0)
 
@@ -784,25 +789,25 @@ if __name__ == "__main__":
     print("cone cnt: ", len(cone_vids))
 
     with open("toolkit_cone_edges.txt", "w") as f:
-        # edges = igl.edges(p_f)
-        # for e in edges:
-        #     if e[0] in cone_vids and e[1] in cone_vids:
-        #         f.write("{} {}\n".format(e[0], e[1]))
+        edges = igl.edges(p_f)
+        for e in edges:
+            if e[0] in cone_vids and e[1] in cone_vids:
+                f.write("{} {}\n".format(e[0], e[1]))
 
-        vv_adjacency = igl.adjacency_list(p_f)
-        edges_to_split = []
-        for i in range(len(vv_adjacency)):
-            if i in cone_vids:
-                for j in vv_adjacency[i]:
-                    if i<j:
-                        edges_to_split.append([i,j])
-                    else:
-                        edges_to_split.append([j,i])
-        edges_to_split = np.array(edges_to_split)
-        unique_edges = np.unique(edges_to_split, axis=0)
+        # vv_adjacency = igl.adjacency_list(p_f)
+        # edges_to_split = []
+        # for i in range(len(vv_adjacency)):
+        #     if i in cone_vids:
+        #         for j in vv_adjacency[i]:
+        #             if i<j:
+        #                 edges_to_split.append([i,j])
+        #             else:
+        #                 edges_to_split.append([j,i])
+        # edges_to_split = np.array(edges_to_split)
+        # unique_edges = np.unique(edges_to_split, axis=0)
 
-        for e in unique_edges:
-            f.write("{} {}\n".format(e[0], e[1]))
+        # for e in unique_edges:
+        #     f.write("{} {}\n".format(e[0], e[1]))
 
     with open("toolkit_para_edges.txt", "w") as f:
         a = 1
@@ -1417,7 +1422,7 @@ if __name__ == "__main__":
     cone_area_face = np.loadtxt("CT_bilaplacian_nodes_values_cone_area_faces.txt").astype(np.int32)
     cone_area_vertices = []
     tris = ryan_mesh.cells[0].data
-    v_upsample_local, f_upsample_local = sample1(2)
+    v_upsample_local, f_upsample_local = sample1(bilap_sample_factor)
     h_nodes = []
     freeze_nodes = []
     v_upsample = []
@@ -1458,7 +1463,7 @@ if __name__ == "__main__":
 
     # # hack one ring
     vv_adj = igl.adjacency_list(f_ct)
-    for i in range(20):
+    for i in range(bilap_k_ring_neighbor):
         cone_area_vertices_expanded = cone_area_vertices.tolist()
         for vv in cone_area_vertices:
             cone_area_vertices_expanded.extend(vv_adj[vv])
@@ -2581,57 +2586,113 @@ if __name__ == "__main__":
     print("[{}] ".format(datetime.datetime.now()), "create json for polyfem")
 
     # c_json = {'space': {'discr_order': 3}, 'geometry': [{'mesh': output_name + '_initial_tetmesh.msh', 'volume_selection': 1, 'surface_selection': 1}], 'constraints': {'hard': ['CT_full_constraint_matrix.hdf5'], 'soft': [{'weight': 10000.0, 'data': 'soft_1.hdf5'}, {'weight': 10000.0, 'data': 'soft_2.hdf5'}]}, 'materials': [{'id': 1, 'type': 'NeoHookean', 'E': 20000000.0, 'nu': 0.3}], 'solver': {'nonlinear': {'x_delta': 1e-10, 'solver': 'Newton', 'grad_norm': 1e-08, 'advanced': {'f_delta': 1e-10}}, 'augmented_lagrangian': {'initial_weight': 100000000.0}}, 'boundary_conditions': {'dirichlet_boundary': {'id': 1, 'value': [0, 0, 0]}}, 'output': {'paraview': {'file_name': output_name + '_final.vtu', 'surface': True, 'wireframe': True, 'points': True, 'options': {'material': True, 'force_high_order': True}, 'vismesh_rel_area': 1e-05}}}
-    c_json = {
-        "contact": {
-            "dhat": 0.03,
-            "enabled": False,
-            "collision_mesh": {
-                "mesh": "CT_bilaplacian_nodes.obj",
-                "linear_map": "local2global_matrix.hdf5",
+    c_json = {}
+    if not enable_offset:
+        c_json = {
+            "contact": {
+                "dhat": 0.03,
+                "enabled": False,
+                "collision_mesh": {
+                    "mesh": "CT_bilaplacian_nodes.obj",
+                    "linear_map": "local2global_matrix.hdf5",
+                },
             },
-        },
-        "space": {"discr_order": 3},
-        "geometry": [
-            {
-                "mesh": output_name + "_initial_tetmesh.msh",
-                "volume_selection": 1,
-                "surface_selection": 1,
-            },
-            # {"mesh": offset_file, "is_obstacle": True},
-        ],
-        "constraints": {
-            "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
-            # "hard": ["soft_2.hdf5"],
-            "soft": [
-                # {"weight": 10000000.0, "data": "CT_constraint_with_cone_tet_ids.hdf5"},
-                # {"weight": weight_soft_1, "data": "soft_1.hdf5"},
-                {"weight": weight_soft_1, "data": "soft_2.hdf5"},
-                # {"weight": weight_soft_1, "data": "soft_3.hdf5"}
+            "space": {"discr_order": 3},
+            "geometry": [
+                {
+                    "mesh": output_name + "_initial_tetmesh.msh",
+                    "volume_selection": 1,
+                    "surface_selection": 1,
+                },
+                # {"mesh": offset_file, "is_obstacle": True},
             ],
-        },
-        "materials": [
-            {"id": 1, "type": "LinearElasticity", "E": 200000000000.0, "nu": 0.3}
-        ],
-        "boundary_conditions": {
-            "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]
-        },
-        "solver": {
-            "contact": {"barrier_stiffness": 1e8},
-            "nonlinear": {
-                "first_grad_norm_tol": 0,
-                "grad_norm": 1e-06,
-                "solver": "Newton",
-                "Newton": {"residual_tolerance": 1e6},
+            "constraints": {
+                "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
+                # "hard": ["soft_2.hdf5"],
+                "soft": [
+                    # {"weight": 10000000.0, "data": "CT_constraint_with_cone_tet_ids.hdf5"},
+                    # {"weight": weight_soft_1, "data": "soft_1.hdf5"},
+                    {"weight": weight_soft_1, "data": "soft_2.hdf5"},
+                    # {"weight": weight_soft_1, "data": "soft_3.hdf5"}
+                ],
             },
-        },
-        "output": {
-            "paraview": {
-                "file_name": output_name + "_final.vtu",
-                "options": {"material": True, "force_high_order": True},
-                "vismesh_rel_area": 1e-05,
-            }
-        },
-    }
+            "materials": [
+                {"id": 1, "type": elasticity_mode, "E": 200000000000.0, "nu": 0.3}
+            ],
+            "boundary_conditions": {
+                "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]
+            },
+            "solver": {
+                "contact": {"barrier_stiffness": 1e8},
+                "nonlinear": {
+                    "first_grad_norm_tol": 0,
+                    "grad_norm": 1e-06,
+                    "solver": "Newton",
+                    "Newton": {"residual_tolerance": 1e6},
+                },
+            },
+            "output": {
+                "paraview": {
+                    "file_name": output_name + "_final.vtu",
+                    "options": {"material": True, "force_high_order": True},
+                    "vismesh_rel_area": 1e-05,
+                }
+            },
+        }
+    else:
+        c_json = {
+            "contact": {
+                "dhat": 0.03,
+                "enabled": True,
+                "collision_mesh": {
+                    "mesh": "CT_bilaplacian_nodes.obj",
+                    "linear_map": "local2global_matrix.hdf5",
+                },
+            },
+            "space": {"discr_order": 3},
+            "geometry": [
+                {
+                    "mesh": output_name + "_initial_tetmesh.msh",
+                    "volume_selection": 1,
+                    "surface_selection": 1,
+                },
+                {"mesh": offset_file, "is_obstacle": True},
+            ],
+            "constraints": {
+                "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
+                # "hard": ["soft_2.hdf5"],
+                "soft": [
+                    # {"weight": 10000000.0, "data": "CT_constraint_with_cone_tet_ids.hdf5"},
+                    # {"weight": weight_soft_1, "data": "soft_1.hdf5"},
+                    {"weight": weight_soft_1, "data": "soft_2.hdf5"},
+                    # {"weight": weight_soft_1, "data": "soft_3.hdf5"}
+                ],
+            },
+            "materials": [
+                {"id": 1, "type": elasticity_mode, "E": 200000000000.0, "nu": 0.3}
+            ],
+            "boundary_conditions": {
+                "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]
+            },
+            "solver": {
+                "contact": {"barrier_stiffness": 1e8},
+                "nonlinear": {
+                    "first_grad_norm_tol": 0,
+                    "grad_norm": 1e-06,
+                    "solver": "Newton",
+                    "Newton": {"residual_tolerance": 1e6},
+                },
+            },
+            "output": {
+                "paraview": {
+                    "file_name": output_name + "_final.vtu",
+                    "options": {"material": True, "force_high_order": True},
+                    "vismesh_rel_area": 1e-05,
+                }
+            },
+        }
+
+    
     with open("constraints.json", "w") as f:
         json.dump(c_json, f)
 
@@ -2656,12 +2717,15 @@ if __name__ == "__main__":
         new_winding_number_list.append(new_winding_numbers[i])
     new_winding_number_list = np.array(new_winding_number_list)
 
-    # new_winding_number_total = np.zeros(
-    #     (len(polyfem_mesh.cells[0]) + len(polyfem_mesh.cells[1]), 1)
-    # )
-    new_winding_number_total = np.zeros(
-        (len(polyfem_mesh.cells[0]), 1)
-    )
+    new_winding_number_total = None
+    if enable_offset:
+        new_winding_number_total = np.zeros(
+            (len(polyfem_mesh.cells[0]) + len(polyfem_mesh.cells[1]), 1)
+        )
+    else:
+        new_winding_number_total = np.zeros(
+            (len(polyfem_mesh.cells[0]), 1)
+        )
     new_winding_number_total[: len(polyfem_mesh.cells[0])] = new_winding_number_list
 
     polyfem_mesh.cell_data["winding"] = new_winding_number_total[:, None]
