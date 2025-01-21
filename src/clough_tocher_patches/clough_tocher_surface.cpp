@@ -4,6 +4,7 @@
 #include <igl/Timer.h>
 #include <igl/edges.h>
 #include <igl/per_vertex_normals.h>
+#include <unsupported/Eigen/SparseExtra>
 
 #include "clough_tocher_constraint_matrices.hpp"
 
@@ -673,6 +674,113 @@ void CloughTocherSurface::write_connected_lagrange_nodes(std::string filename,
   file.close();
 }
 
+void CloughTocherSurface::write_connected_lagrange_nodes_values(
+    std::string filename) {
+  const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
+  const auto &F = m_affine_manifold.get_faces();
+  // evaluate vertices
+  std::vector<Eigen::Vector3d> vertices;
+  for (size_t i = 0; i < lagrange_nodes.size(); ++i) {
+    const auto &patch_idx = lagrange_nodes[i].first;
+    const auto &bc = lagrange_nodes[i].second;
+    vertices.push_back(m_patches[patch_idx].CT_eval(bc[0], bc[1]));
+  }
+
+  std::vector<int64_t> v_around_cone;
+  std::vector<int64_t> f_around_cone;
+
+  // create faces
+  std::vector<Eigen::Vector3i> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+
+    if (f_chart.is_cone_adjacent) {
+      if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[0]]
+              .is_cone) {
+        for (int i = 0; i < 19; ++i) {
+          if (i != 1 && i != 2 && i != 5 && i != 6 && i != 10)
+            v_around_cone.push_back(l_nodes[i]);
+        }
+      }
+      if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[1]]
+              .is_cone) {
+        for (int i = 0; i < 19; ++i) {
+          if (i != 0 && i != 2 && i != 7 && i != 8 && i != 11)
+            v_around_cone.push_back(l_nodes[i]);
+        }
+      }
+      if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[2]]
+              .is_cone) {
+        for (int i = 0; i < 19; ++i) {
+          if (i != 0 && i != 1 && i != 3 && i != 4 && i != 9)
+            v_around_cone.push_back(l_nodes[i]);
+        }
+      }
+
+      for (int i = 0; i < 27; ++i) {
+        f_around_cone.push_back(faces.size() + i);
+      }
+    }
+
+    // 01c
+    faces.emplace_back(l_nodes[0], l_nodes[3], l_nodes[12]);
+    faces.emplace_back(l_nodes[12], l_nodes[3], l_nodes[9]);
+    faces.emplace_back(l_nodes[3], l_nodes[4], l_nodes[9]);
+    faces.emplace_back(l_nodes[9], l_nodes[4], l_nodes[14]);
+    faces.emplace_back(l_nodes[4], l_nodes[1], l_nodes[14]);
+    faces.emplace_back(l_nodes[12], l_nodes[9], l_nodes[13]);
+    faces.emplace_back(l_nodes[13], l_nodes[9], l_nodes[15]);
+    faces.emplace_back(l_nodes[9], l_nodes[14], l_nodes[15]);
+    faces.emplace_back(l_nodes[13], l_nodes[15], l_nodes[18]);
+
+    // 12c
+    faces.emplace_back(l_nodes[1], l_nodes[5], l_nodes[14]);
+    faces.emplace_back(l_nodes[14], l_nodes[5], l_nodes[10]);
+    faces.emplace_back(l_nodes[5], l_nodes[6], l_nodes[10]);
+    faces.emplace_back(l_nodes[10], l_nodes[6], l_nodes[16]);
+    faces.emplace_back(l_nodes[6], l_nodes[2], l_nodes[16]);
+    faces.emplace_back(l_nodes[14], l_nodes[10], l_nodes[15]);
+    faces.emplace_back(l_nodes[15], l_nodes[10], l_nodes[17]);
+    faces.emplace_back(l_nodes[10], l_nodes[16], l_nodes[17]);
+    faces.emplace_back(l_nodes[15], l_nodes[17], l_nodes[18]);
+
+    // 20c
+    faces.emplace_back(l_nodes[2], l_nodes[7], l_nodes[16]);
+    faces.emplace_back(l_nodes[16], l_nodes[7], l_nodes[11]);
+    faces.emplace_back(l_nodes[7], l_nodes[8], l_nodes[11]);
+    faces.emplace_back(l_nodes[11], l_nodes[8], l_nodes[12]);
+    faces.emplace_back(l_nodes[8], l_nodes[0], l_nodes[12]);
+    faces.emplace_back(l_nodes[16], l_nodes[11], l_nodes[17]);
+    faces.emplace_back(l_nodes[17], l_nodes[11], l_nodes[13]);
+    faces.emplace_back(l_nodes[11], l_nodes[12], l_nodes[13]);
+    faces.emplace_back(l_nodes[17], l_nodes[13], l_nodes[18]);
+  }
+
+  std::ofstream file_cone_adj_v(filename + "_cone_area_vertices.txt");
+  for (size_t i = 0; i < v_around_cone.size(); ++i) {
+    file_cone_adj_v << v_around_cone[i] << std::endl;
+  }
+  file_cone_adj_v.close();
+
+  std::ofstream file_cone_adj_f(filename + "_cone_area_faces.txt");
+  for (size_t i = 0; i < f_around_cone.size(); ++i) {
+    file_cone_adj_f << f_around_cone[i] << std::endl;
+  }
+  file_cone_adj_f.close();
+
+  std::ofstream file(filename + ".obj");
+  for (size_t i = 0; i < vertices.size(); ++i) {
+    file << "v " << vertices[i][0] << " " << vertices[i][1] << " "
+         << vertices[i][2] << std::endl;
+  }
+
+  for (size_t i = 0; i < faces.size(); ++i) {
+    file << "f " << faces[i][0] + 1 << " " << faces[i][1] + 1 << " "
+         << faces[i][2] + 1 << std::endl;
+  }
+  file.close();
+}
+
 void CloughTocherSurface::
     write_external_bd_interpolated_function_values_from_lagrange_nodes(
         std::string filename,
@@ -727,6 +835,8 @@ void CloughTocherSurface::P_G2F(Eigen::SparseMatrix<double> &m) {
   }
 
   m.setFromTriplets(triplets.begin(), triplets.end());
+
+  Eigen::saveMarket(m, "P_G2F_matrix.txt");
 }
 
 void CloughTocherSurface::C_L_int(Eigen::Matrix<double, 7, 19> &m) {
@@ -849,6 +959,18 @@ Eigen::Matrix2d inverse_2by2(const Eigen::Matrix2d &m) {
   r << d, -b, -c, a;
   r /= det;
   return r;
+}
+
+// abc and cbd
+// return cos(theta)
+double compute_dihedral_angle(const Eigen::Vector3d &a,
+                              const Eigen::Vector3d &b,
+                              const Eigen::Vector3d &c,
+                              const Eigen::Vector3d &d) {
+  Eigen::Vector3d t1_normal = (b - a).cross(c - b);
+  Eigen::Vector3d t2_normal = (b - c).cross(d - b);
+
+  return t1_normal.dot(t2_normal) / (t1_normal.norm() * t2_normal.norm());
 }
 
 void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,

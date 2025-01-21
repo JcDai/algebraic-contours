@@ -27,6 +27,7 @@ int main(int argc, char *argv[]) {
   std::string output_dir = "./";
   std::string output_name = "CT";
   std::string boundary_data = "";
+  std::string vertex_normal_file = "";
   spdlog::level::level_enum log_level = spdlog::level::off;
   Eigen::Matrix<double, 3, 1> color = SKY_BLUE;
   int num_subdivisions = DISCRETIZATION_LEVEL;
@@ -47,6 +48,8 @@ int main(int argc, char *argv[]) {
   app.add_option(
       "--boundary-data", boundary_data,
       "input boundary data. Only support 1 Function Value interpolant");
+  app.add_option("--vertex_normals", vertex_normal_file,
+                 "vertex normals in the order of lagrange nodes");
   CLI11_PARSE(app, argc, argv);
 
   // Set logger level
@@ -108,6 +111,8 @@ int main(int argc, char *argv[]) {
 
   ct_surface.write_connected_lagrange_nodes(output_name + "_bilaplacian_nodes",
                                             V);
+  ct_surface.write_connected_lagrange_nodes_values(output_name +
+                                                   "_bilaplacian_nodes_values");
 
   Eigen::SparseMatrix<double> c_f_int;
   ct_surface.C_F_int(c_f_int);
@@ -117,9 +122,42 @@ int main(int argc, char *argv[]) {
   ct_surface.C_E_mid(C_e_mid);
 
   Eigen::MatrixXd v_normals;
-  // TODO: change weight
-  igl::per_vertex_normals(V, F, igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_AREA,
-                          v_normals);
+
+  if (vertex_normal_file != "") {
+    std::cout << "Reading external vertex normals file" << std::endl;
+    std::vector<Eigen::Vector3d> lag_node_normals;
+    std::ifstream lag_norm_file(vertex_normal_file);
+    double x, y, z;
+    while (lag_norm_file >> x >> y >> z) {
+      lag_node_normals.emplace_back(x, y, z);
+    }
+    lag_norm_file.close();
+    assert(lag_node_normals.size() ==
+           ct_surface.m_affine_manifold.m_lagrange_nodes.size());
+    if (lag_node_normals.size() !=
+        ct_surface.m_affine_manifold.m_lagrange_nodes.size()) {
+      std::cout
+          << "Lagrange node size not compatible with lag normal size! expected "
+          << ct_surface.m_affine_manifold.m_lagrange_nodes.size() << " but got "
+          << lag_node_normals.size() << std::endl;
+      throw std::runtime_error("normal size from file mismatching");
+    }
+
+    v_normals = Eigen::MatrixXd::Zero(V.rows(), 3);
+    for (size_t i = 0; i < ct_surface.m_affine_manifold.m_lagrange_nodes.size();
+         ++i) {
+      if (ct_surface.m_affine_manifold.lagrange_node_to_v_map.find(i) !=
+          ct_surface.m_affine_manifold.lagrange_node_to_v_map.end()) {
+        v_normals.row(ct_surface.m_affine_manifold.lagrange_node_to_v_map[i]) =
+            lag_node_normals[i];
+      }
+    }
+
+  } else {
+    // TODO: change weight
+    igl::per_vertex_normals(V, F, igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_AREA,
+                            v_normals);
+  }
 
   // // debug use
   // Eigen::MatrixXd test_normals(v_normals.rows(), v_normals.cols());

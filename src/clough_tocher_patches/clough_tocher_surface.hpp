@@ -34,6 +34,7 @@ public:
 
   // for bilaplacian
   void write_connected_lagrange_nodes(std::string filename, Eigen::MatrixXd &V);
+  void write_connected_lagrange_nodes_values(std::string filename);
 
 public:
   void generate_face_normals(const Eigen::MatrixXd &V,
