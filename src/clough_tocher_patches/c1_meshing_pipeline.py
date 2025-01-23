@@ -814,24 +814,24 @@ if __name__ == "__main__":
     #             Call Parametrization Code            #
     ####################################################
     print("[{}] ".format(datetime.datetime.now()), "Calling parametrization code")
-    # para_command = (
-    #     path_to_para_exe
-    #     + " --mesh "
-    #     + workspace_path
-    #     + "embedded_surface.obj --cones embedded_surface_Th_hat --field embedded_surface_kappa_hat"
-    # )
+    para_command = (
+        path_to_para_exe
+        + " --mesh "
+        + workspace_path
+        + "embedded_surface.obj --cones embedded_surface_Th_hat --field embedded_surface_kappa_hat"
+    )
     # para_command = (
     #     path_to_para_exe
     #     + " --mesh "
     #     + workspace_path
     #     + "embedded_surface.obj --cones embedded_surface_Th_hat_reordered --field embedded_surface_kappa_hat"
     # )
-    para_command = (
-        path_to_para_exe
-        + " --mesh "
-        + workspace_path
-        + "embedded_surface.obj --cones cone_angles.txt --field embedded_surface_kappa_hat"
-    )
+    # para_command = (
+    #     path_to_para_exe
+    #     + " --mesh "
+    #     + workspace_path
+    #     + "embedded_surface.obj --cones cone_angles.txt --field embedded_surface_kappa_hat"
+    # )
 
     subprocess.run(
         para_command,
@@ -886,8 +886,8 @@ if __name__ == "__main__":
                     found = True
             assert found
 
-    # angles = np.loadtxt("embedded_surface_Th_hat")
-    angles = np.loadtxt("embedded_surface_Th_hat_reordered")
+    angles = np.loadtxt("embedded_surface_Th_hat")
+    # angles = np.loadtxt("embedded_surface_Th_hat_reordered")
 
     cone_vids = []
     for i, angle in enumerate(angles):
@@ -1633,10 +1633,14 @@ if __name__ == "__main__":
     Beq = np.zeros((0,3))
 
     print("solving bilaplacian on upsampled")
-    # v_smoothed = igl.min_quad_with_fixed(A, B, known, Y, Aeq, Beq, True)
-    v_smoothed = scipy.sparse.linalg.spsolve(scipy.sparse.identity(L_w.shape[0]) - 0.1 * M_inv @ L_w, v_ct)
+    v_smoothed = igl.min_quad_with_fixed(A, B, known, Y, Aeq, Beq, True)
+    # v_smoothed = scipy.sparse.linalg.spsolve(scipy.sparse.identity(L_w.shape[0]) - 1 * L_w, v_ct)
+    # v_smoothed = (True, v_smoothed)
 
     igl.write_obj("sampled_after_smoothing.obj", v_smoothed[1], f_ct)
+
+    # v_hack, _, _, f_hack, _, _ = igl.read_obj("sampled_after_smoothing_new.obj")
+    # v_smoothed = (True, v_hack)
 
     m_xx_points = ryan_mesh.points.copy()
     m_xx_cells = ryan_mesh.cells[0].data
