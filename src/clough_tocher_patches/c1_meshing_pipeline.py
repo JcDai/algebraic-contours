@@ -814,24 +814,24 @@ if __name__ == "__main__":
     #             Call Parametrization Code            #
     ####################################################
     print("[{}] ".format(datetime.datetime.now()), "Calling parametrization code")
-    # para_command = (
-    #     path_to_para_exe
-    #     + " --mesh "
-    #     + workspace_path
-    #     + "embedded_surface.obj --cones embedded_surface_Th_hat --field embedded_surface_kappa_hat"
-    # )
+    para_command = (
+        path_to_para_exe
+        + " --mesh "
+        + workspace_path
+        + "embedded_surface.obj --cones embedded_surface_Th_hat --field embedded_surface_kappa_hat"
+    )
     # para_command = (
     #     path_to_para_exe
     #     + " --mesh "
     #     + workspace_path
     #     + "embedded_surface.obj --cones embedded_surface_Th_hat_reordered --field embedded_surface_kappa_hat"
     # )
-    para_command = (
-        path_to_para_exe
-        + " --mesh "
-        + workspace_path
-        + "embedded_surface.obj --cones cone_angles.txt --field embedded_surface_kappa_hat"
-    )
+    # para_command = (
+    #     path_to_para_exe
+    #     + " --mesh "
+    #     + workspace_path
+    #     + "embedded_surface.obj --cones cone_angles.txt --field embedded_surface_kappa_hat"
+    # )
 
     subprocess.run(
         para_command,
@@ -1633,8 +1633,8 @@ if __name__ == "__main__":
     Beq = np.zeros((0,3))
 
     print("solving bilaplacian on upsampled")
-    # v_smoothed = igl.min_quad_with_fixed(A, B, known, Y, Aeq, Beq, True)
-    v_smoothed = scipy.sparse.linalg.spsolve(scipy.sparse.identity(L_w.shape[0]) - 0.1 * M_inv @ L_w, v_ct)
+    v_smoothed = igl.min_quad_with_fixed(A, B, known, Y, Aeq, Beq, True)
+    # v_smoothed = scipy.sparse.linalg.spsolve(scipy.sparse.identity(L_w.shape[0]) - 0.1 * M_inv @ L_w, v_ct)
 
     igl.write_obj("sampled_after_smoothing.obj", v_smoothed[1], f_ct)
 
@@ -2153,6 +2153,45 @@ if __name__ == "__main__":
         )
 
     tri_to_tet_idx_file_correct.close()
+
+    # newly added
+    # write tets incident to surface vertices
+    tet_to_tri_constraint_nodes_v_map = {}
+    for key, value in tri_to_tet_constraint_nodes_v_map.items():
+        tet_to_tri_constraint_nodes_v_map[value] = key
+
+    debug_cells = []
+    with open("surface_adjcent_tet.txt", "w") as file:
+        cells = linear_tetmesh.cells_dict["tetra20"]
+        for i in range(cells.shape[0]):
+            incident = False
+            for node in cells[i][0:4]:
+                if node in tet_to_tri_constraint_nodes_v_map:
+                    incident = True
+                    break
+            if incident:
+                # file.write(str(i) + " 3\n")
+                file.write("3\n")
+                debug_cells.append(cells[i])
+            else:
+                # file.write(str(i) + " 1\n")
+                file.write("1\n")
+
+    with open("surface_adjcent_tet_with_tid.txt", "w") as file:
+        cells = linear_tetmesh.cells_dict["tetra20"]
+        for i in range(cells.shape[0]):
+            incident = False
+            for node in cells[i][0:4]:
+                if node in tet_to_tri_constraint_nodes_v_map:
+                    incident = True
+                    break
+            if incident:
+                file.write(str(i) + " 3\n")
+            else:
+                file.write(str(i) + " 1\n")
+
+    debug_incident_tetmesh = mio.Mesh(linear_tetmesh.points, [("tetra20", np.array(debug_cells))])
+    debug_incident_tetmesh.write("debug_incident_tetmesh.msh", file_format='gmsh')
 
     ####################################################
     #           Constuct Constraint Matrix             #

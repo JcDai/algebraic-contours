@@ -49,6 +49,7 @@ public:
   std::vector<std::array<TriangleMidpointFunctionData, 3>> m_midpoint_data;
 
   std::vector<Eigen::Vector3d> m_lagrange_node_values;
+  std::vector<Eigen::Vector3d> m_bezier_control_points;
 
 public:
   // constraint matrices
@@ -70,4 +71,13 @@ public:
   void diag_P_G2F(Eigen::SparseMatrix<double> &m); // diag(p_g2f, p_g2f, p_g2f)
   void P_3D(Eigen::SparseMatrix<double> &m);       // group x,y,z values by face
   void C_F_cone(Eigen::SparseMatrix<double> &m, Eigen::MatrixXd &v_normals);
+
+  // independent -> dependent matrices using bezier basis
+  void Ci_endpoint_ind2dep(Eigen::SparseMatrix<double> &m,
+                           std::vector<int64_t> &constrained_row_ids);
+  void Ci_internal_ind2dep_1(Eigen::SparseMatrix<double> &m,
+                             std::vector<int64_t> &constrained_row_ids);
+  void Ci_midpoint_ind2dep(Eigen::SparseMatrix<double> &m,
+                           std::vector<int64_t> &constrained_row_ids);
+  void Ci_internal_ind2dep_2(Eigen::SparseMatrix<double> &m);
 };

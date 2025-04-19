@@ -560,6 +560,42 @@ void CloughTocherSurface::
           l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}});
   }
 
+  // compute bezier control points
+  m_bezier_control_points.resize(m_lagrange_node_values.size());
+
+  Eigen::Matrix<double, 10, 10> p3_lag2bezier_matrix = p3_lag2bezier_m();
+
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+
+    std::array<std::array<int64_t, 10>, 3> indices_sub = {
+        {{{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+           l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}},
+         {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+           l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}},
+         {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+           l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}}}};
+
+    for (int i = 0; i < 3; ++i) {
+      // subtri i
+      Eigen::Matrix<double, 10, 3> lag_values_sub, bezier_points_sub;
+
+      for (int k = 0; k < 10; ++k) {
+        lag_values_sub.row(k) = m_lagrange_node_values[indices_sub[i][k]];
+      }
+
+      // convert local 10 lag to bezier
+      bezier_points_sub = p3_lag2bezier_matrix * lag_values_sub;
+
+      for (int k = 0; k < 10; ++k) {
+        m_bezier_control_points[indices_sub[i][k]] = bezier_points_sub.row(k);
+      }
+    }
+  }
+
+  // debug use, out put bezier net
+  vertices = m_bezier_control_points;
+
   file << "$Nodes\n";
 
   const size_t node_size = vertices.size();
@@ -1821,4 +1857,473 @@ void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
     file2 << edge_vids[i] << std::endl;
   }
   file2.close();
+}
+
+/*
+bezier constraints
+*/
+
+void assign_spvec_to_spmat_row(Eigen::SparseMatrix<double> &mat,
+                               Eigen::SparseVector<double> &vec,
+                               const int row) {
+  for (Eigen::SparseVector<double>::InnerIterator it(vec); it; ++it) {
+    mat.coeffRef(row, it.index()) = it.value();
+  }
+}
+
+void CloughTocherSurface::Ci_endpoint_ind2dep(
+    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids) {
+  const auto &v_charts = m_affine_manifold.m_vertex_charts;
+  // const auto &f_charts = m_affine_manifold.m_face_charts;
+  const auto &F = m_affine_manifold.get_faces();
+
+  for (size_t v_id = 0; v_id < v_charts.size(); ++v_id) {
+    // // debug use
+    // if (v_id > 2) {
+    //   break;
+    // }
+
+    // // debug use
+    // if (v_id == 2) {
+    //   std::cout << "in 2" << std::endl;
+    // }
+
+    int vid = v_id;
+
+    const auto &v_chart = v_charts[vid];
+    const auto &v_one_ring = v_chart.vertex_one_ring;
+    const auto &f_one_ring = v_chart.face_one_ring;
+
+    // get vertex uv positions
+    std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_map;
+    for (int i = 0; i < v_chart.one_ring_uv_positions.rows(); ++i) {
+      one_ring_uv_positions_map[v_one_ring[i]] =
+          v_chart.one_ring_uv_positions.row(i);
+    }
+
+    std::map<int64_t, bool> processed_id; // vid processed, caution! not node id
+
+    processed_id[vid] = true;
+
+    // pick nodes on the first face to be independent
+    // find the two edges
+    const auto &first_fid = f_one_ring[0];
+    const auto &first_Fv = F.row(first_fid);
+    // const auto &first_f_chart = f_charts[first_fid];
+
+    std::vector<int64_t>
+        indep_node_ids; // pi pij pik (need to be size 3 after push)
+    std::vector<Eigen::Vector2d>
+        u_ijik; // uij uik (need to be size 2 after push)
+
+    // find the node id of vid and push it into indep node ids
+    for (int i = 0; i < 3; ++i) {
+      // find the edges connected to vid
+      if (first_Fv[i] != vid) {
+        const auto &e_chart = m_affine_manifold.get_edge_chart(first_fid, i);
+
+        if (e_chart.left_vertex_index == vid) {
+          indep_node_ids.push_back(e_chart.lagrange_nodes[0]);
+        } else {
+          indep_node_ids.push_back(e_chart.lagrange_nodes[3]);
+        }
+
+        // break after found
+        break;
+      }
+    }
+
+    for (int i = 0; i < 3; ++i) {
+      // find the edges connected to vid
+      if (first_Fv[i] != vid) {
+        const auto &e_chart = m_affine_manifold.get_edge_chart(first_fid, i);
+
+        // get the indep node id on this edge
+        if (e_chart.left_vertex_index == vid) {
+          indep_node_ids.push_back(e_chart.lagrange_nodes[1]);
+          Eigen::Vector2d uij =
+              one_ring_uv_positions_map[e_chart.right_vertex_index] -
+              Eigen::Vector2d(0, 0);
+          // Eigen::Vector2d uij = e_chart.right_global_uv_position -
+          //                       e_chart.left_global_uv_position;
+          u_ijik.push_back(uij);
+          processed_id[e_chart.right_vertex_index] = true;
+        } else {
+          indep_node_ids.push_back(e_chart.lagrange_nodes[2]);
+          Eigen::Vector2d uij =
+              one_ring_uv_positions_map[e_chart.left_vertex_index] -
+              Eigen::Vector2d(0, 0);
+          // Eigen::Vector2d uij = e_chart.left_global_uv_position -
+          //                       e_chart.right_global_uv_position;
+          u_ijik.push_back(uij);
+          processed_id[e_chart.left_vertex_index] = true;
+        }
+
+        //   processed_id[first_Fv[i]] = true;
+      }
+    }
+
+    assert(indep_node_ids.size() == 3);
+    assert(u_ijik.size() == 2);
+
+    Eigen::Matrix2d U_ijik;
+    U_ijik << u_ijik[0][0], u_ijik[1][0], u_ijik[0][1], u_ijik[1][1];
+    Eigen::Matrix2d U_ijik_inv = inverse_2by2(U_ijik);
+
+    // set indep vids in the whole matrix
+    if (!v_chart.is_cone) {
+      // not cone
+      for (int i = 0; i < 3; ++i) {
+        m.insert(indep_node_ids[i], indep_node_ids[i]) = 1;
+        constrained_row_ids.push_back(indep_node_ids[i]);
+      }
+      // return;
+    } else {
+      // cone
+      for (int i = 0; i < 3; ++i) {
+        m.insert(indep_node_ids[i], indep_node_ids[0]) = 1;
+        constrained_row_ids.push_back(indep_node_ids[i]);
+      }
+    }
+
+    // iterate each face, process other dep vertices
+    for (const auto &fid : f_one_ring) {
+      for (int i = 0; i < 3; ++i) {
+        if (F.row(fid)[i] != vid) {
+          const auto &e_chart = m_affine_manifold.get_edge_chart(fid, i);
+
+          // find a unprocessed vertex to process
+          if (e_chart.left_vertex_index != vid &&
+              processed_id.find(e_chart.left_vertex_index) ==
+                  processed_id.end()) {
+
+            // get node id
+            auto dep_node_id =
+                e_chart.lagrange_nodes[2]; // right is vid, so node is lag[2]
+
+            if (v_chart.is_cone) {
+              // cone case
+              m.insert(dep_node_id, indep_node_ids[0]) = 1;
+              constrained_row_ids.push_back(dep_node_id);
+            } else {
+              Eigen::Vector2d u_im =
+                  one_ring_uv_positions_map[e_chart.left_vertex_index] -
+                  Eigen::Vector2d(0, 0);
+              // Eigen::Vector2d u_im = e_chart.left_global_uv_position -
+              //                        e_chart.right_global_uv_position;
+              Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
+
+              // p_im = (1-Umj-Umk)*pi + Umj*pij + Umk*pik
+              m.insert(dep_node_id, indep_node_ids[0]) =
+                  1 - U_ijm[0] - U_ijm[1];
+              m.insert(dep_node_id, indep_node_ids[1]) = U_ijm[0];
+              m.insert(dep_node_id, indep_node_ids[2]) = U_ijm[1];
+              constrained_row_ids.push_back(dep_node_id);
+            }
+            processed_id[e_chart.left_vertex_index] = true;
+          }
+          if (e_chart.right_vertex_index != vid &&
+              processed_id.find(e_chart.right_vertex_index) ==
+                  processed_id.end()) {
+
+            // get node id
+            auto dep_node_id =
+                e_chart.lagrange_nodes[1]; // left is vid, so node is lag[1]
+
+            if (v_chart.is_cone) {
+              // cone case
+              m.insert(dep_node_id, indep_node_ids[0]) = 1;
+              constrained_row_ids.push_back(dep_node_id);
+            } else {
+              Eigen::Vector2d u_im =
+                  one_ring_uv_positions_map[e_chart.right_vertex_index] -
+                  Eigen::Vector2d(0, 0);
+              // Eigen::Vector2d u_im = e_chart.right_global_uv_position -
+              //                        e_chart.left_global_uv_position;
+              Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
+
+              // p_im = (1-Umj-Umk)*pi + Umj*pij + Umk*pik
+              m.insert(dep_node_id, indep_node_ids[0]) =
+                  1 - U_ijm[0] - U_ijm[1];
+              m.insert(dep_node_id, indep_node_ids[1]) = U_ijm[0];
+              m.insert(dep_node_id, indep_node_ids[2]) = U_ijm[1];
+              constrained_row_ids.push_back(dep_node_id);
+            }
+            processed_id[e_chart.right_vertex_index] = true;
+          }
+        }
+      }
+    }
+
+    if (!v_chart.is_boundary) {
+      assert(processed_id.size() == v_one_ring.size());
+    } else {
+      assert(processed_id.size() == v_one_ring.size() + 1);
+    }
+  }
+}
+
+void CloughTocherSurface::Ci_internal_ind2dep_1(
+    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids) {
+  const auto &f_charts = m_affine_manifold.m_face_charts;
+
+  for (size_t fid = 0; fid < f_charts.size(); ++fid) {
+    const auto &f_chart = f_charts[fid];
+    const auto &node_ids = f_chart.lagrange_nodes;
+
+    // p0c = (p0 + p01 + p02) / 3
+    Eigen::SparseVector<double> p0 = m.row(node_ids[0]);
+    Eigen::SparseVector<double> p01 = m.row(node_ids[3]);
+    Eigen::SparseVector<double> p02 = m.row(node_ids[8]);
+
+    // m.row(node_ids[12]) = (p0 + p01 + p02) / 3.0;
+    Eigen::SparseVector<double> p0c = (p0 + p01 + p02) / 3.0;
+    assign_spvec_to_spmat_row(m, p0c, node_ids[12]);
+
+    constrained_row_ids.push_back(node_ids[12]);
+
+    // p1c = (p1 + p12 + p10) / 3
+    Eigen::SparseVector<double> p1 = m.row(node_ids[1]);
+    Eigen::SparseVector<double> p12 = m.row(node_ids[5]);
+    Eigen::SparseVector<double> p10 = m.row(node_ids[4]);
+
+    // m.row(node_ids[14]) = (p1 + p12 + p10) / 3.0;
+    Eigen::SparseVector<double> p1c = (p1 + p12 + p10) / 3.0;
+    assign_spvec_to_spmat_row(m, p1c, node_ids[14]);
+
+    constrained_row_ids.push_back(node_ids[14]);
+
+    // p2c = (p2 + p21 + p20) / 3
+    Eigen::SparseVector<double> p2 = m.row(node_ids[2]);
+    Eigen::SparseVector<double> p21 = m.row(node_ids[6]);
+    Eigen::SparseVector<double> p20 = m.row(node_ids[7]);
+
+    // m.row(node_ids[16]) = (p2 + p21 + p20) / 3.0;
+    Eigen::SparseVector<double> p2c = (p2 + p21 + p20) / 3.0;
+    assign_spvec_to_spmat_row(m, p2c, node_ids[16]);
+
+    constrained_row_ids.push_back(node_ids[16]);
+  }
+}
+
+std::array<int64_t, 7> N_helper(const int lid1, const int lid2) {
+  switch (lid1 * 10 + lid2) {
+  case 1:
+    // 01
+    return {{0, 1, 3, 4, 12, 14, 9}};
+  case 2:
+    // 02
+    return {{0, 2, 8, 7, 12, 16, 11}};
+  case 10:
+    // 10
+    return {{1, 0, 4, 3, 14, 12, 9}};
+  case 12:
+    // 12
+    return {{1, 2, 5, 6, 14, 16, 10}};
+  case 20:
+    // 20
+    return {{2, 0, 7, 8, 16, 12, 11}};
+  case 21:
+    // 21
+    return {{2, 1, 6, 5, 16, 14, 10}};
+  }
+
+  return {{-1, -1, -1, -1, -1, -1, -1}};
+}
+
+void CloughTocherSurface::Ci_midpoint_ind2dep(
+    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids) {
+  Eigen::Matrix<double, 5, 7> K_N;
+  K_N << 1, 0, 0, 0, 0, 0, 0, // p0
+      0, 1, 0, 0, 0, 0, 0,    // p1
+      -3, 0, 3, 0, 0, 0, 0,   // d01
+      0, -3, 0, 3, 0, 0, 0,   // d10
+      -3. / 8., -3. / 8., -9. / 8., -9. / 8., 3. / 4., 3. / 4.,
+      3. / 2.; // h01 redundant
+
+  const Eigen::Matrix<double, 5, 1> c_e = c_e_m();
+  const Eigen::Matrix<double, 7, 1> c_hij = c_hij_m();
+
+  const auto &e_charts = m_affine_manifold.m_edge_charts;
+  const auto &F = m_affine_manifold.get_faces();
+
+  for (size_t eid = 0; eid < e_charts.size(); ++eid) {
+    const auto &e_chart = e_charts[eid];
+    if (e_chart.is_boundary) {
+      // skip boundary edges
+      continue;
+    }
+
+    const auto &fid_top = e_chart.top_face_index;
+    const auto &fid_bot = e_chart.bottom_face_index;
+    const auto &f_top = m_affine_manifold.m_face_charts[fid_top];
+    const auto &f_bot = m_affine_manifold.m_face_charts[fid_bot];
+
+    // v_pos and v_pos'
+    const Eigen::Vector2d &v0_pos = e_chart.left_vertex_uv_position;
+    const Eigen::Vector2d &v1_pos = e_chart.right_vertex_uv_position;
+    const Eigen::Vector2d &v2_pos = e_chart.top_vertex_uv_position;
+
+    const Eigen::Vector2d &v0_pos_prime = e_chart.right_vertex_uv_position;
+    const Eigen::Vector2d &v1_pos_prime = e_chart.left_vertex_uv_position;
+    const Eigen::Vector2d &v2_pos_prime = e_chart.bottom_vertex_uv_position;
+
+    // u_ij and u_ij'
+    const Eigen::Vector2d u_01 = v1_pos - v0_pos;
+    const Eigen::Vector2d u_02 = v2_pos - v0_pos;
+    const Eigen::Vector2d u_12 = v2_pos - v1_pos;
+
+    std::cout << "u_01: " << u_01 << std::endl;
+
+    const Eigen::Vector2d u_01_prime = v1_pos_prime - v0_pos_prime;
+    const Eigen::Vector2d u_02_prime = v2_pos_prime - v0_pos_prime;
+    const Eigen::Vector2d u_12_prime = v2_pos_prime - v1_pos_prime;
+
+    // m01 and m01_prime
+    const Eigen::Vector2d m_01 = (u_02 + u_12) / 2.0;
+    const Eigen::Vector2d m_01_prime = (u_02_prime + u_12_prime) / 2.0;
+
+    // u_01_prep u_01_prep_prime
+    Eigen::Vector2d u_01_prep(-u_01[1], u_01[0]);
+    Eigen::Vector2d u_01_prep_prime(-u_01_prime[1], u_01_prime[0]);
+
+    // compute M_N and k_N
+    Eigen::Matrix<double, 1, 7> M_N =
+        (m_01.dot(u_01.normalized())) / u_01.norm() * c_e.transpose() * K_N;
+    auto k_N = m_01.dot(u_01_prep.normalized());
+    Eigen::Matrix<double, 1, 7> M_N_prime =
+        (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
+        c_e.transpose() * K_N;
+    // Eigen::Matrix<double, 1, 7> M_N_prime =
+    //     (m_01_prime.dot(u_01.normalized())) / u_01_prime.norm() *
+    //     c_e.transpose() * K_N;
+    auto k_N_prime = m_01_prime.dot(u_01_prep_prime.normalized());
+
+    // std::cout << c_hij.rows() << " " << c_hij.cols() << std::endl;
+    // std::cout << M_N.rows() << " " << M_N.cols() << std::endl;
+
+    // compute CM
+    Eigen::Matrix<double, 1, 7> CM = c_hij - M_N.transpose(); // 7 x 1
+    Eigen::Matrix<double, 1, 7> CM_prime = c_hij - M_N_prime.transpose();
+
+    // get local indices in T and T'
+    int lid1_top = -1;
+    int lid2_top = -1;
+    int lid1_bot = -1;
+    int lid2_bot = -1;
+    for (int i = 0; i < 3; ++i) {
+      if (F.row(fid_top)[i] == e_chart.left_vertex_index) {
+        lid1_top = i;
+      }
+      if (F.row(fid_top)[i] == e_chart.right_vertex_index) {
+        lid2_top = i;
+      }
+      if (F.row(fid_bot)[i] == e_chart.right_vertex_index) {
+        lid1_bot = i;
+      }
+      if (F.row(fid_bot)[i] == e_chart.left_vertex_index) {
+        lid2_bot = i;
+      }
+    }
+
+    assert(lid1_top > -1);
+    assert(lid1_bot > -1);
+    assert(lid2_top > -1);
+    assert(lid2_bot > -1);
+
+    // get N_full, N, N_prime
+    const auto &node_ids_top = N_helper(lid1_top, lid2_top);
+    const auto &node_ids_bot = N_helper(lid1_bot, lid2_bot);
+
+    std::array<int64_t, 7> N;
+    std::array<int64_t, 7> N_prime;
+    for (int i = 0; i < 7; ++i) {
+      N[i] = f_top.lagrange_nodes[node_ids_top[i]];
+      N_prime[i] = f_bot.lagrange_nodes[node_ids_bot[i]];
+    }
+
+    assert(N[0] == N_prime[1]);
+    assert(N[1] == N_prime[0]);
+    assert(N[2] == N_prime[3]);
+    assert(N[3] == N_prime[2]);
+
+    auto p_0 = m.row(N[0]);
+    auto p_1 = m.row(N[1]);
+    auto p_01 = m.row(N[2]);
+    auto p_10 = m.row(N[3]);
+    auto p_0c = m.row(N[4]);
+    auto p_1c = m.row(N[5]);
+
+    auto p_0_prime = p_1;
+    auto p_1_prime = p_0;
+    auto p_01_prime = p_10;
+    auto p_10_prime = p_01;
+
+    auto p_0c_prime = m.row(N_prime[4]);
+    auto p_1c_prime = m.row(N_prime[5]);
+
+    // assign p_01_c as indep
+    m.insert(N[6], N[6]) = 1;
+    constrained_row_ids.push_back(N[6]);
+
+    auto p_01_c = m.row(N[6]);
+
+    Eigen::SparseVector<double> p_01_c_prime =
+        (k_N_prime * (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10 +
+                      CM[4] * p_0c + CM[5] * p_1c + CM[6] * p_01_c) +
+         k_N * (CM_prime[0] * p_0_prime + CM_prime[1] * p_1_prime +
+                CM_prime[2] * p_01_prime + CM_prime[3] * p_10_prime +
+                CM_prime[4] * p_0c_prime + CM_prime[5] * p_1c_prime)) /
+        (-k_N * CM_prime[6]);
+
+    // // assign p_01_c_prime
+    // m.row(N_prime[6]) = p_01_c_prime;
+    assign_spvec_to_spmat_row(m, p_01_c_prime, N_prime[6]);
+    constrained_row_ids.push_back(N_prime[6]);
+  }
+}
+
+void CloughTocherSurface::Ci_internal_ind2dep_2(
+    Eigen::SparseMatrix<double> &m) {
+  const auto &f_charts = m_affine_manifold.m_face_charts;
+
+  for (size_t fid = 0; fid < f_charts.size(); ++fid) {
+    const auto &f_chart = f_charts[fid];
+    const auto &node_ids = f_chart.lagrange_nodes;
+
+    // pc0 = (p0c + p01^c + p20^c) / 3
+    Eigen::SparseVector<double> p0c = m.row(node_ids[12]);
+    Eigen::SparseVector<double> p01_c = m.row(node_ids[9]);
+    Eigen::SparseVector<double> p20_c = m.row(node_ids[11]);
+
+    Eigen::SparseVector<double> pc0 = (p0c + p01_c + p20_c) / 3.0;
+    // m.row(node_ids[13]) = pc0;
+
+    assign_spvec_to_spmat_row(m, pc0, node_ids[13]);
+
+    // pc1 = (p1c + p12^c + p01^c) / 3
+    Eigen::SparseVector<double> p1c = m.row(node_ids[14]);
+    Eigen::SparseVector<double> p12_c = m.row(node_ids[10]);
+    // Eigen::SparseMatrix<double> p01_c = m.row(node_ids[9]);
+
+    Eigen::SparseVector<double> pc1 = (p1c + p12_c + p01_c) / 3.0;
+    // m.row(node_ids[15]) = pc1;
+
+    assign_spvec_to_spmat_row(m, pc1, node_ids[15]);
+
+    // pc2 = (p2c + p20^c + p12^c) / 3
+    Eigen::SparseVector<double> p2c = m.row(node_ids[16]);
+    // Eigen::SparseMatrix<double> p20_c = m.row(node_ids[11]);
+    // Eigen::SparseMatrix<double> p12_c = m.row(node_ids[10]);
+
+    Eigen::SparseVector<double> pc2 = (p2c + p20_c + p12_c) / 3.0;
+    // m.row(node_ids[17]) = pc2;
+
+    assign_spvec_to_spmat_row(m, pc2, node_ids[17]);
+
+    // pc = (pc0 + pc1 + pc2) / 3
+    // m.row(node_ids[18]) = (pc0 + pc1 + pc2) / 3.0;
+    Eigen::SparseVector<double> pc = (pc0 + pc1 + pc2) / 3.0;
+    assign_spvec_to_spmat_row(m, pc, node_ids[18]);
+  }
 }

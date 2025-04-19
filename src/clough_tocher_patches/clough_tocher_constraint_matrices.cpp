@@ -55,3 +55,31 @@ std::array<std::array<Eigen::Matrix<double, 1, 12>, 3>, 3> c_t_m() {
 
   return c_t_mat;
 }
+
+// bezier
+Eigen::Matrix<double, 7, 1> c_hij_m() {
+  double c[7];
+  c_hij_matrix(c);
+  Eigen::Matrix<double, 7, 1> c_hij_mat;
+
+  for (int i = 0; i < 7; ++i) {
+    c_hij_mat[i] = c[i];
+  }
+
+  return c_hij_mat;
+}
+
+Eigen::Matrix<double, 10, 10> p3_lag2bezier_m() {
+  double c[10][10];
+  p3_lag2bezier_matrix(c);
+
+  Eigen::Matrix<double, 10, 10> p3_lag2bezier_mat;
+
+  for (int i = 0; i < 10; ++i) {
+    for (int j = 0; j < 10; ++j) {
+      p3_lag2bezier_mat(i, j) = c[i][j];
+    }
+  }
+
+  return p3_lag2bezier_mat;
+}

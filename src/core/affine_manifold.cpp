@@ -1160,6 +1160,47 @@ void AffineManifold::generate_lagrange_nodes() {
   assert(m_lagrange_nodes.size() == 10 * m_face_charts.size() +
                                         2 * m_edge_charts.size() +
                                         m_vertex_charts.size());
+
+  // assign lagrange node indices for edges
+  for (size_t i = 0; i < m_edge_charts.size(); ++i) {
+    const auto &top_fid = m_edge_charts[i].top_face_index;
+    const auto &left_vid = m_edge_charts[i].left_vertex_index;
+    const auto &right_vid = m_edge_charts[i].right_vertex_index;
+
+    // compute from top face
+    const auto &f_chart = m_face_charts[top_fid];
+    const auto &f = F.row(top_fid);
+    const auto &f_nodes = f_chart.lagrange_nodes;
+
+    // match endpoint vid in faces
+    if (left_vid == f[0] && right_vid == f[1]) {
+      // e01
+      m_edge_charts[i].lagrange_nodes = {
+          {f_nodes[0], f_nodes[3], f_nodes[4], f_nodes[1]}};
+    } else if (left_vid == f[1] && right_vid == f[0]) {
+      // e10
+      m_edge_charts[i].lagrange_nodes = {
+          {f_nodes[1], f_nodes[4], f_nodes[3], f_nodes[0]}};
+    } else if (left_vid == f[1] && right_vid == f[2]) {
+      // e12
+      m_edge_charts[i].lagrange_nodes = {
+          {f_nodes[1], f_nodes[5], f_nodes[6], f_nodes[2]}};
+    } else if (left_vid == f[2] && right_vid == f[1]) {
+      // e21
+      m_edge_charts[i].lagrange_nodes = {
+          {f_nodes[2], f_nodes[6], f_nodes[5], f_nodes[1]}};
+    } else if (left_vid == f[2] && right_vid == f[0]) {
+      // e20
+      m_edge_charts[i].lagrange_nodes = {
+          {f_nodes[2], f_nodes[7], f_nodes[8], f_nodes[0]}};
+    } else if (left_vid == f[0] && right_vid == f[2]) {
+      // e02
+      m_edge_charts[i].lagrange_nodes = {
+          {f_nodes[0], f_nodes[8], f_nodes[7], f_nodes[2]}};
+    } else {
+      throw std::runtime_error("no matching edge in face!!!");
+    }
+  }
 }
 
 /*

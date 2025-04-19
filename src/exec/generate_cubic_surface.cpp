@@ -13,6 +13,14 @@
 #include <igl/writeOBJ.h>
 #include <unsupported/Eigen/SparseExtra>
 
+void assign_spvec_to_spmat_row_main(Eigen::SparseMatrix<double> &mat,
+                                    Eigen::SparseVector<double> &vec,
+                                    const int row) {
+  for (Eigen::SparseVector<double>::InnerIterator it(vec); it; ++it) {
+    mat.coeffRef(row, it.index()) = it.value();
+  }
+}
+
 int main(int argc, char *argv[]) {
   // Build maps from strings to enums
   std::map<std::string, spdlog::level::level_enum> log_level_map{
@@ -114,6 +122,72 @@ int main(int argc, char *argv[]) {
   ct_surface.write_connected_lagrange_nodes_values(output_name +
                                                    "_bilaplacian_nodes_values");
 
+  // bezier form
+
+  int64_t node_cnt = ct_surface.m_affine_manifold.m_lagrange_nodes.size();
+  Eigen::SparseMatrix<double> bezier_reduced_to_full(node_cnt, node_cnt);
+
+  std::vector<int64_t> constrained_row_ids;
+  ct_surface.Ci_endpoint_ind2dep(bezier_reduced_to_full, constrained_row_ids);
+  Eigen::saveMarket(bezier_reduced_to_full, output_name + "_bezier_1_r2f.txt");
+  ct_surface.Ci_internal_ind2dep_1(bezier_reduced_to_full, constrained_row_ids);
+  Eigen::saveMarket(bezier_reduced_to_full, output_name + "_bezier_12_r2f.txt");
+  ct_surface.Ci_midpoint_ind2dep(bezier_reduced_to_full, constrained_row_ids);
+  // ct_surface.Ci_internal_ind2dep_2(bezier_reduced_to_full);
+
+  Eigen::saveMarket(bezier_reduced_to_full,
+                    output_name + "_bezier_endpoint_r2f.txt");
+
+  std::cout << "constrained row count: " << constrained_row_ids.size()
+            << std::endl;
+
+  // check bezier constraint
+  auto bezier_control_points = ct_surface.m_bezier_control_points;
+  Eigen::MatrixXd bezier_points_mat(bezier_control_points.size(), 3);
+  for (size_t i = 0; i < bezier_control_points.size(); ++i) {
+    bezier_points_mat.row(i) = bezier_control_points[i].transpose();
+  }
+
+  // bezier_points_mat.setConstant(1);
+
+  // extract constrained lines
+  Eigen::SparseMatrix<double> bezier_endpoint_cons(constrained_row_ids.size(),
+                                                   node_cnt);
+
+  Eigen::MatrixXd endpoint_bezier_points_mat;
+  endpoint_bezier_points_mat.resize(constrained_row_ids.size(), 3);
+  for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
+    Eigen::SparseVector<double> tmpvec =
+        bezier_reduced_to_full.row(constrained_row_ids[i]);
+    assign_spvec_to_spmat_row_main(bezier_endpoint_cons, tmpvec, i);
+
+    endpoint_bezier_points_mat.row(i) =
+        bezier_points_mat.row(constrained_row_ids[i]);
+  }
+
+  auto beizer_end_error =
+      bezier_endpoint_cons * bezier_points_mat - endpoint_bezier_points_mat;
+
+  // auto beizer_end_error =
+  //     bezier_reduced_to_full * bezier_points_mat - bezier_points_mat;
+  double bezier_end_max_error = beizer_end_error.maxCoeff();
+  double bezier_end_min_error = beizer_end_error.minCoeff();
+
+  std::cout << "beizer endpoint max error: "
+            << ((std::abs(bezier_end_max_error) >
+                 std::abs(bezier_end_min_error))
+                    ? std::abs(bezier_end_max_error)
+                    : std::abs(bezier_end_min_error))
+            << std::endl;
+
+  std::cout << beizer_end_error << std::endl;
+
+  std::cout << std::endl << endpoint_bezier_points_mat << std::endl;
+
+  exit(0);
+
+  // lagrange form
+
   Eigen::SparseMatrix<double> c_f_int;
   ct_surface.C_F_int(c_f_int);
   Eigen::SparseMatrix<double> C_e_end, C_e_end_elim;
@@ -185,22 +259,6 @@ int main(int argc, char *argv[]) {
   Eigen::saveMarket(C_e_mid,
                     output_name + "_edge_midpoint_constraint_matrix.txt");
   Eigen::saveMarket(c_cone, output_name + "_cone_constraint_matrix.txt");
-
-  // std::ofstream file(output_name + "_interior_constraint_matrix.txt");
-  // file << std::setprecision(16) << c_f_int;
-  // std::ofstream file_2(output_name + "_edge_endpoint_constraint_matrix.txt");
-  // file_2 << std::setprecision(16) << C_e_end;
-  // std::ofstream file_3(output_name + "_edge_midpoint_constraint_matrix.txt");
-  // file_3 << std::setprecision(16) << C_e_mid;
-
-  // std::ofstream file_4(output_name +
-  //                      "_edge_endpoint_constraint_matrix_eliminated.txt");
-  // file_4 << std::setprecision(16) << C_e_end_elim;
-
-  // file.close();
-  // file_2.close();
-  // file_3.close();
-  // file_4.close();
 
   if (have_external_boundary_data) {
     // TODO

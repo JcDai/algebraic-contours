@@ -13,5 +13,5 @@ c1-scripts/dependencies
 c1-scripts/executables.json
 src/clou*/*.msh
 src/clou*/*.hdf5
-src/clou*/*.json
+# src/clou*/*.json
 src/clou*/*.vtu
