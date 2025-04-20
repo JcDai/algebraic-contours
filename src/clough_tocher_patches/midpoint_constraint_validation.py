@@ -20,7 +20,7 @@ def compute_gm(T):
     m   =  T[2]-mpt
     u01_n = u01/norm2(u01); u10_n = u10/norm2(u10); 
     gm =  (ch - np.dot(m, u01_n)*c_e/norm2(u01))/np.dot(m, perp(u01_n));
-    return gm;
+    return gm
 
 def compute_r(T,ff,gradf):
     u01 = T[1]-T[0] 
@@ -31,6 +31,7 @@ def compute_r(T,ff,gradf):
 
 npa = np.array
 c_e = generate_ce(polys_C1_f)
+print(c_e)
 c_e = npa(c_e) 
 ch = npa([0,0,0,0,1])
 
