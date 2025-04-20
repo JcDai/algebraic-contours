@@ -137,17 +137,17 @@ if __name__ == '__main__':
         piv, pij, pji, pjv = symbols('piv pij pji pjv')
         pic_p, pmij_p, pjc_p = symbols('pic_p pmij_p pjc_p')
 
-        # name used in N -> qijk in Tp
+        # point name used in N -> qijk in Tp
         patch2N = {
             pic: q201, pmij: q111, pjc: q021,
             piv: q300, pij: q210, pji: q120, pjv: q030
         }
-        # name used in Np -> qijk in Tp
+        # point name used in Np -> qijk in Tp
         patch2Np = {
             pic_p: q201, pmij_p: q111, pjc_p: q021,
              piv: q300, pij: q210, pji: q120, pjv: q030
         } 
-        # qijk name -> number in cp  
+        # qijk  -> number in cp  
         bpt2ind = {cp[i]: i for i in range(len(cp))}
 
         bezier_pts = get_bezier_pts(testpoly, Ttest)
@@ -164,8 +164,7 @@ if __name__ == '__main__':
         # extract pijm_p similarly
         pijm_p_val = bezier_pts_p[bpt2ind[patch2Np[pmij_p]]]
         cfs =  get_pijm_coeffs(Ttest, Tptest).tolist()[0]
-        dot_val = sum(cfs[i] * Nfull_s[i] for i in range(len(cfs)))
-        print('checking constraint, should be zero: ', dot_val - pijm_p_val)
+        print('checking constraint, should be zero: ', Matrix(cfs).dot(Nfull_s) - pijm_p_val)
 
 
         
