@@ -1,0 +1,10 @@
+{
+    "input": "<input file>",
+    "output": "<output name>",
+    "enable_offset": false,
+    "offset": "",
+    "weight_soft_1": 100000000000000.0,
+    "bilap_k_ring_neighbor": 10,
+    "bilap_sample_factor":2,
+    "elasticity_mode": "LinearElasticity"
+}

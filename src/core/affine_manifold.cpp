@@ -1061,25 +1061,25 @@ void AffineManifold::generate_lagrange_nodes() {
   // bc2 bc
 
   const std::array<PlanarPoint, 19> CT_nodes = {{
-      PlanarPoint(1., 0.),           // b0
-      PlanarPoint(0., 1.),           // b1
-      PlanarPoint(0., 0.),           // b2
-      PlanarPoint(2. / 3., 1. / 3.), // b01
-      PlanarPoint(1. / 3., 2. / 3.), // b10
-      PlanarPoint(0., 2. / 3.),      // b12
-      PlanarPoint(0., 1. / 3.),      // b21
-      PlanarPoint(1. / 3., 0.),      // b20
-      PlanarPoint(2. / 3., 0.),      // b02
-      PlanarPoint(4. / 9., 4. / 9.), // b01^c
-      PlanarPoint(1. / 9., 4. / 9.), // b12^c
-      PlanarPoint(4. / 9., 1. / 9.), // b20^c
-      PlanarPoint(7. / 9., 1. / 9.), // b0c
-      PlanarPoint(5. / 9., 2. / 9.), // bc0
-      PlanarPoint(1. / 9., 7. / 9.), // b1c
-      PlanarPoint(2. / 9., 5. / 9.), // bc1
-      PlanarPoint(1. / 9., 1. / 9.), // b2c
-      PlanarPoint(2. / 9., 2. / 9.), // bc2
-      PlanarPoint(1. / 3., 1. / 3.), // bc
+      PlanarPoint(1., 0.),           // b0    0
+      PlanarPoint(0., 1.),           // b1    1
+      PlanarPoint(0., 0.),           // b2    2
+      PlanarPoint(2. / 3., 1. / 3.), // b01   3
+      PlanarPoint(1. / 3., 2. / 3.), // b10   4
+      PlanarPoint(0., 2. / 3.),      // b12   5
+      PlanarPoint(0., 1. / 3.),      // b21   6
+      PlanarPoint(1. / 3., 0.),      // b20   7
+      PlanarPoint(2. / 3., 0.),      // b02   8
+      PlanarPoint(4. / 9., 4. / 9.), // b01^c 9
+      PlanarPoint(1. / 9., 4. / 9.), // b12^c 10
+      PlanarPoint(4. / 9., 1. / 9.), // b20^c 11
+      PlanarPoint(7. / 9., 1. / 9.), // b0c   12
+      PlanarPoint(5. / 9., 2. / 9.), // bc0   13
+      PlanarPoint(1. / 9., 7. / 9.), // b1c   14
+      PlanarPoint(2. / 9., 5. / 9.), // bc1   15
+      PlanarPoint(1. / 9., 1. / 9.), // b2c   16
+      PlanarPoint(2. / 9., 2. / 9.), // bc2   17
+      PlanarPoint(1. / 3., 1. / 3.), // bc    18
   }};
 
   // std::map<int64_t, int64_t> v_to_lagrange_node_map;
@@ -1097,6 +1097,7 @@ void AffineManifold::generate_lagrange_nodes() {
         continue;
       } else {
         v_to_lagrange_node_map[f[k]] = m_lagrange_nodes.size();
+        lagrange_node_to_v_map[m_lagrange_nodes.size()] = f[k];
         m_lagrange_nodes.emplace_back(i, CT_nodes[k]);
       }
     }

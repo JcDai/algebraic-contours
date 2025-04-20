@@ -40,3 +40,18 @@ Eigen::Matrix<double, 5, 1> c_e_m() {
 
   return c_e_mat;
 }
+
+std::array<std::array<Eigen::Matrix<double, 1, 12>, 3>, 3> c_t_m() {
+  double c[3][3][12];
+  c_t_matrix(c);
+  std::array<std::array<Eigen::Matrix<double, 1, 12>, 3>, 3> c_t_mat;
+  for (int j = 0; j < 3; ++j) {
+    for (int m = 0; m < 3; ++m) {
+      for (int i = 0; i < 12; ++i) {
+        c_t_mat[j][m][i] = c[j][m][i];
+      }
+    }
+  }
+
+  return c_t_mat;
+}

@@ -1,8 +1,10 @@
 #include "clough_tocher_surface.hpp"
 
 #include <fstream>
+#include <igl/Timer.h>
 #include <igl/edges.h>
 #include <igl/per_vertex_normals.h>
+#include <unsupported/Eigen/SparseExtra>
 
 #include "clough_tocher_constraint_matrices.hpp"
 
@@ -47,8 +49,90 @@ CloughTocherSurface::CloughTocherSurface(
   // compute patches
   assert(m_corner_data.size() == m_midpoint_data.size());
   for (size_t i = 0; i < m_corner_data.size(); ++i) {
-    m_patches.push_back(
-        CloughTocherPatch(m_corner_data[i], m_midpoint_data[i]));
+    // get cubic data
+    Eigen::Matrix<double, 12, 3> boundary_data;
+    Eigen::Matrix<double, 1, 3> p0, p1, p2, d01, d10, d12, d21, d20, d02;
+
+    p0 = m_corner_data[i][0].function_value;          // p0
+    p1 = m_corner_data[i][1].function_value;          // p1
+    p2 = m_corner_data[i][2].function_value;          // p2
+    d01 = m_corner_data[i][0].first_edge_derivative;  // d01
+    d10 = m_corner_data[i][1].second_edge_derivative; // d10
+    d12 = m_corner_data[i][1].first_edge_derivative;  // d12
+    d21 = m_corner_data[i][2].second_edge_derivative; // d21
+    d20 = m_corner_data[i][2].first_edge_derivative;  // d20
+    d02 = m_corner_data[i][0].second_edge_derivative; // d02
+
+    // fix hij
+    // convert hij from quadratic to cubic
+    Eigen::Matrix<double, 1, 3> h01_q = m_midpoint_data[i][2].normal_derivative;
+    Eigen::Matrix<double, 1, 3> h12_q = m_midpoint_data[i][0].normal_derivative;
+    Eigen::Matrix<double, 1, 3> h20_q = m_midpoint_data[i][1].normal_derivative;
+    Eigen::Matrix<double, 1, 3> h01_c, h12_c, h20_c;
+
+    // formulas
+    // dfde_quad = 2*(fj-fi) + 0.5*(dji-dij)
+    // dfde_cubic = 1.5*(fj-fi) + 0.25*(dji-dij)
+    // hij_fixed = hij - ([df/de]_quad (eij dot mij) + ([df/de]_cubic (eijdot
+    // mij)
+
+    // fix edge 01
+    const auto &e01_chart = m_affine_manifold.get_edge_chart(i, 2);
+    const auto &m01 =
+        (e01_chart.top_face_index == int64_t(i))
+            ? e01_chart.top_vertex_uv_position
+            : e01_chart
+                  .bottom_vertex_uv_position; // vector start point is (0,0)
+    const auto e01 = (e01_chart.top_face_index == int64_t(i))
+                         ? Eigen::Vector2d(1, 0)
+                         : Eigen::Vector2d(-1, 0);
+    const auto dfde_01_q = 2 * (p1 - p0) + 0.5 * (d10 - d01);
+    const auto dfde_01_c = 1.5 * (p1 - p0) + 0.25 * (d10 - d01);
+    h01_c = h01_q - dfde_01_q * (e01.dot(m01)) + dfde_01_c * (e01.dot(m01));
+
+    // fix edge 12
+    const auto &e12_chart = m_affine_manifold.get_edge_chart(i, 0);
+    const auto &m12 =
+        (e12_chart.top_face_index == int64_t(i))
+            ? e12_chart.top_vertex_uv_position
+            : e12_chart
+                  .bottom_vertex_uv_position; // vector start point is (0,0)
+    const auto e12 = (e12_chart.top_face_index == int64_t(i))
+                         ? Eigen::Vector2d(1, 0)
+                         : Eigen::Vector2d(-1, 0);
+    const auto dfde_12_q = 2 * (p2 - p1) + 0.5 * (d21 - d12);
+    const auto dfde_12_c = 1.5 * (p2 - p1) + 0.25 * (d21 - d12);
+    h12_c = h12_q - dfde_12_q * (e12.dot(m12)) + dfde_12_c * (e12.dot(m12));
+
+    // fix edge 20
+    const auto &e20_chart = m_affine_manifold.get_edge_chart(i, 1);
+    const auto &m20 =
+        (e20_chart.top_face_index == int64_t(i))
+            ? e20_chart.top_vertex_uv_position
+            : e20_chart
+                  .bottom_vertex_uv_position; // vector start point is (0,0)
+    const auto e20 = (e20_chart.top_face_index == int64_t(i))
+                         ? Eigen::Vector2d(1, 0)
+                         : Eigen::Vector2d(-1, 0);
+    const auto dfde_20_q = 2 * (p0 - p2) + 0.5 * (d02 - d20);
+    const auto dfde_20_c = 1.5 * (p0 - p2) + 0.25 * (d02 - d20);
+    h20_c = h20_q - dfde_20_q * (e20.dot(m20)) + dfde_20_c * (e20.dot(m20));
+
+    boundary_data.row(0) = p0;
+    boundary_data.row(1) = p1;
+    boundary_data.row(2) = p2;
+    boundary_data.row(3) = d01;
+    boundary_data.row(4) = d10;
+    boundary_data.row(5) = d12;
+    boundary_data.row(6) = d21;
+    boundary_data.row(7) = d20;
+    boundary_data.row(8) = d02;
+    boundary_data.row(9) = h01_c;
+    boundary_data.row(10) = h12_c;
+    boundary_data.row(11) = h20_c;
+
+    // create patch
+    m_patches.push_back(CloughTocherPatch(boundary_data));
   }
 }
 
@@ -205,6 +289,7 @@ void CloughTocherSurface::sample_to_obj(std::string filename, int sample_size) {
   file << "f 1 1 1\n";
 }
 
+// deprecated
 void CloughTocherSurface::write_cubic_surface_to_msh_with_conn(
     std::string filename) {
   std::ofstream file(filename + ".msh");
@@ -458,6 +543,8 @@ void CloughTocherSurface::
     vertices.push_back(z);
   }
 
+  m_lagrange_node_values = vertices;
+
   // build faces
   std::vector<std::array<int64_t, 10>> faces;
   for (const auto &f_chart : m_affine_manifold.m_face_charts) {
@@ -513,6 +600,187 @@ void CloughTocherSurface::
   }
 }
 
+Eigen::Vector3d bc_to_cart(const Eigen::Vector3i &f, const Eigen::MatrixXd &V,
+                           const PlanarPoint &bc) {
+  const double &u = bc[0];
+  const double &v = bc[1];
+  const double w = 1.0 - u - v;
+
+  return u * V.row(f[0]) + v * V.row(f[1]) + w * V.row(f[2]);
+}
+
+void CloughTocherSurface::write_connected_lagrange_nodes(std::string filename,
+                                                         Eigen::MatrixXd &V) {
+  const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
+  const auto &F = m_affine_manifold.get_faces();
+  // evaluate vertices
+  std::vector<Eigen::Vector3d> vertices;
+  for (size_t i = 0; i < lagrange_nodes.size(); ++i) {
+    const auto &patch_idx = lagrange_nodes[i].first;
+    const auto &bc = lagrange_nodes[i].second;
+
+    const Eigen::Vector3i &f = F.row(patch_idx);
+    vertices.push_back(bc_to_cart(f, V, bc));
+  }
+
+  // create faces
+  std::vector<Eigen::Vector3i> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    // 01c
+    faces.emplace_back(l_nodes[0], l_nodes[3], l_nodes[12]);
+    faces.emplace_back(l_nodes[12], l_nodes[3], l_nodes[9]);
+    faces.emplace_back(l_nodes[3], l_nodes[4], l_nodes[9]);
+    faces.emplace_back(l_nodes[9], l_nodes[4], l_nodes[14]);
+    faces.emplace_back(l_nodes[4], l_nodes[1], l_nodes[14]);
+    faces.emplace_back(l_nodes[12], l_nodes[9], l_nodes[13]);
+    faces.emplace_back(l_nodes[13], l_nodes[9], l_nodes[15]);
+    faces.emplace_back(l_nodes[9], l_nodes[14], l_nodes[15]);
+    faces.emplace_back(l_nodes[13], l_nodes[15], l_nodes[18]);
+
+    // 12c
+    faces.emplace_back(l_nodes[1], l_nodes[5], l_nodes[14]);
+    faces.emplace_back(l_nodes[14], l_nodes[5], l_nodes[10]);
+    faces.emplace_back(l_nodes[5], l_nodes[6], l_nodes[10]);
+    faces.emplace_back(l_nodes[10], l_nodes[6], l_nodes[16]);
+    faces.emplace_back(l_nodes[6], l_nodes[2], l_nodes[16]);
+    faces.emplace_back(l_nodes[14], l_nodes[10], l_nodes[15]);
+    faces.emplace_back(l_nodes[15], l_nodes[10], l_nodes[17]);
+    faces.emplace_back(l_nodes[10], l_nodes[16], l_nodes[17]);
+    faces.emplace_back(l_nodes[15], l_nodes[17], l_nodes[18]);
+
+    // 20c
+    faces.emplace_back(l_nodes[2], l_nodes[7], l_nodes[16]);
+    faces.emplace_back(l_nodes[16], l_nodes[7], l_nodes[11]);
+    faces.emplace_back(l_nodes[7], l_nodes[8], l_nodes[11]);
+    faces.emplace_back(l_nodes[11], l_nodes[8], l_nodes[12]);
+    faces.emplace_back(l_nodes[8], l_nodes[0], l_nodes[12]);
+    faces.emplace_back(l_nodes[16], l_nodes[11], l_nodes[17]);
+    faces.emplace_back(l_nodes[17], l_nodes[11], l_nodes[13]);
+    faces.emplace_back(l_nodes[11], l_nodes[12], l_nodes[13]);
+    faces.emplace_back(l_nodes[17], l_nodes[13], l_nodes[18]);
+  }
+
+  std::ofstream file(filename + ".obj");
+  for (size_t i = 0; i < vertices.size(); ++i) {
+    file << "v " << vertices[i][0] << " " << vertices[i][1] << " "
+         << vertices[i][2] << std::endl;
+  }
+
+  for (size_t i = 0; i < faces.size(); ++i) {
+    file << "f " << faces[i][0] + 1 << " " << faces[i][1] + 1 << " "
+         << faces[i][2] + 1 << std::endl;
+  }
+  file.close();
+}
+
+void CloughTocherSurface::write_connected_lagrange_nodes_values(
+    std::string filename) {
+  const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
+  const auto &F = m_affine_manifold.get_faces();
+  // evaluate vertices
+  std::vector<Eigen::Vector3d> vertices;
+  for (size_t i = 0; i < lagrange_nodes.size(); ++i) {
+    const auto &patch_idx = lagrange_nodes[i].first;
+    const auto &bc = lagrange_nodes[i].second;
+    vertices.push_back(m_patches[patch_idx].CT_eval(bc[0], bc[1]));
+  }
+
+  std::vector<int64_t> v_around_cone;
+  std::vector<int64_t> f_around_cone;
+
+  // create faces
+  std::vector<Eigen::Vector3i> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+
+    if (f_chart.is_cone_adjacent) {
+      if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[0]]
+              .is_cone) {
+        for (int i = 0; i < 19; ++i) {
+          if (i != 1 && i != 2 && i != 5 && i != 6 && i != 10)
+            v_around_cone.push_back(l_nodes[i]);
+        }
+      }
+      if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[1]]
+              .is_cone) {
+        for (int i = 0; i < 19; ++i) {
+          if (i != 0 && i != 2 && i != 7 && i != 8 && i != 11)
+            v_around_cone.push_back(l_nodes[i]);
+        }
+      }
+      if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[2]]
+              .is_cone) {
+        for (int i = 0; i < 19; ++i) {
+          if (i != 0 && i != 1 && i != 3 && i != 4 && i != 9)
+            v_around_cone.push_back(l_nodes[i]);
+        }
+      }
+
+      for (int i = 0; i < 27; ++i) {
+        f_around_cone.push_back(faces.size() + i);
+      }
+    }
+
+    // 01c
+    faces.emplace_back(l_nodes[0], l_nodes[3], l_nodes[12]);
+    faces.emplace_back(l_nodes[12], l_nodes[3], l_nodes[9]);
+    faces.emplace_back(l_nodes[3], l_nodes[4], l_nodes[9]);
+    faces.emplace_back(l_nodes[9], l_nodes[4], l_nodes[14]);
+    faces.emplace_back(l_nodes[4], l_nodes[1], l_nodes[14]);
+    faces.emplace_back(l_nodes[12], l_nodes[9], l_nodes[13]);
+    faces.emplace_back(l_nodes[13], l_nodes[9], l_nodes[15]);
+    faces.emplace_back(l_nodes[9], l_nodes[14], l_nodes[15]);
+    faces.emplace_back(l_nodes[13], l_nodes[15], l_nodes[18]);
+
+    // 12c
+    faces.emplace_back(l_nodes[1], l_nodes[5], l_nodes[14]);
+    faces.emplace_back(l_nodes[14], l_nodes[5], l_nodes[10]);
+    faces.emplace_back(l_nodes[5], l_nodes[6], l_nodes[10]);
+    faces.emplace_back(l_nodes[10], l_nodes[6], l_nodes[16]);
+    faces.emplace_back(l_nodes[6], l_nodes[2], l_nodes[16]);
+    faces.emplace_back(l_nodes[14], l_nodes[10], l_nodes[15]);
+    faces.emplace_back(l_nodes[15], l_nodes[10], l_nodes[17]);
+    faces.emplace_back(l_nodes[10], l_nodes[16], l_nodes[17]);
+    faces.emplace_back(l_nodes[15], l_nodes[17], l_nodes[18]);
+
+    // 20c
+    faces.emplace_back(l_nodes[2], l_nodes[7], l_nodes[16]);
+    faces.emplace_back(l_nodes[16], l_nodes[7], l_nodes[11]);
+    faces.emplace_back(l_nodes[7], l_nodes[8], l_nodes[11]);
+    faces.emplace_back(l_nodes[11], l_nodes[8], l_nodes[12]);
+    faces.emplace_back(l_nodes[8], l_nodes[0], l_nodes[12]);
+    faces.emplace_back(l_nodes[16], l_nodes[11], l_nodes[17]);
+    faces.emplace_back(l_nodes[17], l_nodes[11], l_nodes[13]);
+    faces.emplace_back(l_nodes[11], l_nodes[12], l_nodes[13]);
+    faces.emplace_back(l_nodes[17], l_nodes[13], l_nodes[18]);
+  }
+
+  std::ofstream file_cone_adj_v(filename + "_cone_area_vertices.txt");
+  for (size_t i = 0; i < v_around_cone.size(); ++i) {
+    file_cone_adj_v << v_around_cone[i] << std::endl;
+  }
+  file_cone_adj_v.close();
+
+  std::ofstream file_cone_adj_f(filename + "_cone_area_faces.txt");
+  for (size_t i = 0; i < f_around_cone.size(); ++i) {
+    file_cone_adj_f << f_around_cone[i] << std::endl;
+  }
+  file_cone_adj_f.close();
+
+  std::ofstream file(filename + ".obj");
+  for (size_t i = 0; i < vertices.size(); ++i) {
+    file << "v " << vertices[i][0] << " " << vertices[i][1] << " "
+         << vertices[i][2] << std::endl;
+  }
+
+  for (size_t i = 0; i < faces.size(); ++i) {
+    file << "f " << faces[i][0] + 1 << " " << faces[i][1] + 1 << " "
+         << faces[i][2] + 1 << std::endl;
+  }
+  file.close();
+}
+
 void CloughTocherSurface::
     write_external_bd_interpolated_function_values_from_lagrange_nodes(
         std::string filename,
@@ -557,6 +825,7 @@ void CloughTocherSurface::P_G2F(Eigen::SparseMatrix<double> &m) {
   m.resize(19 * F_cnt, N_L);
 
   std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(F_cnt * 19);
 
   const auto &face_charts = m_affine_manifold.m_face_charts;
   for (size_t i = 0; i < face_charts.size(); ++i) {
@@ -566,6 +835,8 @@ void CloughTocherSurface::P_G2F(Eigen::SparseMatrix<double> &m) {
   }
 
   m.setFromTriplets(triplets.begin(), triplets.end());
+
+  Eigen::saveMarket(m, "P_G2F_matrix.txt");
 }
 
 void CloughTocherSurface::C_L_int(Eigen::Matrix<double, 7, 19> &m) {
@@ -588,6 +859,7 @@ void CloughTocherSurface::C_F_int(Eigen::SparseMatrix<double> &m) {
 
   Eigen::SparseMatrix<double> C_diag;
   C_diag.resize(7 * F_cnt, 19 * F_cnt);
+  C_diag.reserve(Eigen::VectorXi::Constant(19 * F_cnt, 7));
 
   for (size_t i = 0; i < F_cnt; ++i) {
     for (int j = 0; j < 7; ++j) {
@@ -596,12 +868,15 @@ void CloughTocherSurface::C_F_int(Eigen::SparseMatrix<double> &m) {
       }
     }
   }
+  C_diag.makeCompressed();
 
   m.resize(7 * F_cnt, N_L);
-  std::cout << 7 * F_cnt << " " << N_L << std::endl;
+  m.reserve(Eigen::VectorXi::Constant(N_L, 7));
+  // std::cout << 7 * F_cnt << " " << N_L << std::endl;
 
   m = C_diag * p_g2f;
-  std::cout << m.rows() << " " << m.cols() << std::endl;
+  m.makeCompressed();
+  // std::cout << m.rows() << " " << m.cols() << std::endl;
 }
 
 void CloughTocherSurface::P_G2E(Eigen::SparseMatrix<double> &m) {
@@ -614,17 +889,26 @@ void CloughTocherSurface::P_G2E(Eigen::SparseMatrix<double> &m) {
   const auto &f_charts = m_affine_manifold.m_face_charts;
 
   std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(E_cnt * 24);
   for (size_t i = 0; i < e_charts.size(); ++i) {
+    // std::cout << "edge " << e_charts[i].left_vertex_index << " "
+    //           << e_charts[i].right_vertex_index << ": " << std::endl;
     const auto &top_face_idx = e_charts[i].top_face_index;
     const auto &bottom_face_idx = e_charts[i].bottom_face_index;
     for (int j = 0; j < 12; ++j) {
       triplets.emplace_back(i * 24 + j,
                             f_charts[top_face_idx].lagrange_nodes[j], 1);
-      if (bottom_face_idx > -1) {
+      // std::cout << f_charts[top_face_idx].lagrange_nodes[j] << " ";
+    }
+    // std::cout << " / ";
+    if (bottom_face_idx > -1) {
+      for (int j = 0; j < 12; ++j) {
         triplets.emplace_back(i * 24 + 12 + j,
                               f_charts[bottom_face_idx].lagrange_nodes[j], 1);
+        // std::cout << f_charts[bottom_face_idx].lagrange_nodes[j] << " ";
       }
     }
+    // std::cout << std::endl;
   }
 
   m.setFromTriplets(triplets.begin(), triplets.end());
@@ -633,7 +917,11 @@ void CloughTocherSurface::P_G2E(Eigen::SparseMatrix<double> &m) {
 std::array<int, 4> P_dE_helper(int a, int b) {
   int hash = a * 10 + b;
 
+  // get
+  // d01 d02 d10 d12
+  // from
   // p0 p1 p2 d01 d10 d12 d21 d20 d02 h01 h12 h20
+  // 0  1  2  3   4   5   6   7   8   9   10  11
 
   switch (hash) {
   case 1:
@@ -661,7 +949,32 @@ std::array<int, 4> P_dE_helper(int a, int b) {
   return {{-1, -1, -1, -1}};
 }
 
-void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
+Eigen::Matrix2d inverse_2by2(const Eigen::Matrix2d &m) {
+  const double &a = m(0, 0);
+  const double &b = m(0, 1);
+  const double &c = m(1, 0);
+  const double &d = m(1, 1);
+  double det = (a * d - b * c);
+  Eigen::Matrix2d r;
+  r << d, -b, -c, a;
+  r /= det;
+  return r;
+}
+
+// abc and cbd
+// return cos(theta)
+double compute_dihedral_angle(const Eigen::Vector3d &a,
+                              const Eigen::Vector3d &b,
+                              const Eigen::Vector3d &c,
+                              const Eigen::Vector3d &d) {
+  Eigen::Vector3d t1_normal = (b - a).cross(c - b);
+  Eigen::Vector3d t2_normal = (b - c).cross(d - b);
+
+  return t1_normal.dot(t2_normal) / (t1_normal.norm() * t2_normal.norm());
+}
+
+void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m,
+                                  Eigen::SparseMatrix<double> &m_elim) {
   const auto N_L = m_affine_manifold.m_lagrange_nodes.size();
   const auto E_cnt = m_affine_manifold.m_edge_charts.size();
 
@@ -672,7 +985,7 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
   const auto &v_charts = m_affine_manifold.m_vertex_charts;
   const auto &Fv = m_affine_manifold.get_faces();
   // const auto &Fv_uv = m_affine_manifold.get_F_uv();
-  const auto &uvs = m_affine_manifold.get_global_uv();
+  // const auto &uvs = m_affine_manifold.get_global_uv();
 
   const Eigen::Matrix<double, 12, 12> L_L2d_ind = L_L2d_ind_m();
   Eigen::Matrix<double, 24, 24> diag_L_L2d_ind;
@@ -682,6 +995,13 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
 
   Eigen::SparseMatrix<double> C_E_L;
   C_E_L.resize(2 * E_cnt, 24 * E_cnt);
+  C_E_L.reserve(Eigen::VectorXi::Constant(24 * E_cnt, 2));
+
+  // std::vector<int> visited(v_charts.size(), 0);
+  std::vector<int> skip(2 * E_cnt, 0);
+  int64_t skip_cnt = 0;
+
+  std::vector<int64_t> row_vertex_id_map;
 
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
@@ -689,33 +1009,123 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
       // skip boundary edges
       continue;
     }
-    // T vertices
-    const int64_t v0 = e.left_global_uv_idx;
-    const int64_t v1 = e.right_global_uv_idx;
-    const int64_t v2 = e.top_global_uv_idx;
-    // T' vertices
-    const int64_t v0_prime =
-        e.reverse_left_global_uv_idx; // reverse left == original right
-    const int64_t v1_prime =
-        e.reverse_right_global_uv_idx; // reverse right == original left
-    const int64_t v2_prime = e.bottom_global_uv_idx;
 
-    // std::cout << "v0 v1 v2: " << v0 << "  " << v1 << "  " << v2 << std::endl;
-    // std::cout << "v0' v1' v2': " << v0_prime << "  " << v1_prime << "  "
-    //           << v2_prime << std::endl;
+    const auto &v0_chart = v_charts[e.left_vertex_index];
+    if (!v0_chart.is_cone) {
+      // if other vertex is the first or second vertex in one ring
+      if (e.right_vertex_index == v0_chart.vertex_one_ring[0] ||
+          e.right_vertex_index == v0_chart.vertex_one_ring[1]) {
+        skip[2 * eid + 0] = 1;
+        skip_cnt++;
+      }
+    }
+
+    const auto &v1_chart = v_charts[e.right_vertex_index];
+    if (!v1_chart.is_cone) {
+      if (e.left_vertex_index == v1_chart.vertex_one_ring[0] ||
+          e.left_vertex_index == v1_chart.vertex_one_ring[1]) {
+        skip[2 * eid + 1] = 1;
+        skip_cnt++;
+      }
+    }
+
+    row_vertex_id_map.push_back(e.left_vertex_index);
+    row_vertex_id_map.push_back(e.right_vertex_index);
 
     // T and T'
     const auto &T = Fv.row(e.top_face_index);
     const auto &T_prime = Fv.row(e.bottom_face_index);
 
-    // std::cout << "T: " << T << std::endl;
-    // std::cout << "T': " << T_prime << std::endl;
+    // v_pos using edge charts
+    const auto &v0_pos = e.left_vertex_uv_position;
+    const auto &v1_pos = e.right_vertex_uv_position;
+    const auto &v2_pos = e.top_vertex_uv_position;
+
+    const auto &v0_pos_prime = e.right_vertex_uv_position;
+    const auto &v1_pos_prime = e.left_vertex_uv_position;
+    const auto &v2_pos_prime = e.bottom_vertex_uv_position;
+
+    // // v pos using vertex charts, should be equivalant to using e chart cuz
+    // // in e chart two triangles are scaled with the same factor
+    // // v0 is at origin in v chart
+    // // find the v1 v2 v2' in the v chart
+    // const auto &v0_idx = e.left_vertex_index;
+    // const auto &v1_idx = e.right_vertex_index;
+    // const auto &v2_idx = e.top_vertex_index;
+    // const auto &v2_prime_idx = e.bottom_vertex_index;
+    // const auto &v0_chart = v_charts[v0_idx];
+    // const auto &v1_chart = v_charts[v1_idx];
+
+    // PlanarPoint v0_pos, v1_pos, v2_pos, v0_pos_prime, v1_pos_prime,
+    //     v2_pos_prime;
+
+    // // use a non-cone vertex to compute, otherwise it won't close up
+    // if (!v0_chart.is_cone) {
+    //   int v1_lid_in_v_chart = -1, v2_lid_in_v_chart = -1,
+    //       v2_prime_lid_in_v_chart = -1;
+
+    //   for (size_t i = 0; i < v0_chart.vertex_one_ring.size(); ++i) {
+    //     if (v0_chart.vertex_one_ring[i] == v1_idx) {
+    //       v1_lid_in_v_chart = i;
+    //     }
+    //     if (v0_chart.vertex_one_ring[i] == v2_idx) {
+    //       v2_lid_in_v_chart = i;
+    //     }
+    //     if (v0_chart.vertex_one_ring[i] == v2_prime_idx) {
+    //       v2_prime_lid_in_v_chart = i;
+    //     }
+    //   }
+
+    //   assert(v1_lid_in_v_chart != -1);
+    //   assert(v2_lid_in_v_chart != -1);
+    //   assert(v2_prime_lid_in_v_chart != -1);
+
+    //   v0_pos = PlanarPoint(0., 0.);
+    //   v1_pos = v0_chart.one_ring_uv_positions.row(v1_lid_in_v_chart);
+    //   v2_pos = v0_chart.one_ring_uv_positions.row(v2_lid_in_v_chart);
+
+    //   v0_pos_prime = v1_pos;
+    //   v1_pos_prime = v0_pos;
+    //   v2_pos_prime =
+    //       v0_chart.one_ring_uv_positions.row(v2_prime_lid_in_v_chart);
+    // } else {
+    //   // use v2, if both are cones it's okay because we overwrite cde with
+    //   // 1's
+    //   int v0_lid_in_v_chart = -1, v2_lid_in_v_chart = -1,
+    //       v2_prime_lid_in_v_chart = -1;
+
+    //   for (size_t i = 0; i < v1_chart.vertex_one_ring.size(); ++i) {
+    //     if (v1_chart.vertex_one_ring[i] == v0_idx) {
+    //       v0_lid_in_v_chart = i;
+    //     }
+    //     if (v1_chart.vertex_one_ring[i] == v2_idx) {
+    //       v2_lid_in_v_chart = i;
+    //     }
+    //     if (v1_chart.vertex_one_ring[i] == v2_prime_idx) {
+    //       v2_prime_lid_in_v_chart = i;
+    //     }
+    //   }
+
+    //   assert(v0_lid_in_v_chart != -1);
+    //   assert(v2_lid_in_v_chart != -1);
+    //   assert(v2_prime_lid_in_v_chart != -1);
+
+    //   v0_pos = v1_chart.one_ring_uv_positions.row(v0_lid_in_v_chart);
+    //   v1_pos = PlanarPoint(0., 0.);
+    //   v2_pos = v1_chart.one_ring_uv_positions.row(v2_lid_in_v_chart);
+
+    //   v0_pos_prime = v1_pos;
+    //   v1_pos_prime = v0_pos;
+    //   v2_pos_prime =
+    //       v1_chart.one_ring_uv_positions.row(v2_prime_lid_in_v_chart);
+    // }
 
     // u_ij
-    const auto u_01 = uvs.row(v1) - uvs.row(v0);
-    const auto u_02 = uvs.row(v2) - uvs.row(v0);
-    const auto u_12 = uvs.row(v2) - uvs.row(v1);
-    const auto u_10 = uvs.row(v0) - uvs.row(v1);
+
+    const auto u_01 = v1_pos - v0_pos;
+    const auto u_02 = v2_pos - v0_pos;
+    const auto u_12 = v2_pos - v1_pos;
+    const auto u_10 = v0_pos - v1_pos;
 
     // std::cout << "u_01: " << u_01[0] << " " << u_01[1] << std::endl;
     // std::cout << "u_02: " << u_02[0] << " " << u_02[1] << std::endl;
@@ -723,10 +1133,10 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     // std::cout << "u_10: " << u_10[0] << " " << u_10[1] << std::endl;
 
     // u_ij_prime
-    const auto u_01_prime = uvs.row(v1_prime) - uvs.row(v0_prime);
-    const auto u_02_prime = uvs.row(v2_prime) - uvs.row(v0_prime);
-    const auto u_12_prime = uvs.row(v2_prime) - uvs.row(v1_prime);
-    const auto u_10_prime = uvs.row(v0_prime) - uvs.row(v1_prime);
+    const auto u_01_prime = v1_pos_prime - v0_pos_prime;
+    const auto u_02_prime = v2_pos_prime - v0_pos_prime;
+    const auto u_12_prime = v2_pos_prime - v1_pos_prime;
+    const auto u_10_prime = v0_pos_prime - v1_pos_prime;
 
     // std::cout << "u_01': " << u_01_prime[0] << " " << u_01_prime[1]
     //           << std::endl;
@@ -741,44 +1151,35 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     Eigen::Matrix<double, 2, 2> D0;
     D0 << u_01[0], u_01[1], u_02[0], u_02[1];
     Eigen::Matrix<double, 2, 2> D1;
-    D1 << u_12[0], u_12[1], u_10[0], u_10[1];
-
-    // std::cout << "D0: " << std::endl << D0 << std::endl;
-    // std::cout << "D1: " << std::endl << D1 << std::endl;
+    D1 << u_10[0], u_10[1], u_12[0], u_12[1];
 
     // D0_prime D1_prime
     Eigen::Matrix<double, 2, 2> D0_prime;
     D0_prime << u_01_prime[0], u_01_prime[1], u_02_prime[0], u_02_prime[1];
     Eigen::Matrix<double, 2, 2> D1_prime;
-    D1_prime << u_12_prime[0], u_12_prime[1], u_10_prime[0], u_10_prime[1];
-
-    // std::cout << "D0: " << std::endl << D0 << std::endl;
-    // std::cout << "D1: " << std::endl << D1 << std::endl;
+    D1_prime << u_10_prime[0], u_10_prime[1], u_12_prime[0], u_12_prime[1];
 
     // u_01_prep u_01_prep_prime
     Eigen::Vector2d u_01_prep(-u_01[1], u_01[0]);
     Eigen::Vector2d u_01_prep_prime(-u_01_prime[1], u_01_prime[0]);
 
     // g0 g1
-    Eigen::Matrix<double, 1, 2> g0 = u_01_prep.transpose() * D0.inverse();
-    Eigen::Matrix<double, 1, 2> g1 = u_01_prep.transpose() * D1.inverse();
+    Eigen::Matrix<double, 1, 2> g0 = u_01_prep.transpose() * inverse_2by2(D0);
+    Eigen::Matrix<double, 1, 2> g1 = u_01_prep.transpose() * inverse_2by2(D1);
 
     // g0_prime g1_prime
-    // Eigen::Matrix<double, 1, 2> g0_prime =
-    //     u_01_prep_prime.transpose() * D0_prime.inverse();
-    // Eigen::Matrix<double, 1, 2> g1_prime =
-    //     u_01_prep_prime.transpose() * D1_prime.inverse();
-
     Eigen::Matrix<double, 1, 2> g0_prime =
-        u_01_prep.transpose() * D0_prime.inverse();
+        u_01_prep.transpose() * inverse_2by2(D0_prime);
     Eigen::Matrix<double, 1, 2> g1_prime =
-        u_01_prep.transpose() * D1_prime.inverse();
+        u_01_prep.transpose() * inverse_2by2(D1_prime);
 
     // C_dE(e)
     Eigen::Matrix<double, 2, 8> C_dE;
-    C_dE << g0(0, 0), g0(0, 1), -g0_prime(0, 0), -g0_prime(0, 1), 0, 0, 0,
-        0,                                                                // v0
-        0, 0, 0, 0, g1(0, 0), g1(0, 1), -g1_prime(0, 0), -g1_prime(0, 1); // v1
+    C_dE.row(0) << g0(0, 0), g0(0, 1), -g1_prime(0, 0), -g1_prime(0, 1), 0, 0,
+        0,
+        0; // v0
+    C_dE.row(1) << 0, 0, 0, 0, g1(0, 0), g1(0, 1), -g0_prime(0, 0),
+        -g0_prime(0, 1); // v1
 
     // check cones and modify C_dE(e)
     if (v_charts[e.left_vertex_index].is_cone) {
@@ -806,6 +1207,9 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     }
     assert(lid_0 > -1 && lid_1 > -1);
 
+    // std::cout << "T local id for v0 v1: " << lid_0 << " " << lid_1 <<
+    // std::endl;
+
     // v0_prime v1_prime local id in T'
     int64_t lid_0_prime, lid_1_prime = -1;
     for (int i = 0; i < 3; ++i) {
@@ -817,6 +1221,10 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
       }
     }
     assert(lid_0_prime > -1 && lid_1_prime > -1);
+
+    // std::cout << "T' local id for v0 v1: " << lid_0_prime << " " <<
+    // lid_1_prime
+    //           << std::endl;
 
     // T and T' reindex
     auto T_P_dE_indices = P_dE_helper(lid_0, lid_1);
@@ -843,16 +1251,69 @@ void CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double> &m) {
     }
   }
 
+  C_E_L.makeCompressed();
+
   Eigen::SparseMatrix<double> p_g2e;
   P_G2E(p_g2e);
 
+  auto timer = igl::Timer();
+  timer.start();
   m = C_E_L * p_g2e;
+  m.makeCompressed();
+  std::cout << "C_E_L * p_g2e time: " << timer.getElapsedTime() << "s"
+            << std::endl;
+
+  // compute C_E_L_elim
+  Eigen::SparseMatrix<double> C_E_L_elim;
+  C_E_L_elim.resize(2 * E_cnt - skip_cnt, 24 * E_cnt);
+  C_E_L_elim.reserve(Eigen::VectorXi::Constant(24 * E_cnt, 2));
+
+  std::vector<int> cones;
+  m_affine_manifold.compute_cones(cones);
+  assert(skip_cnt / 2 == int64_t(v_charts.size() - cones.size()));
+  std::cout << "skip cnt: " << skip_cnt
+            << " v_cnt - cone_cnt: " << v_charts.size() - cones.size()
+            << std::endl;
+
+  int64_t row_id = 0;
+  std::vector<int64_t> C_to_C_elim_idx_map(2 * E_cnt, -1);
+  for (size_t i = 0; i < skip.size(); ++i) {
+    if (skip[i] == 1) {
+      continue;
+    } else {
+      C_to_C_elim_idx_map[i] = row_id;
+      row_id++;
+    }
+  }
+  for (int64_t k = 0; k < C_E_L.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(C_E_L, k); it; ++it) {
+      if (C_to_C_elim_idx_map[it.row()] != -1) {
+        C_E_L_elim.insert(C_to_C_elim_idx_map[it.row()], it.col()) = it.value();
+      }
+    }
+  }
+  C_E_L_elim.makeCompressed();
+
+  // get m_elim
+  m_elim.resize(2 * E_cnt - skip_cnt, N_L);
+  m_elim = C_E_L_elim * p_g2e;
+
+  m_elim.makeCompressed();
+
+  // debug use
+  std::ofstream file("endpoint_row_to_vid.txt");
+  for (size_t i = 0; i < row_vertex_id_map.size(); ++i) {
+    file << row_vertex_id_map[i] << std::endl;
+  }
+  file.close();
 }
 
 std::array<int, 5> P_dM_helper(int a, int b) {
   int hash = a * 10 + b;
 
+  // p0 p1 p01 p10 h01
   // p0 p1 p2 d01 d10 d12 d21 d20 d02 h01 h12 h20
+  // 0  1  2  3   4   5   6   7   8   9   10  11
 
   switch (hash) {
   case 1:
@@ -893,7 +1354,7 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
   // const auto &v_charts = m_affine_manifold.m_vertex_charts;
   const auto &Fv = m_affine_manifold.get_faces();
   // const auto &Fv_uv = m_affine_manifold.get_F_uv();
-  const auto &uvs = m_affine_manifold.get_global_uv();
+  // const auto &uvs = m_affine_manifold.get_global_uv();
 
   const Eigen::Matrix<double, 12, 12> L_L2d_ind = L_L2d_ind_m();
   Eigen::Matrix<double, 24, 24> diag_L_L2d_ind;
@@ -904,10 +1365,11 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
   Eigen::Matrix<double, 5, 1> c_h;
   c_h << 0, 0, 0, 0, 1;
 
-  Eigen::Matrix<double, 5, 1> c_e = c_e_m();
+  const Eigen::Matrix<double, 5, 1> c_e = c_e_m();
 
   Eigen::SparseMatrix<double> C_M_L;
   C_M_L.resize(E_cnt, 24 * E_cnt);
+  C_M_L.reserve(Eigen::VectorXi::Constant(24 * E_cnt, 1));
 
   for (size_t eid = 0; eid < e_charts.size(); ++eid) {
     const auto &e = e_charts[eid];
@@ -915,89 +1377,53 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
       // skip boundary edges
       continue;
     }
-    // T vertices
-    const int64_t v0 = e.left_global_uv_idx;
-    const int64_t v1 = e.right_global_uv_idx;
-    const int64_t v2 = e.top_global_uv_idx;
-    // T' vertices
-    const int64_t v0_prime =
-        e.reverse_left_global_uv_idx; // reverse_left == original right
-    const int64_t v1_prime =
-        e.reverse_right_global_uv_idx; // reverse_right == original left
-    const int64_t v2_prime = e.bottom_global_uv_idx;
-
-    std::cout << "v0 v1 v2: " << v0 << "  " << v1 << "  " << v2 << std::endl;
-    std::cout << "v0' v1' v2': " << v0_prime << "  " << v1_prime << "  "
-              << v2_prime << std::endl;
 
     // T and T'
     const auto &T = Fv.row(e.top_face_index);
     const auto &T_prime = Fv.row(e.bottom_face_index);
 
-    std::cout << "T: " << T << std::endl;
-    std::cout << "T': " << T_prime << std::endl;
+    // v_pos and v_pos'
+    const auto &v0_pos = e.left_vertex_uv_position;
+    const auto &v1_pos = e.right_vertex_uv_position;
+    const auto &v2_pos = e.top_vertex_uv_position;
 
-    // u_ij
-    const auto u_01 = uvs.row(v1) - uvs.row(v0);
-    const auto u_02 = uvs.row(v2) - uvs.row(v0);
-    const auto u_12 = uvs.row(v2) - uvs.row(v1);
-    // const auto u_10 = uvs.row(v0) - uvs.row(v1);
+    const auto &v0_pos_prime = e.right_vertex_uv_position;
+    const auto &v1_pos_prime = e.left_vertex_uv_position;
+    const auto &v2_pos_prime = e.bottom_vertex_uv_position;
 
-    // std::cout << u_01 << std::endl;
-    // std::cout << u_02 << std::endl;
-    // std::cout << u_12 << std::endl;
+    // u_ij and u_ij'
+    const auto u_01 = v1_pos - v0_pos;
+    const auto u_02 = v2_pos - v0_pos;
+    const auto u_12 = v2_pos - v1_pos;
 
-    // u_ij_prime
-    const auto u_01_prime = uvs.row(v1_prime) - uvs.row(v0_prime);
-    const auto u_02_prime = uvs.row(v2_prime) - uvs.row(v0_prime);
-    const auto u_12_prime = uvs.row(v2_prime) - uvs.row(v1_prime);
-    // const auto u_10_prime = uvs.row(v0_prime) - uvs.row(v1_prime);
-
-    // std::cout << u_01_prime << std::endl;
-    // std::cout << u_02_prime << std::endl;
-    // std::cout << u_12_prime << std::endl;
+    const auto u_01_prime = v1_pos_prime - v0_pos_prime;
+    const auto u_02_prime = v2_pos_prime - v0_pos_prime;
+    const auto u_12_prime = v2_pos_prime - v1_pos_prime;
 
     // m01 and m01_prime
     const auto m_01 = (u_02 + u_12) / 2.0;
     const auto m_01_prime = (u_02_prime + u_12_prime) / 2.0;
 
-    std::cout << "m_01: " << m_01[0] << " " << m_01[1] << std::endl;
-    std::cout << "m_01': " << m_01_prime[0] << " " << m_01_prime[1]
-              << std::endl;
-
     // u_01_prep u_01_prep_prime
     Eigen::Vector2d u_01_prep(-u_01[1], u_01[0]);
     Eigen::Vector2d u_01_prep_prime(-u_01_prime[1], u_01_prime[0]);
 
-    std::cout << "u_01_prep: " << u_01_prep[0] << " " << u_01_prep[1]
-              << std::endl;
-    std::cout << "u_01_prep_prime': " << u_01_prep_prime[0] << " "
-              << u_01_prep_prime[1] << std::endl;
-
     // g_M and g_M_prime
-    // Eigen::Matrix<double, 1, 5> g_M;
-    // g_M = (c_h - (m_01.dot(u_01.normalized())) * c_e).transpose() /
-    //       (m_01.dot(u_01_prep.normalized()));
-    // Eigen::Matrix<double, 1, 5> g_M_prime;
-    // g_M_prime =
-    //     (c_h - (m_01_prime.dot(u_01_prime.normalized())) * c_e).transpose() /
-    //     (m_01_prime.dot(u_01_prep_prime.normalized()));
-
     Eigen::Matrix<double, 1, 5> g_M;
-    g_M = (c_h - (m_01.dot(u_01.normalized())) * c_e).transpose() /
-          (m_01.dot(u_01_prep.normalized()));
+    g_M =
+        (c_h - (m_01.dot(u_01.normalized()) / u_01.norm()) * c_e).transpose() /
+        (m_01.dot(u_01_prep.normalized()));
     Eigen::Matrix<double, 1, 5> g_M_prime;
-    // g_M_prime =
-    //     (c_h - (m_01_prime.dot(u_01_prime.normalized())) * c_e).transpose() /
-    //     (m_01_prime.dot(u_01_prep_prime.normalized()));
-
-    g_M_prime = (c_h - (m_01_prime.dot(u_01.normalized())) * c_e).transpose() /
-                (m_01_prime.dot(u_01_prep.normalized()));
+    g_M_prime =
+        (c_h -
+         (m_01_prime.dot(u_01_prime.normalized()) / u_01_prime.norm()) * c_e)
+            .transpose() /
+        (m_01_prime.dot(u_01_prep_prime.normalized()));
 
     // C_dM
     Eigen::Matrix<double, 1, 10> C_dM;
     C_dM.block<1, 5>(0, 0) = g_M;
-    C_dM.block<1, 5>(0, 5) = -g_M_prime;
+    C_dM.block<1, 5>(0, 5) = g_M_prime;
 
     // P_dM
     Eigen::Matrix<double, 10, 24> P_dM;
@@ -1051,9 +1477,348 @@ void CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double> &m) {
       C_M_L.insert(eid, eid * 24 + i) = C_M_L_e(0, i);
     }
   }
+  C_M_L.makeCompressed();
 
   Eigen::SparseMatrix<double> p_g2e;
   P_G2E(p_g2e);
 
+  auto timer = igl::Timer();
+  timer.start();
   m = C_M_L * p_g2e;
+  m.makeCompressed();
+  std::cout << "C_M_L * p_g2e time: " << timer.getElapsedTime() << "s"
+            << std::endl;
+}
+
+void CloughTocherSurface::diag_P_G2F(Eigen::SparseMatrix<double> &m) {
+  const auto N_L = m_affine_manifold.m_lagrange_nodes.size();
+  const auto F_cnt = m_affine_manifold.m_face_charts.size();
+
+  m.resize(3 * 19 * F_cnt, 3 * N_L);
+
+  std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(F_cnt * 19 * 3);
+
+  const auto &face_charts = m_affine_manifold.m_face_charts;
+  for (size_t i = 0; i < F_cnt; ++i) {
+    for (int j = 0; j < 19; ++j) {
+      triplets.emplace_back(0 * 19 * F_cnt + i * 19 + j,
+                            0 * N_L + face_charts[i].lagrange_nodes[j],
+                            1); // block 0
+      triplets.emplace_back(1 * 19 * F_cnt + i * 19 + j,
+                            1 * N_L + face_charts[i].lagrange_nodes[j],
+                            1); // block 1
+      triplets.emplace_back(2 * 19 * F_cnt + i * 19 + j,
+                            2 * N_L + face_charts[i].lagrange_nodes[j],
+                            1); // block 2
+    }
+  }
+
+  m.setFromTriplets(triplets.begin(), triplets.end());
+}
+
+void CloughTocherSurface::P_3D(Eigen::SparseMatrix<double> &m) {
+  // const auto N_L = m_affine_manifold.m_lagrange_nodes.size();
+  const auto F_cnt = m_affine_manifold.m_face_charts.size();
+
+  m.resize(F_cnt * 19 * 3, F_cnt * 19 * 3);
+
+  std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(F_cnt * 19 * 3);
+
+  for (size_t i = 0; i < F_cnt; ++i) {
+    for (int j = 0; j < 19; ++j) {
+      triplets.emplace_back(i * 19 * 3 + 0 * 19 + j,
+                            0 * F_cnt * 19 + i * 19 + j,
+                            1); // x
+      triplets.emplace_back(i * 19 * 3 + 1 * 19 + j,
+                            1 * F_cnt * 19 + i * 19 + j,
+                            1); // y
+      triplets.emplace_back(i * 19 * 3 + 2 * 19 + j,
+                            2 * F_cnt * 19 + i * 19 + j,
+                            1); // z
+    }
+  }
+
+  m.setFromTriplets(triplets.begin(), triplets.end());
+}
+
+std::array<int64_t, 57> P_C_2_helper(const int &lid) {
+  // return (row, col) where row is 0 to 56
+  std::array<int64_t, 57> row_col;
+  std::array<int64_t, 19> row_col_1D;
+  switch (lid) {
+  case 0:
+    row_col_1D = {
+        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}};
+    break;
+  case 1:
+    row_col_1D = {
+        {1, 2, 0, 5, 6, 7, 8, 3, 4, 10, 11, 9, 14, 15, 16, 17, 12, 13, 18}};
+    break;
+  case 2:
+    row_col_1D = {
+        {2, 0, 1, 7, 8, 3, 4, 5, 6, 11, 9, 10, 16, 17, 12, 13, 14, 15, 18}};
+    break;
+  default:
+    assert(false);
+    break;
+  }
+
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 19; ++j) {
+      row_col[i * 19 + j] = row_col_1D[j] + i * 19;
+    }
+  }
+
+  return row_col;
+}
+
+std::array<int64_t, 36> P_C_2_alt_helper(const int &lid) {
+  // return (row, col) where row is 0 to 56
+  std::array<int64_t, 36> row_col;
+  std::array<int64_t, 12> row_col_1D;
+  switch (lid) {
+  case 0:
+    row_col_1D = {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}};
+    break;
+  case 1:
+    row_col_1D = {{1, 2, 0, 5, 6, 7, 8, 3, 4, 10, 11, 9}};
+    break;
+  case 2:
+    row_col_1D = {{2, 0, 1, 7, 8, 3, 4, 5, 6, 11, 9, 10}};
+    break;
+  default:
+    assert(false);
+    break;
+  }
+
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 12; ++j) {
+      row_col[i * 12 + j] = row_col_1D[j] + i * 12;
+    }
+  }
+
+  return row_col;
+}
+
+void CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double> &m,
+                                   Eigen::MatrixXd &v_normals) {
+  // const auto N_L = m_affine_manifold.m_lagrange_nodes.size();
+  const auto F_cnt = m_affine_manifold.m_face_charts.size();
+
+  // L_L2d
+  const Eigen::Matrix<double, 12, 12> L_L2d_ind = L_L2d_ind_m();
+  Eigen::Matrix<double, 12, 19> L_L2d;
+  L_L2d.block<12, 12>(0, 0) = L_L2d_ind;
+  L_L2d.block<12, 7>(0, 12) = Eigen::Matrix<double, 12, 7>::Zero();
+
+  // diag_L_L2d_3
+  // Eigen::Matrix<double, 36, 57> diag_L_L2d_3;
+  // diag_L_L2d_3.block<12, 19>(0, 0) = L_L2d;
+  // diag_L_L2d_3.block<12, 19>(12, 19) = L_L2d;
+  // diag_L_L2d_3.block<12, 19>(24, 38) = L_L2d;
+
+  // diag_P_G2F
+  Eigen::SparseMatrix<double> diag_p_g2f;
+  diag_P_G2F(diag_p_g2f);
+
+  // P_3D
+  Eigen::SparseMatrix<double> p_3d;
+  P_3D(p_3d);
+
+  // c_t
+  const auto &c_t = c_t_m(); // 3 x 3 x Matrix<1, 12>
+  // for (int i = 0; i < 3; ++i) {
+  //   for (int j = 0; j < 3; ++j) {
+  //     std::cout << c_t[i][j] << std::endl;
+  //   }
+  // }
+
+  const auto &v_charts = m_affine_manifold.m_vertex_charts;
+  // const auto &f_charts = m_affine_manifold.m_face_charts;
+  const auto &Fv = m_affine_manifold.get_faces();
+
+  // diag_C_cone
+  std::vector<Eigen::Triplet<double>> diag_C_cone_triplets;
+  // diag_L_L2d
+  std::vector<Eigen::Triplet<double>> diag_L_L2d_triplets;
+  // P_C_1 N_FC by 3 * N_L
+  std::vector<Eigen::Triplet<double>> P_C_1_triplets;
+  // P_C_2
+  std::vector<Eigen::Triplet<double>> P_C_2_triplets;
+  // std::vector<Eigen::Triplet<double>> P_C_2_triplets_alt;
+
+  int64_t N_FC = 0; // number of blocks
+  for (size_t vid = 0; vid < v_charts.size(); ++vid) {
+    if (!v_charts[vid].is_cone) {
+      continue;
+    }
+    N_FC += v_charts[vid].face_one_ring.size();
+  }
+
+  std::vector<int64_t> cone_vids;
+  std::vector<int64_t> edge_vids;
+
+  int64_t cone_adj_face_cnt = 0; // face can appear many times in this, plays
+                                 // the block id role, == N_FC at last
+
+  for (size_t vid = 0; vid < v_charts.size(); ++vid) {
+    const auto &v_chart = v_charts[vid];
+    if (!v_chart.is_cone) {
+      // skip non cones
+      continue;
+    }
+    cone_vids.push_back(vid);
+
+    const Eigen::Vector3d v_normal =
+        v_normals.row(vid); // normal of this cone vertex
+    const double nx = v_normal[0];
+    const double ny = v_normal[1];
+    const double nz = v_normal[2];
+
+    // std::cout << nx << " " << ny << " " << nz << std::endl;
+    const auto &v_one_ring_face = v_chart.face_one_ring;
+
+    // C_cone_vid
+    Eigen::Matrix<double, 4, 36> C_cone_vid;
+    C_cone_vid.block<1, 12>(0, 0) = nx * c_t[0][0];
+    C_cone_vid.block<1, 12>(0, 12) = ny * c_t[0][0];
+    C_cone_vid.block<1, 12>(0, 24) = nz * c_t[0][0];
+    C_cone_vid.block<1, 12>(1, 0) = nx * c_t[0][1];
+    C_cone_vid.block<1, 12>(1, 12) = ny * c_t[0][1];
+    C_cone_vid.block<1, 12>(1, 24) = nz * c_t[0][1];
+    C_cone_vid.block<1, 12>(2, 0) = nx * c_t[2][0];
+    C_cone_vid.block<1, 12>(2, 12) = ny * c_t[2][0];
+    C_cone_vid.block<1, 12>(2, 24) = nz * c_t[2][0];
+    C_cone_vid.block<1, 12>(3, 0) = nx * c_t[2][1];
+    C_cone_vid.block<1, 12>(3, 12) = ny * c_t[2][1];
+    C_cone_vid.block<1, 12>(3, 24) = nz * c_t[2][1];
+    // std::cout << nx * c_t[0][0] << std::endl;
+    // std::cout << nx * c_t[2][0] << std::endl;
+
+    // std::cout << C_cone_vid << std::endl << std::endl;
+
+    for (const auto &fid : v_one_ring_face) {
+      // std::cout << "------------------------" << std::endl;
+      // std::cout << "cone " << vid << " face " << fid << std::endl;
+      const auto &T = Fv.row(fid);
+      int lid = -1; // local vid of the cone in T
+      for (int i = 0; i < 3; ++i) {
+        if (int64_t(vid) == T[i]) {
+          lid = i;
+          break;
+        }
+      }
+      assert(lid > -1);
+
+      edge_vids.push_back(vid);
+      edge_vids.push_back(T[(lid + 2) % 3]);
+
+      // std::cout << "T: " << T << std::endl;
+      // std::cout << "lid: " << lid << std::endl;
+
+      // add an identity block for P_C_1
+      for (int i = 0; i < 57; ++i) { // 57 = 19 * 3 = all x, y, z of a face
+        P_C_1_triplets.emplace_back(cone_adj_face_cnt * 57 + i, fid * 57 + i,
+                                    1);
+      }
+
+      // add a permutation 57 * 57 block for local v index for P_C_2
+      const auto &p_c_2_local_row_col = P_C_2_helper(lid);
+      for (int i = 0; i < 57; ++i) {
+        P_C_2_triplets.emplace_back(
+            cone_adj_face_cnt * 57 + i,
+            cone_adj_face_cnt * 57 + p_c_2_local_row_col[i], 1);
+      }
+
+      // alt
+      // const auto &p_c_2_local_row_col_alt = P_C_2_alt_helper(lid);
+      // // for (int i = 0; i < 36; ++i) {
+      // //   std::cout << p_c_2_local_row_col_alt[i] << " ";
+      // // }
+      // // std::cout << std::endl;
+      // for (int i = 0; i < 36; ++i) {
+      //   P_C_2_triplets_alt.emplace_back(
+      //       cone_adj_face_cnt * 36 + i,
+      //       cone_adj_face_cnt * 36 + p_c_2_local_row_col_alt[i], 1);
+      // }
+
+      // diag_L_L2d
+      for (int i = 0; i < 12; ++i) {
+        for (int j = 0; j < 19; ++j) {
+          diag_L_L2d_triplets.emplace_back(cone_adj_face_cnt * 36 + 0 * 12 + i,
+                                           cone_adj_face_cnt * 57 + 0 * 19 + j,
+                                           L_L2d(i, j));
+          diag_L_L2d_triplets.emplace_back(cone_adj_face_cnt * 36 + 1 * 12 + i,
+                                           cone_adj_face_cnt * 57 + 1 * 19 + j,
+                                           L_L2d(i, j));
+          diag_L_L2d_triplets.emplace_back(cone_adj_face_cnt * 36 + 2 * 12 + i,
+                                           cone_adj_face_cnt * 57 + 2 * 19 + j,
+                                           L_L2d(i, j));
+        }
+      }
+
+      // diag_C_cone
+      for (int i = 0; i < 4; ++i) {
+        // TODO: drop two rows
+        if (i == 2 || i == 3) {
+          // drop the third and forth row
+          continue;
+        }
+        for (int j = 0; j < 36; ++j) {
+          diag_C_cone_triplets.emplace_back(cone_adj_face_cnt * 2 + i,
+                                            cone_adj_face_cnt * 36 + j,
+                                            C_cone_vid(i, j));
+        }
+      }
+
+      cone_adj_face_cnt++;
+    }
+  }
+  assert(cone_adj_face_cnt == N_FC);
+
+  // diag_C_cone
+  Eigen::SparseMatrix<double> diag_C_cone;
+  diag_C_cone.resize(N_FC * 2, N_FC * 36);
+  diag_C_cone.setFromTriplets(diag_C_cone_triplets.begin(),
+                              diag_C_cone_triplets.end());
+
+  // diag_L_L2d
+  Eigen::SparseMatrix<double> diag_L_L2d;
+  diag_L_L2d.resize(N_FC * 36, N_FC * 57);
+  diag_L_L2d.setFromTriplets(diag_L_L2d_triplets.begin(),
+                             diag_L_L2d_triplets.end());
+
+  // P_C_2
+  Eigen::SparseMatrix<double> p_c_2;
+  p_c_2.resize(N_FC * 57, N_FC * 57);
+  p_c_2.setFromTriplets(P_C_2_triplets.begin(), P_C_2_triplets.end());
+
+  // P_C_2 alt
+  // Eigen::SparseMatrix<double> p_c_2_alt;
+  // p_c_2_alt.resize(N_FC * 36, N_FC * 36);
+  // p_c_2_alt.setFromTriplets(P_C_2_triplets_alt.begin(),
+  //                           P_C_2_triplets_alt.end());
+
+  // P_C_1
+  Eigen::SparseMatrix<double> p_c_1;
+  p_c_1.resize(N_FC * 57, F_cnt * 57);
+  p_c_1.setFromTriplets(P_C_1_triplets.begin(), P_C_1_triplets.end());
+
+  m = diag_C_cone * diag_L_L2d * p_c_2 * p_c_1 * p_3d * diag_p_g2f;
+  // m = diag_C_cone * p_c_2_alt * diag_L_L2d * p_c_1 * p_3d * diag_p_g2f;
+  m.makeCompressed();
+
+  // debug use
+  std::ofstream file("cone_vids.txt");
+  for (size_t i = 0; i < cone_vids.size(); ++i) {
+    file << cone_vids[i] << std::endl;
+  }
+  file.close();
+  std::ofstream file2("cone_edge_vids.txt");
+  for (size_t i = 0; i < edge_vids.size(); ++i) {
+    file2 << edge_vids[i] << std::endl;
+  }
+  file2.close();
 }

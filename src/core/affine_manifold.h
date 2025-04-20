@@ -412,6 +412,7 @@ public:
   std::vector<std::pair<int64_t, PlanarPoint>>
       m_lagrange_nodes; // (face_idx, barycentric coord)
   std::map<int64_t, int64_t> v_to_lagrange_node_map; // vidx to node idx
+  std::map<int64_t, int64_t> lagrange_node_to_v_map; // node idx to vids
 
   // edge with v_idx to two nodes idx on edge
   std::map<std::pair<int64_t, int64_t>, std::array<int64_t, 4>>

@@ -1,0 +1,38 @@
+{
+  "space": { "discr_order": 3 },
+  "geometry": [
+    {
+      "volume_selection": 1,
+      "surface_selection": 1
+    }
+  ],
+  "constraints": {
+    "hard": ["CT_full_constraint_matrix.hdf5"],
+    "soft": [
+      { "weight": 10000.0, "data": "soft_1.hdf5" },
+      { "weight": 10000.0, "data": "soft_2.hdf5" }
+    ]
+  },
+  "materials": [{ "id": 1, "type": "NeoHookean", "E": 20000000.0, "nu": 0.3 }],
+  "solver": {
+    "nonlinear": {
+      "x_delta": 1e-10,
+      "solver": "Newton",
+      "grad_norm": 1e-8,
+      "advanced": { "f_delta": 1e-10 }
+    },
+    "augmented_lagrangian": { "initial_weight": 100000000.0 }
+  },
+  "boundary_conditions": {
+    "dirichlet_boundary": { "id": 1, "value": [0, 0, 0] }
+  },
+  "output": {
+    "paraview": {
+      "surface": true,
+      "wireframe": true,
+      "points": true,
+      "options": { "material": true, "force_high_order": true },
+      "vismesh_rel_area": 1e-5
+    }
+  }
+}
