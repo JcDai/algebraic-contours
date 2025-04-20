@@ -86,23 +86,25 @@ def get_transform_subs(T):
 
     # Return substitution for u and v to global coordinates
     global_coords = As * Matrix([u, v]) + bs
-    return {u: global_coords[0], v: global_coords[1]}
+    return {s: global_coords[0], t: global_coords[1]}
 
 # Bernstein basis
-u, v = symbols('u v')
+s, t = symbols('s t')
 pind = [[i, j, 3 - i - j] for i in range(4) for j in range(4 - i)]
 B = [
         factorial(3) / (factorial(i) * factorial(j) * factorial(k)) *
-        u**i * v**j * (1 - u - v)**k
+        s**i * t**j * (1 - s - t)**k
         for i, j, k in pind
 ]
+# global variables common for two triangles
+u, v = symbols('u v')
 
 def get_bezier_pts(poly, T):    
-    Tglob_uv = get_transform_subs(T)
+    Tglob_st = get_transform_subs(T)
     
     cp = [Symbol(f'q{i}{j}{k}') for i, j, k in pind]
     patch = sum(B[i] * cp[i] for i in range(len(cp)))
-    patch_sub = patch.subs(Tglob_uv)
+    patch_sub = patch.subs(Tglob_st).expand()
 
     eqs = []
     for i in range(4):
@@ -112,12 +114,58 @@ def get_bezier_pts(poly, T):
             eqs.append(coeff_poly - coeff_patch)
 
     sol = solve(eqs, cp, dict=True)
+
     return [sol[0][c] for c in cp]
 
-if 1: #__name__ == '__main__':
-        Ttest = list(map(lambda x: Matrix(x),[[0,0],[0,1],[1,0]]))
-        Tptest =list(map(lambda x: Matrix(x),[[0,1],[0,0],[-1,0]]))
+
+
+if __name__ == '__main__':
+        Ttest = list(map(lambda x: Matrix(x),[[Rational(1,2),0],[0,1],[1,0]]))
+        Tptest =list(map(lambda x: Matrix(x),[[0,1],[Rational(1,2),0],[-1,0]]))
         print( get_pijm_coeffs(Ttest, Tptest).tolist()[0])
-        testbp = get_bezier_pts(u**2, Ttest)
-        Tglob_uv = get_transform_subs(Ttest)
-        print(simplify( (sum(B[i] * testbp[i] for i in range(len(testbp)))).subs(Tglob_uv)))
+
+        testpoly = u**2 - v**3
+        bezier_pts = get_bezier_pts(testpoly, Ttest)
+        Tglob_st = get_transform_subs(Ttest)
+        print(simplify( (sum(B[i] * bezier_pts[i] for i in range(len(bezier_pts)))).subs(Tglob_st)))
+
+        # name remappings for control points for 2 patches
+        q300, q210, q120, q030, q201, q111, q021 = symbols('q300 q210 q120 q030 q201 q111 q021')
+        cp = [Symbol(f"q{i}{j}{k}") for i,j,k in pind]
+
+        pic, pmij, pjc = symbols('pic pmij pjc')
+        piv, pij, pji, pjv = symbols('piv pij pji pjv')
+        pic_p, pmij_p, pjc_p = symbols('pic_p pmij_p pjc_p')
+
+        # name used in N -> qijk in Tp
+        patch2N = {
+            pic: q201, pmij: q111, pjc: q021,
+            piv: q300, pij: q210, pji: q120, pjv: q030
+        }
+        # name used in Np -> qijk in Tp
+        patch2Np = {
+            pic_p: q201, pmij_p: q111, pjc_p: q021,
+             piv: q300, pij: q210, pji: q120, pjv: q030
+        } 
+        # qijk name -> number in cp  
+        bpt2ind = {cp[i]: i for i in range(len(cp))}
+
+        bezier_pts = get_bezier_pts(testpoly, Ttest)
+        bezier_pts_p = get_bezier_pts(testpoly, Tptest)
+
+        Nfull = [piv, pjv, pij, pji, pic, pjc, pic_p, pjc_p, pmij]
+        # extract actual values from bezier arrays using remapping 
+        # name in Nfull -> qijk name -> index in cp
+        Nfull_s = \
+            [bezier_pts[bpt2ind[patch2N[Nfull[i]]]] for i in range(6)] + \
+            [bezier_pts_p[bpt2ind[patch2Np[Nfull[i]]]] for i in range(6, 8)] + \
+            [bezier_pts[bpt2ind[patch2N[Nfull[8]]]]]
+        
+        # extract pijm_p similarly
+        pijm_p_val = bezier_pts_p[bpt2ind[patch2Np[pmij_p]]]
+        cfs =  get_pijm_coeffs(Ttest, Tptest).tolist()[0]
+        dot_val = sum(cfs[i] * Nfull_s[i] for i in range(len(cfs)))
+        print('checking constraint, should be zero: ', dot_val - pijm_p_val)
+
+
+        
