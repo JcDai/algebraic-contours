@@ -53,7 +53,9 @@ def get_pijm_coeffs(T, Tp):
     ])
 
     CM = (cme - MN) / k
+    print(CM)
     CMp = (cme - MNp) / kp
+    print(CMp)
     CMrp = CMp[:6]     
     alpha_p = CMp[6] 
 

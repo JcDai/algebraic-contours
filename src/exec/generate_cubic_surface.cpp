@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
   ct_surface.Ci_internal_ind2dep_1(bezier_reduced_to_full, constrained_row_ids);
   Eigen::saveMarket(bezier_reduced_to_full, output_name + "_bezier_12_r2f.txt");
   ct_surface.Ci_midpoint_ind2dep(bezier_reduced_to_full, constrained_row_ids);
-  // ct_surface.Ci_internal_ind2dep_2(bezier_reduced_to_full);
+  ct_surface.Ci_internal_ind2dep_2(bezier_reduced_to_full, constrained_row_ids);
 
   Eigen::saveMarket(bezier_reduced_to_full,
                     output_name + "_bezier_endpoint_r2f.txt");
@@ -173,16 +173,18 @@ int main(int argc, char *argv[]) {
   double bezier_end_max_error = beizer_end_error.maxCoeff();
   double bezier_end_min_error = beizer_end_error.minCoeff();
 
-  std::cout << "beizer endpoint max error: "
+  std::cout << "beizer max error: "
             << ((std::abs(bezier_end_max_error) >
                  std::abs(bezier_end_min_error))
                     ? std::abs(bezier_end_max_error)
                     : std::abs(bezier_end_min_error))
             << std::endl;
 
-  std::cout << beizer_end_error << std::endl;
+  // std::cout << beizer_end_error << std::endl;
 
-  std::cout << std::endl << endpoint_bezier_points_mat << std::endl;
+  // std::cout << bezier_endpoint_cons * bezier_points_mat << std::endl;
+
+  // std::cout << std::endl << endpoint_bezier_points_mat << std::endl;
 
   exit(0);
 

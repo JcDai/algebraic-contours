@@ -79,5 +79,6 @@ public:
                              std::vector<int64_t> &constrained_row_ids);
   void Ci_midpoint_ind2dep(Eigen::SparseMatrix<double> &m,
                            std::vector<int64_t> &constrained_row_ids);
-  void Ci_internal_ind2dep_2(Eigen::SparseMatrix<double> &m);
+  void Ci_internal_ind2dep_2(Eigen::SparseMatrix<double> &m,
+                             std::vector<int64_t> &constrained_row_ids);
 };
