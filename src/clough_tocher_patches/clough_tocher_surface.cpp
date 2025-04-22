@@ -2379,3 +2379,122 @@ void CloughTocherSurface::Ci_internal_ind2dep_2(
     constrained_row_ids.push_back(node_ids[18]);
   }
 }
+
+void assign_spvec_to_spmat_row_col(Eigen::SparseMatrix<double> &mat,
+                                   Eigen::SparseVector<double> &vec,
+                                   const int row, const int col) {
+  // assign sp vec to sp mat row , start at col
+  for (Eigen::SparseVector<double>::InnerIterator it(vec); it; ++it) {
+    mat.coeffRef(row, col + it.index()) = it.value();
+  }
+}
+
+std::array<int64_t, 4> Cone_N_helper(const int lid) {
+  // assuming oriented uv faces
+  switch (lid) {
+  case 0:
+    return {{0, 7, 13, 4}};
+  case 1:
+    return {{1, 3, 15, 6}};
+  case 2:
+    return {{2, 5, 17, 8}};
+  }
+  return {{-1, -1, -1, -1}};
+}
+
+void CloughTocherSurface::Ci_cone_bezier(const Eigen::SparseMatrix<double> &m,
+                                         Eigen::SparseMatrix<double> &m_cone,
+                                         Eigen::MatrixXd &v_normals) {
+  const auto &v_charts = m_affine_manifold.m_vertex_charts;
+  const auto &f_charts = m_affine_manifold.m_face_charts;
+  const auto &Fv = m_affine_manifold.get_faces();
+
+  int64_t cone_m_row_id = 0;
+
+  // compute m_cone size
+  const int64_t node_cnt = m_affine_manifold.m_lagrange_nodes.size();
+  assert(node_cnt == m.rows());
+
+  int64_t m_cone_rows = 0;
+  for (const auto &v_chart : v_charts) {
+    m_cone_rows += v_chart.face_one_ring.size();
+  }
+
+  m_cone.resize(m_cone_rows * 2 * 3,
+                node_cnt * 3); // 2 cons per face, each cones has 3 rows for xyz
+
+  // compute matrix
+  for (size_t v_id = 0; v_id < v_charts.size(); ++v_id) {
+    const int64_t vid = v_id;
+    const auto &v_chart = v_charts[vid];
+
+    if (!v_chart.is_cone) {
+      // not a cone, skip
+      continue;
+    }
+
+    const Eigen::Vector3d &v_normal = v_normals.row(vid);
+
+    for (const auto &fid : v_chart.face_one_ring) {
+      const auto &f_chart = f_charts[fid];
+      const Eigen::Vector3i &F = Fv.row(fid);
+
+      // get vid local index in F
+      int lvid = -1;
+      for (int i = 0; i < 3; ++i) {
+        if (vid == F[i]) {
+          lvid = i;
+          break;
+        }
+      }
+
+      assert(lvid > -1);
+
+      // get p20 pc0 p10
+      const std::array<int64_t, 4> &Cone_N = Cone_N_helper(lvid);
+      Eigen::SparseVector<double> p20 =
+          m.row(f_chart.lagrange_nodes[Cone_N[1]]);
+      Eigen::SparseVector<double> pc0 =
+          m.row(f_chart.lagrange_nodes[Cone_N[2]]);
+      // Eigen::SparseVector<double> p10 =
+      //     m.row(f_chart.lagrange_nodes[Cone_N[3]]); // redundant
+
+      Eigen::SparseVector<double> p0 = m.row(f_chart.lagrange_nodes[Cone_N[0]]);
+
+      // two vectors orth to v_normal
+      Eigen::SparseVector<double> v20 = p20 - p0;
+      Eigen::SparseVector<double> vc0 = pc0 - p0;
+
+      // v20 x
+      Eigen::SparseVector<double> v20_x = v_normal[0] * v20;
+      assign_spvec_to_spmat_row_col(m_cone, v20_x, cone_m_row_id, 0 * node_cnt);
+      cone_m_row_id++; // this can merge in to the line above, but just to be
+                       // clear to see here
+
+      // v20 y
+      Eigen::SparseVector<double> v20_y = v_normal[1] * v20;
+      assign_spvec_to_spmat_row_col(m_cone, v20_y, cone_m_row_id, 1 * node_cnt);
+      cone_m_row_id++;
+
+      // v20 z
+      Eigen::SparseVector<double> v20_z = v_normal[2] * v20;
+      assign_spvec_to_spmat_row_col(m_cone, v20_z, cone_m_row_id, 2 * node_cnt);
+      cone_m_row_id++;
+
+      // vc0 x
+      Eigen::SparseVector<double> vc0_x = v_normal[0] * vc0;
+      assign_spvec_to_spmat_row_col(m_cone, vc0_x, cone_m_row_id, 0 * node_cnt);
+      cone_m_row_id++;
+
+      // vc0 x
+      Eigen::SparseVector<double> vc0_y = v_normal[1] * vc0;
+      assign_spvec_to_spmat_row_col(m_cone, vc0_y, cone_m_row_id, 1 * node_cnt);
+      cone_m_row_id++;
+
+      // vc0 x
+      Eigen::SparseVector<double> vc0_z = v_normal[2] * vc0;
+      assign_spvec_to_spmat_row_col(m_cone, vc0_z, cone_m_row_id, 2 * node_cnt);
+      cone_m_row_id++;
+    }
+  }
+}

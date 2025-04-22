@@ -81,4 +81,7 @@ public:
                            std::vector<int64_t> &constrained_row_ids);
   void Ci_internal_ind2dep_2(Eigen::SparseMatrix<double> &m,
                              std::vector<int64_t> &constrained_row_ids);
+  void Ci_cone_bezier(const Eigen::SparseMatrix<double> &m,
+                      Eigen::SparseMatrix<double> &m_cone,
+                      Eigen::MatrixXd &v_normals);
 };

@@ -135,6 +135,10 @@ int main(int argc, char *argv[]) {
   ct_surface.Ci_midpoint_ind2dep(bezier_reduced_to_full, constrained_row_ids);
   ct_surface.Ci_internal_ind2dep_2(bezier_reduced_to_full, constrained_row_ids);
 
+  // Eigen::SparseMatrix<double> bezier_cone_matrix;
+  // ct_surface.Ci_cone_bezier(bezier_reduced_to_full, bezier_cone_matrix,
+  //                           v_normals);
+
   Eigen::saveMarket(bezier_reduced_to_full,
                     output_name + "_bezier_endpoint_r2f.txt");
 
@@ -185,6 +189,8 @@ int main(int argc, char *argv[]) {
   // std::cout << bezier_endpoint_cons * bezier_points_mat << std::endl;
 
   // std::cout << std::endl << endpoint_bezier_points_mat << std::endl;
+
+  std::cout << constrained_row_ids.size() << "  " << node_cnt << std::endl;
 
   exit(0);
 
