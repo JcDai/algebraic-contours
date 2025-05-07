@@ -509,7 +509,7 @@ void CloughTocherSurface::write_cubic_surface_to_msh_with_conn(
 
 void CloughTocherSurface::
     write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
-        std::string filename) {
+        std::string filename, bool write_bezier) {
   std::ofstream file(filename + ".msh");
 
   /*
@@ -594,7 +594,9 @@ void CloughTocherSurface::
   }
 
   // debug use, out put bezier net
-  vertices = m_bezier_control_points;
+  if (write_bezier) {
+    vertices = m_bezier_control_points;
+  }
 
   file << "$Nodes\n";
 
@@ -633,6 +635,70 @@ void CloughTocherSurface::
   std::ofstream v_map_file(filename + "_input_v_to_output_v_map.txt");
   for (const auto &pair : m_affine_manifold.v_to_lagrange_node_map) {
     v_map_file << pair.first << " " << pair.second << std::endl;
+  }
+}
+
+void CloughTocherSurface::bezier2lag_full_mat(Eigen::SparseMatrix<double> &m) {
+  Eigen::Matrix<double, 10, 10> p3_bezier2lag_matrix = p3_bezier2lag_m();
+
+  const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
+
+  m.resize(lagrange_nodes.size(), lagrange_nodes.size());
+  std::vector<bool> processed(lagrange_nodes.size(), false);
+
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+
+    std::array<std::array<int64_t, 10>, 3> indices_sub = {
+        {{{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+           l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}},
+         {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+           l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}},
+         {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+           l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}}}};
+
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 10; ++j) {
+        if (!processed[indices_sub[i][j]])
+          for (int k = 0; k < 10; ++k) {
+            m.insert(indices_sub[i][j], indices_sub[i][k]) =
+                p3_bezier2lag_matrix(j, k);
+          }
+        processed[indices_sub[i][j]] = true;
+      }
+    }
+  }
+}
+
+void CloughTocherSurface::lag2bezier_full_mat(Eigen::SparseMatrix<double> &m) {
+  Eigen::Matrix<double, 10, 10> p3_lag2bezier_matrix = p3_lag2bezier_m();
+
+  const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
+
+  m.resize(lagrange_nodes.size(), lagrange_nodes.size());
+  std::vector<bool> processed(lagrange_nodes.size(), false);
+
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+
+    std::array<std::array<int64_t, 10>, 3> indices_sub = {
+        {{{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+           l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}},
+         {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+           l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}},
+         {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+           l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}}}};
+
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 10; ++j) {
+        if (!processed[indices_sub[i][j]])
+          for (int k = 0; k < 10; ++k) {
+            m.insert(indices_sub[i][j], indices_sub[i][k]) =
+                p3_lag2bezier_matrix(j, k);
+          }
+        processed[indices_sub[i][j]] = true;
+      }
+    }
   }
 }
 
@@ -1872,22 +1938,13 @@ void assign_spvec_to_spmat_row(Eigen::SparseMatrix<double> &mat,
 }
 
 void CloughTocherSurface::Ci_endpoint_ind2dep(
-    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids) {
+    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
+    std::map<int64_t, int> &independent_node_map) {
   const auto &v_charts = m_affine_manifold.m_vertex_charts;
   // const auto &f_charts = m_affine_manifold.m_face_charts;
   const auto &F = m_affine_manifold.get_faces();
 
   for (size_t v_id = 0; v_id < v_charts.size(); ++v_id) {
-    // // debug use
-    // if (v_id > 2) {
-    //   break;
-    // }
-
-    // // debug use
-    // if (v_id == 2) {
-    //   std::cout << "in 2" << std::endl;
-    // }
-
     int vid = v_id;
 
     const auto &v_chart = v_charts[vid];
@@ -1976,6 +2033,7 @@ void CloughTocherSurface::Ci_endpoint_ind2dep(
       for (int i = 0; i < 3; ++i) {
         m.insert(indep_node_ids[i], indep_node_ids[i]) = 1;
         constrained_row_ids.push_back(indep_node_ids[i]);
+        independent_node_map[indep_node_ids[i]] = 1; // set node as independent
       }
       // return;
     } else {
@@ -1983,6 +2041,13 @@ void CloughTocherSurface::Ci_endpoint_ind2dep(
       for (int i = 0; i < 3; ++i) {
         m.insert(indep_node_ids[i], indep_node_ids[0]) = 1;
         constrained_row_ids.push_back(indep_node_ids[i]);
+        if (i == 0) {
+          independent_node_map[indep_node_ids[i]] =
+              1; // only set the first node as independent
+        } else {
+          independent_node_map[indep_node_ids[i]] =
+              0; // set the other two as dependent
+        }
       }
     }
 
@@ -2005,6 +2070,7 @@ void CloughTocherSurface::Ci_endpoint_ind2dep(
               // cone case
               m.insert(dep_node_id, indep_node_ids[0]) = 1;
               constrained_row_ids.push_back(dep_node_id);
+              independent_node_map[dep_node_id] = 0; // set as dependent
             } else {
               Eigen::Vector2d u_im =
                   one_ring_uv_positions_map[e_chart.left_vertex_index] -
@@ -2019,6 +2085,7 @@ void CloughTocherSurface::Ci_endpoint_ind2dep(
               m.insert(dep_node_id, indep_node_ids[1]) = U_ijm[0];
               m.insert(dep_node_id, indep_node_ids[2]) = U_ijm[1];
               constrained_row_ids.push_back(dep_node_id);
+              independent_node_map[dep_node_id] = 0; // set as dependent
             }
             processed_id[e_chart.left_vertex_index] = true;
           }
@@ -2034,6 +2101,7 @@ void CloughTocherSurface::Ci_endpoint_ind2dep(
               // cone case
               m.insert(dep_node_id, indep_node_ids[0]) = 1;
               constrained_row_ids.push_back(dep_node_id);
+              independent_node_map[dep_node_id] = 0; // set as dependent
             } else {
               Eigen::Vector2d u_im =
                   one_ring_uv_positions_map[e_chart.right_vertex_index] -
@@ -2048,6 +2116,7 @@ void CloughTocherSurface::Ci_endpoint_ind2dep(
               m.insert(dep_node_id, indep_node_ids[1]) = U_ijm[0];
               m.insert(dep_node_id, indep_node_ids[2]) = U_ijm[1];
               constrained_row_ids.push_back(dep_node_id);
+              independent_node_map[dep_node_id] = 0; // set as dependent
             }
             processed_id[e_chart.right_vertex_index] = true;
           }
@@ -2064,7 +2133,8 @@ void CloughTocherSurface::Ci_endpoint_ind2dep(
 }
 
 void CloughTocherSurface::Ci_internal_ind2dep_1(
-    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids) {
+    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
+    std::map<int64_t, int> &independent_node_map) {
   const auto &f_charts = m_affine_manifold.m_face_charts;
 
   for (size_t fid = 0; fid < f_charts.size(); ++fid) {
@@ -2081,6 +2151,7 @@ void CloughTocherSurface::Ci_internal_ind2dep_1(
     assign_spvec_to_spmat_row(m, p0c, node_ids[12]);
 
     constrained_row_ids.push_back(node_ids[12]);
+    independent_node_map[node_ids[12]] = 0; // set as dependent
 
     // p1c = (p1 + p12 + p10) / 3
     Eigen::SparseVector<double> p1 = m.row(node_ids[1]);
@@ -2092,6 +2163,7 @@ void CloughTocherSurface::Ci_internal_ind2dep_1(
     assign_spvec_to_spmat_row(m, p1c, node_ids[14]);
 
     constrained_row_ids.push_back(node_ids[14]);
+    independent_node_map[node_ids[14]] = 0; // set as dependent
 
     // p2c = (p2 + p21 + p20) / 3
     Eigen::SparseVector<double> p2 = m.row(node_ids[2]);
@@ -2103,6 +2175,7 @@ void CloughTocherSurface::Ci_internal_ind2dep_1(
     assign_spvec_to_spmat_row(m, p2c, node_ids[16]);
 
     constrained_row_ids.push_back(node_ids[16]);
+    independent_node_map[node_ids[16]] = 0; // set as dependent
   }
 }
 
@@ -2132,7 +2205,8 @@ std::array<int64_t, 7> N_helper(const int lid1, const int lid2) {
 }
 
 void CloughTocherSurface::Ci_midpoint_ind2dep(
-    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids) {
+    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
+    std::map<int64_t, int> &independent_node_map) {
   Eigen::Matrix<double, 5, 7> K_N;
   K_N << 1, 0, 0, 0, 0, 0, 0, // p0
       0, 1, 0, 0, 0, 0, 0,    // p1
@@ -2182,6 +2256,7 @@ void CloughTocherSurface::Ci_midpoint_ind2dep(
 
       m.insert(N[6], N[6]) = 1;
       constrained_row_ids.push_back(N[6]);
+      independent_node_map[N[6]] = 1; // set as independent
 
       continue;
     }
@@ -2228,13 +2303,7 @@ void CloughTocherSurface::Ci_midpoint_ind2dep(
     Eigen::Matrix<double, 1, 7> M_N_prime =
         (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
         c_e.transpose() * K_N;
-    // Eigen::Matrix<double, 1, 7> M_N_prime =
-    //     (m_01_prime.dot(u_01.normalized())) / u_01.norm() * c_e.transpose() *
-    //     K_N;
     auto k_N_prime = m_01_prime.dot(u_01_prep_prime.normalized());
-
-    // std::cout << c_hij.rows() << " " << c_hij.cols() << std::endl;
-    // std::cout << M_N.rows() << " " << M_N.cols() << std::endl;
 
     // compute CM
     Eigen::Matrix<double, 1, 7> CM = c_hij - M_N.transpose(); // 7 x 1
@@ -2299,6 +2368,7 @@ void CloughTocherSurface::Ci_midpoint_ind2dep(
     // assign p_01_c as indep
     m.insert(N[6], N[6]) = 1;
     constrained_row_ids.push_back(N[6]);
+    independent_node_map[N[6]] = 1; // set as independent
 
     auto p_01_c = m.row(N[6]);
 
@@ -2310,24 +2380,15 @@ void CloughTocherSurface::Ci_midpoint_ind2dep(
                 CM_prime[4] * p_0c_prime + CM_prime[5] * p_1c_prime)) /
         (-k_N * CM_prime[6]);
 
-    // Eigen::SparseVector<double> p_01_c_prime =
-    //     (k_N_prime * (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10
-    //     +
-    //                   CM[4] * p_0c + CM[5] * p_1c + CM[6] * p_01_c) +
-    //      k_N * (CM_prime[0] * p_0 + CM_prime[1] * p_1 + CM_prime[2] * p_01 +
-    //             CM_prime[3] * p_10 + CM_prime[4] * p_0c_prime +
-    //             CM_prime[5] * p_1c_prime)) /
-    //     (-k_N * CM_prime[6]);
-
-    // // assign p_01_c_prime
-    // m.row(N_prime[6]) = p_01_c_prime;
     assign_spvec_to_spmat_row(m, p_01_c_prime, N_prime[6]);
     constrained_row_ids.push_back(N_prime[6]);
+    independent_node_map[N_prime[6]] = 0; // set as dependent
   }
 }
 
 void CloughTocherSurface::Ci_internal_ind2dep_2(
-    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids) {
+    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
+    std::map<int64_t, int> &independent_node_map) {
   const auto &f_charts = m_affine_manifold.m_face_charts;
 
   for (size_t fid = 0; fid < f_charts.size(); ++fid) {
@@ -2340,15 +2401,10 @@ void CloughTocherSurface::Ci_internal_ind2dep_2(
     Eigen::SparseVector<double> p20_c = m.row(node_ids[11]);
 
     Eigen::SparseVector<double> pc0 = (p0c + p01_c + p20_c) / 3.0;
-    // std::cout << p0c << std::endl;
-    // std::cout << p01_c << std::endl;
-    // std::cout << p20_c << std::endl;
-
-    // std::cout << pc0 << std::endl;
-    // m.row(node_ids[13]) = pc0;
 
     assign_spvec_to_spmat_row(m, pc0, node_ids[13]);
     constrained_row_ids.push_back(node_ids[13]);
+    independent_node_map[node_ids[13]] = 0; // set as dependent
 
     // pc1 = (p1c + p12^c + p01^c) / 3
     Eigen::SparseVector<double> p1c = m.row(node_ids[14]);
@@ -2360,6 +2416,7 @@ void CloughTocherSurface::Ci_internal_ind2dep_2(
 
     assign_spvec_to_spmat_row(m, pc1, node_ids[15]);
     constrained_row_ids.push_back(node_ids[15]);
+    independent_node_map[node_ids[15]] = 0; // set as dependent
 
     // pc2 = (p2c + p20^c + p12^c) / 3
     Eigen::SparseVector<double> p2c = m.row(node_ids[16]);
@@ -2371,12 +2428,14 @@ void CloughTocherSurface::Ci_internal_ind2dep_2(
 
     assign_spvec_to_spmat_row(m, pc2, node_ids[17]);
     constrained_row_ids.push_back(node_ids[17]);
+    independent_node_map[node_ids[17]] = 0; // set as dependent
 
     // pc = (pc0 + pc1 + pc2) / 3
     // m.row(node_ids[18]) = (pc0 + pc1 + pc2) / 3.0;
     Eigen::SparseVector<double> pc = (pc0 + pc1 + pc2) / 3.0;
     assign_spvec_to_spmat_row(m, pc, node_ids[18]);
     constrained_row_ids.push_back(node_ids[18]);
+    independent_node_map[node_ids[18]] = 0; // set as dependent
   }
 }
 
@@ -2389,22 +2448,22 @@ void assign_spvec_to_spmat_row_col(Eigen::SparseMatrix<double> &mat,
   }
 }
 
-std::array<int64_t, 4> Cone_N_helper(const int lid) {
+std::array<int64_t, 6> Cone_N_helper(const int lid) {
   // assuming oriented uv faces
   switch (lid) {
   case 0:
-    return {{0, 7, 13, 4}};
+    return {{0, 7, 11, 13, 9, 4}};
   case 1:
-    return {{1, 3, 15, 6}};
+    return {{1, 3, 9, 15, 10, 6}};
   case 2:
-    return {{2, 5, 17, 8}};
+    return {{2, 5, 10, 17, 11, 8}};
   }
   return {{-1, -1, -1, -1}};
 }
 
 void CloughTocherSurface::Ci_cone_bezier(const Eigen::SparseMatrix<double> &m,
                                          Eigen::SparseMatrix<double> &m_cone,
-                                         Eigen::MatrixXd &v_normals) {
+                                         const Eigen::MatrixXd &v_normals) {
   const auto &v_charts = m_affine_manifold.m_vertex_charts;
   const auto &f_charts = m_affine_manifold.m_face_charts;
   const auto &Fv = m_affine_manifold.get_faces();
@@ -2420,8 +2479,9 @@ void CloughTocherSurface::Ci_cone_bezier(const Eigen::SparseMatrix<double> &m,
     m_cone_rows += v_chart.face_one_ring.size();
   }
 
-  m_cone.resize(m_cone_rows * 2 * 3,
-                node_cnt * 3); // 2 cons per face, each cones has 3 rows for xyz
+  m_cone.resize(m_cone_rows * 4 * 3,
+                node_cnt *
+                    3); // 4 cons per marcro tri, each cones has 3 rows for xyz
 
   // compute matrix
   for (size_t v_id = 0; v_id < v_charts.size(); ++v_id) {
@@ -2451,11 +2511,15 @@ void CloughTocherSurface::Ci_cone_bezier(const Eigen::SparseMatrix<double> &m,
       assert(lvid > -1);
 
       // get p20 pc0 p10
-      const std::array<int64_t, 4> &Cone_N = Cone_N_helper(lvid);
+      const std::array<int64_t, 6> &Cone_N = Cone_N_helper(lvid);
       Eigen::SparseVector<double> p20 =
           m.row(f_chart.lagrange_nodes[Cone_N[1]]);
-      Eigen::SparseVector<double> pc0 =
+      Eigen::SparseVector<double> p20m0 =
           m.row(f_chart.lagrange_nodes[Cone_N[2]]);
+      Eigen::SparseVector<double> pc0 =
+          m.row(f_chart.lagrange_nodes[Cone_N[3]]);
+      Eigen::SparseVector<double> p01m0 =
+          m.row(f_chart.lagrange_nodes[Cone_N[4]]);
       // Eigen::SparseVector<double> p10 =
       //     m.row(f_chart.lagrange_nodes[Cone_N[3]]); // redundant
 
@@ -2463,38 +2527,38 @@ void CloughTocherSurface::Ci_cone_bezier(const Eigen::SparseMatrix<double> &m,
 
       // two vectors orth to v_normal
       Eigen::SparseVector<double> v20 = p20 - p0;
+      Eigen::SparseVector<double> v20m0 = p20m0 - p0;
       Eigen::SparseVector<double> vc0 = pc0 - p0;
+      Eigen::SparseVector<double> v10m0 = p01m0 - p0;
 
-      // v20 x
-      Eigen::SparseVector<double> v20_x = v_normal[0] * v20;
-      assign_spvec_to_spmat_row_col(m_cone, v20_x, cone_m_row_id, 0 * node_cnt);
-      cone_m_row_id++; // this can merge in to the line above, but just to be
-                       // clear to see here
+      // v20
+      for (int i = 0; i < 3; ++i) {
+        Eigen::SparseVector<double> vec = v_normal[i] * v20;
+        assign_spvec_to_spmat_row_col(m_cone, vec, cone_m_row_id, i * node_cnt);
+        cone_m_row_id++; // this can merge in to the line above, but just to be
+                         // clear to see here
+      }
 
-      // v20 y
-      Eigen::SparseVector<double> v20_y = v_normal[1] * v20;
-      assign_spvec_to_spmat_row_col(m_cone, v20_y, cone_m_row_id, 1 * node_cnt);
-      cone_m_row_id++;
+      // v20m0
+      for (int i = 0; i < 3; ++i) {
+        Eigen::SparseVector<double> vec = v_normal[i] * v20m0;
+        assign_spvec_to_spmat_row_col(m_cone, vec, cone_m_row_id, i * node_cnt);
+        cone_m_row_id++;
+      }
 
-      // v20 z
-      Eigen::SparseVector<double> v20_z = v_normal[2] * v20;
-      assign_spvec_to_spmat_row_col(m_cone, v20_z, cone_m_row_id, 2 * node_cnt);
-      cone_m_row_id++;
+      // vc0
+      for (int i = 0; i < 3; ++i) {
+        Eigen::SparseVector<double> vec = v_normal[i] * vc0;
+        assign_spvec_to_spmat_row_col(m_cone, vec, cone_m_row_id, i * node_cnt);
+        cone_m_row_id++;
+      }
 
-      // vc0 x
-      Eigen::SparseVector<double> vc0_x = v_normal[0] * vc0;
-      assign_spvec_to_spmat_row_col(m_cone, vc0_x, cone_m_row_id, 0 * node_cnt);
-      cone_m_row_id++;
-
-      // vc0 x
-      Eigen::SparseVector<double> vc0_y = v_normal[1] * vc0;
-      assign_spvec_to_spmat_row_col(m_cone, vc0_y, cone_m_row_id, 1 * node_cnt);
-      cone_m_row_id++;
-
-      // vc0 x
-      Eigen::SparseVector<double> vc0_z = v_normal[2] * vc0;
-      assign_spvec_to_spmat_row_col(m_cone, vc0_z, cone_m_row_id, 2 * node_cnt);
-      cone_m_row_id++;
+      // v10m0
+      for (int i = 0; i < 3; ++i) {
+        Eigen::SparseVector<double> vec = v_normal[i] * v10m0;
+        assign_spvec_to_spmat_row_col(m_cone, vec, cone_m_row_id, i * node_cnt);
+        cone_m_row_id++;
+      }
     }
   }
 }

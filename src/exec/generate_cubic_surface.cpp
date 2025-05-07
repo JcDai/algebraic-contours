@@ -116,93 +116,15 @@ int main(int argc, char *argv[]) {
 
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
       output_name + "_from_lagrange_nodes");
+  ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
+      output_name + "_from_bezier_nodes", true);
 
   ct_surface.write_connected_lagrange_nodes(output_name + "_bilaplacian_nodes",
                                             V);
   ct_surface.write_connected_lagrange_nodes_values(output_name +
                                                    "_bilaplacian_nodes_values");
 
-  // bezier form
-
-  int64_t node_cnt = ct_surface.m_affine_manifold.m_lagrange_nodes.size();
-  Eigen::SparseMatrix<double> bezier_reduced_to_full(node_cnt, node_cnt);
-
-  std::vector<int64_t> constrained_row_ids;
-  ct_surface.Ci_endpoint_ind2dep(bezier_reduced_to_full, constrained_row_ids);
-  Eigen::saveMarket(bezier_reduced_to_full, output_name + "_bezier_1_r2f.txt");
-  ct_surface.Ci_internal_ind2dep_1(bezier_reduced_to_full, constrained_row_ids);
-  Eigen::saveMarket(bezier_reduced_to_full, output_name + "_bezier_12_r2f.txt");
-  ct_surface.Ci_midpoint_ind2dep(bezier_reduced_to_full, constrained_row_ids);
-  ct_surface.Ci_internal_ind2dep_2(bezier_reduced_to_full, constrained_row_ids);
-
-  // Eigen::SparseMatrix<double> bezier_cone_matrix;
-  // ct_surface.Ci_cone_bezier(bezier_reduced_to_full, bezier_cone_matrix,
-  //                           v_normals);
-
-  Eigen::saveMarket(bezier_reduced_to_full,
-                    output_name + "_bezier_endpoint_r2f.txt");
-
-  std::cout << "constrained row count: " << constrained_row_ids.size()
-            << std::endl;
-
-  // check bezier constraint
-  auto bezier_control_points = ct_surface.m_bezier_control_points;
-  Eigen::MatrixXd bezier_points_mat(bezier_control_points.size(), 3);
-  for (size_t i = 0; i < bezier_control_points.size(); ++i) {
-    bezier_points_mat.row(i) = bezier_control_points[i].transpose();
-  }
-
-  // bezier_points_mat.setConstant(1);
-
-  // extract constrained lines
-  Eigen::SparseMatrix<double> bezier_endpoint_cons(constrained_row_ids.size(),
-                                                   node_cnt);
-
-  Eigen::MatrixXd endpoint_bezier_points_mat;
-  endpoint_bezier_points_mat.resize(constrained_row_ids.size(), 3);
-  for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
-    Eigen::SparseVector<double> tmpvec =
-        bezier_reduced_to_full.row(constrained_row_ids[i]);
-    assign_spvec_to_spmat_row_main(bezier_endpoint_cons, tmpvec, i);
-
-    endpoint_bezier_points_mat.row(i) =
-        bezier_points_mat.row(constrained_row_ids[i]);
-  }
-
-  auto beizer_end_error =
-      bezier_endpoint_cons * bezier_points_mat - endpoint_bezier_points_mat;
-
-  // auto beizer_end_error =
-  //     bezier_reduced_to_full * bezier_points_mat - bezier_points_mat;
-  double bezier_end_max_error = beizer_end_error.maxCoeff();
-  double bezier_end_min_error = beizer_end_error.minCoeff();
-
-  std::cout << "beizer max error: "
-            << ((std::abs(bezier_end_max_error) >
-                 std::abs(bezier_end_min_error))
-                    ? std::abs(bezier_end_max_error)
-                    : std::abs(bezier_end_min_error))
-            << std::endl;
-
-  // std::cout << beizer_end_error << std::endl;
-
-  // std::cout << bezier_endpoint_cons * bezier_points_mat << std::endl;
-
-  // std::cout << std::endl << endpoint_bezier_points_mat << std::endl;
-
-  std::cout << constrained_row_ids.size() << "  " << node_cnt << std::endl;
-
-  exit(0);
-
-  // lagrange form
-
-  Eigen::SparseMatrix<double> c_f_int;
-  ct_surface.C_F_int(c_f_int);
-  Eigen::SparseMatrix<double> C_e_end, C_e_end_elim;
-  ct_surface.C_E_end(C_e_end, C_e_end_elim);
-  Eigen::SparseMatrix<double> C_e_mid;
-  ct_surface.C_E_mid(C_e_mid);
-
+  // get vertex normals
   Eigen::MatrixXd v_normals;
 
   if (vertex_normal_file != "") {
@@ -253,6 +175,184 @@ int main(int argc, char *argv[]) {
   // }
 
   // v_normals = test_normals;
+
+  // bezier form
+
+  int64_t node_cnt = ct_surface.m_affine_manifold.m_lagrange_nodes.size();
+  Eigen::SparseMatrix<double> bezier_full_to_full(node_cnt, node_cnt);
+
+  std::vector<int64_t> constrained_row_ids;
+  std::map<int64_t, int> independent_node_map;
+  ct_surface.Ci_endpoint_ind2dep(bezier_full_to_full, constrained_row_ids,
+                                 independent_node_map);
+  // Eigen::saveMarket(bezier_full_to_full, output_name +
+  // "_bezier_1_r2f.txt");
+  ct_surface.Ci_internal_ind2dep_1(bezier_full_to_full, constrained_row_ids,
+                                   independent_node_map);
+  // Eigen::saveMarket(bezier_full_to_full, output_name +
+  // "_bezier_12_r2f.txt");
+  ct_surface.Ci_midpoint_ind2dep(bezier_full_to_full, constrained_row_ids,
+                                 independent_node_map);
+  ct_surface.Ci_internal_ind2dep_2(bezier_full_to_full, constrained_row_ids,
+                                   independent_node_map);
+
+  std::cout << "constrained row count: " << constrained_row_ids.size()
+            << std::endl;
+  // Eigen::saveMarket(bezier_full_to_full, output_name + "_bezier_r2f.txt");
+
+  Eigen::SparseMatrix<double> bezier_cone_matrix;
+  ct_surface.Ci_cone_bezier(bezier_full_to_full, bezier_cone_matrix, v_normals);
+
+  Eigen::saveMarket(bezier_cone_matrix, output_name + "_bezier_cone.txt");
+
+  // check bezier constraint
+  auto bezier_control_points = ct_surface.m_bezier_control_points;
+  Eigen::MatrixXd bezier_points_mat(bezier_control_points.size(), 3);
+  for (size_t i = 0; i < bezier_control_points.size(); ++i) {
+    bezier_points_mat.row(i) = bezier_control_points[i].transpose();
+  }
+
+  // bezier_points_mat.setConstant(1);
+
+  // extract constrained lines
+  Eigen::SparseMatrix<double> bezier_endpoint_cons(constrained_row_ids.size(),
+                                                   node_cnt);
+
+  Eigen::MatrixXd endpoint_bezier_points_mat;
+  endpoint_bezier_points_mat.resize(constrained_row_ids.size(), 3);
+  for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
+    Eigen::SparseVector<double> tmpvec =
+        bezier_full_to_full.row(constrained_row_ids[i]);
+    assign_spvec_to_spmat_row_main(bezier_endpoint_cons, tmpvec, i);
+
+    endpoint_bezier_points_mat.row(i) =
+        bezier_points_mat.row(constrained_row_ids[i]);
+  }
+
+  auto beizer_end_error =
+      bezier_endpoint_cons * bezier_points_mat - endpoint_bezier_points_mat;
+
+  // auto beizer_end_error =
+  //     bezier_full_to_full * bezier_points_mat - bezier_points_mat;
+  double bezier_end_max_error = beizer_end_error.maxCoeff();
+  double bezier_end_min_error = beizer_end_error.minCoeff();
+
+  std::cout << "beizer max error: "
+            << ((std::abs(bezier_end_max_error) >
+                 std::abs(bezier_end_min_error))
+                    ? std::abs(bezier_end_max_error)
+                    : std::abs(bezier_end_min_error))
+            << std::endl;
+
+  // std::cout << beizer_end_error << std::endl;
+
+  // std::cout << bezier_endpoint_cons * bezier_points_mat << std::endl;
+
+  // std::cout << std::endl << endpoint_bezier_points_mat << std::endl;
+
+  std::cout << constrained_row_ids.size() << "  " << node_cnt << std::endl;
+
+  // compute bezier constraint matrix without cone cons
+  Eigen::SparseMatrix<double> bezier_cons_no_cone;
+
+  // count dep rows
+  int64_t dep_cnt = 0;
+  int64_t ind_cnt = 0;
+  for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
+    if (independent_node_map[i] == 0) {
+      dep_cnt++;
+    } else if (independent_node_map[i] == 1) {
+      ind_cnt++;
+    }
+  }
+
+  assert(dep_cnt + ind_cnt == node_cnt);
+
+  bezier_cons_no_cone.resize(dep_cnt, node_cnt);
+
+  int64_t row_id = 0;
+  for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
+    if (independent_node_map[i] == 1) {
+      // skip indepdent nodes
+      continue;
+    }
+
+    const Eigen::SparseVector<double> &r2f_row = bezier_full_to_full.row(i);
+    Eigen::SparseVector<double> eye_row;
+    eye_row.resize(node_cnt);
+    eye_row.insert(i) = 1;
+
+    Eigen::SparseVector<double> cons_row = r2f_row - eye_row;
+    assign_spvec_to_spmat_row_main(bezier_cons_no_cone, cons_row, row_id);
+    row_id++;
+  }
+
+  Eigen::saveMarket(bezier_cons_no_cone,
+                    output_name + "_bezier_constraints_no_cone.txt");
+
+  // compute reduce to full without cones
+  Eigen::SparseMatrix<double> bezier_no_cone_r2f(node_cnt, ind_cnt);
+  std::vector<int64_t> col2nodeid_map;
+  int64_t col_cnt = 0;
+  for (int64_t i = 0; i < bezier_full_to_full.cols(); ++i) {
+    if (independent_node_map[i] == 1) {
+      const Eigen::SparseVector<double> &c = bezier_full_to_full.col(i);
+      bezier_no_cone_r2f.col(col_cnt) = c;
+      col_cnt++;
+      col2nodeid_map.push_back(i);
+    } else {
+      // do nothing
+    }
+  }
+
+  std::cout << "ind node cnt: " << ind_cnt << std::endl;
+
+  Eigen::saveMarket(bezier_no_cone_r2f,
+                    output_name + "_bezier_r2f_no_cone.txt");
+
+  std::ofstream r2f_idx_map_file(output_name +
+                                 "_bezier_r2f_mat_col_idx_map.txt");
+  for (size_t i = 0; i < col2nodeid_map.size(); ++i) {
+    r2f_idx_map_file << col2nodeid_map[i] << std::endl;
+  }
+  r2f_idx_map_file.close();
+
+  // test bezier lag convertion
+  Eigen::SparseMatrix<double> b2l_full_mat, l2b_full_mat;
+  ct_surface.bezier2lag_full_mat(b2l_full_mat);
+  ct_surface.lag2bezier_full_mat(l2b_full_mat);
+
+  Eigen::MatrixXd lag_mat(ct_surface.m_lagrange_node_values.size(), 3);
+  for (size_t i = 0; i < ct_surface.m_lagrange_node_values.size(); ++i) {
+    lag_mat.row(i) = ct_surface.m_lagrange_node_values[i].transpose();
+  }
+
+  Eigen::MatrixXd bezier_mat(ct_surface.m_bezier_control_points.size(), 3);
+  for (size_t i = 0; i < ct_surface.m_bezier_control_points.size(); ++i) {
+    bezier_mat.row(i) = ct_surface.m_bezier_control_points[i].transpose();
+  }
+
+  std::cout << (b2l_full_mat * bezier_mat - lag_mat).norm() << std::endl;
+  std::cout << (l2b_full_mat * lag_mat - bezier_mat).norm() << std::endl;
+
+  Eigen::saveMarket(b2l_full_mat,
+                    output_name + "_bezier_to_lag_convertion_matrix.txt");
+
+  Eigen::saveMarket(l2b_full_mat,
+                    output_name + "_lag_to_bezier_convertion_matrix.txt");
+
+  exit(0);
+
+  ////////////////////////////////////////////////////////
+  // lagrange form
+  ////////////////////////////////////////////////////////
+
+  Eigen::SparseMatrix<double> c_f_int;
+  ct_surface.C_F_int(c_f_int);
+  Eigen::SparseMatrix<double> C_e_end, C_e_end_elim;
+  ct_surface.C_E_end(C_e_end, C_e_end_elim);
+  Eigen::SparseMatrix<double> C_e_mid;
+  ct_surface.C_E_mid(C_e_mid);
 
   Eigen::SparseMatrix<double> c_cone;
   ct_surface.C_F_cone(c_cone, v_normals);

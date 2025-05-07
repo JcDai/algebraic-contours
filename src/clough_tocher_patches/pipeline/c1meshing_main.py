@@ -1,0 +1,120 @@
+import igl
+import meshio as mio
+import numpy as np
+import copy
+import subprocess
+import sys
+import gmsh
+import h5py
+from scipy import sparse
+import os
+import json
+import scipy
+import datetime
+from argparse import ArgumentParser
+
+# files in the directory
+from utils import *
+from step_1_generate_embedded_mesh import *
+from step_2_cone_arrangement_and_parametrization import *
+from step_3_face_split import *
+from step_4_generate_CT_constraints import *
+from step_5_map_nodes_tri2tet import *
+from step_6_build_hard_constraints import *
+from step_7_build_soft_constraints import *
+from step_8_polyfem import *
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument(
+        "-j", dest="spec", required=True, type=lambda x: is_valid_json(parser, x)
+    )
+    parser.add_argument(
+        "-b", dest="bins", required=True, type=lambda x: is_valid_json(parser, x)
+    )
+
+    args = parser.parse_args()
+
+    input_file = args.spec[
+        "input"
+    ]  # vtu tetmesh file with 'winding_number' as cell data
+    output_name = args.spec["output"]  # output name
+    offset_file = args.spec["offset"]  # offset file
+    weight_soft_1 = args.spec["weight_soft_1"]
+    # int, bilaplacian on k ring 5 to 20
+    k_ring_factor = args.spec["k_ring_factor"]
+    sample_factor = args.spec["sample_factor"]  # int, put 2
+    # LinearElasticity or Neohookean
+    elasticity_mode = args.spec["elasticity_mode"]
+    enable_offset = args.spec["enable_offset"]
+
+    path_to_para_exe = args.bins[
+        "seamless_parametrization_binary"
+    ]  # path to parametrization bin
+    path_to_ct_exe = args.bins[
+        "smooth_contours_binary"
+    ]  # path to Clough Tocher constraints bin
+    path_to_polyfem_exe = args.bins["polyfem_binary"]  # path to polyfem bin
+    path_to_matlab_exe = args.bins["matlab_binary"]  # path to matlab exe
+    # path to toolkit app
+    path_to_toolkit_exe = args.bins["wmtk_c1_cone_split_binary"]
+    path_to_generate_cone_exe = args.bins["seamless_con_gen_binary"]
+
+    workspace_path = "./"
+
+    # step 1 read
+    tets, vertices, winding_numbers, tet_surface_origin, surface_adj_tet, para_in_v, para_in_f, para_in_v_to_tet_v_map, surface_tet_faces, surface_vertices = read_and_generate_embedded_surface(
+        workspace_path, input_file, debug=True)
+
+    tets_regular, tets_vertices_regular, surface_adj_tet, tet_surface, winding_numbers = simplicial_embedding(
+        tets, vertices, winding_numbers, tet_surface_origin, surface_adj_tet, surface_tet_faces)
+
+    # step 2 cone arrangement and parametrization
+    generate_frame_field(
+        workspace_path, path_to_generate_cone_exe, meshfile="embedded_surface.obj")
+
+    parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
+                    conefile="embedded_surface_Th_hat", fieldfile="embedded_surface_kappa_hat")
+
+    parametrization_split(workspace_path, tets_vertices_regular, tets_regular, surface_adj_tet, para_in_v_to_tet_v_map,
+                          path_to_toolkit_exe, meshfile_before_para="embedded_surface.obj", meshfile_after_para="parameterized_mesh.obj")
+
+    # step 3 face split
+    tet_points_after_face_split, tet_cells_after_face_split, new_winding_numbers, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map = face_split(workspace_path, "toolkit_tetmesh_tets.vtu", "surface_uv_after_cone_split.obj",
+                                                                                                                                                  "surface_v_to_tet_v_after_cone_split.txt", "surface_adj_tet_after_cone_split.txt")
+
+    call_gmsh(workspace_path)
+
+    # step 4 generate CT constraints
+    call_CT_code(workspace_path, path_to_ct_exe,
+                 "surface_uv_after_cone_split.obj")
+
+    # step 5 map tri to tet
+    tet_edge_to_vertices, tet_face_to_vertices = map_tri_nodes_to_tet_nodes(
+        workspace_path, output_name, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map)
+
+    # step 6 build hard constraints
+    build_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+                                        "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh")
+
+    build_bezier_reduce2full_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+                                    "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
+
+    build_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+                                                 "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
+
+    # step 7 build soft constraints
+    A_sti, b_sti, A_sti_2, b_sti_2 = upsample_and_smooth_cones("CT_bilaplacian_nodes_values_cone_area_vertices.txt",
+                                                               "CT_bilaplacian_nodes_values_cone_area_faces.txt", "CT_from_lagrange_nodes.msh", sample_factor, k_ring_factor)
+
+    soft_constraint_fit_normal(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+                               output_name + "_initial_tetmesh.msh", A_sti, b_sti)
+
+    # step 8 polyfem
+    create_polyfem_json(enable_offset, output_name, "soft.hdf5",
+                        "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
+
+    call_polyfem(workspace_path, path_to_polyfem_exe, "constraints.json")
+
+    resurrect_winding_number(output_name, new_winding_numbers, enable_offset)

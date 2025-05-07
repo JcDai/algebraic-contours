@@ -9,3 +9,4 @@ std::array<std::array<Eigen::Matrix<double, 1, 12>, 3>, 3> c_t_m();
 // bezier
 Eigen::Matrix<double, 7, 1> c_hij_m();
 Eigen::Matrix<double, 10, 10> p3_lag2bezier_m();
+Eigen::Matrix<double, 10, 10> p3_bezier2lag_m();

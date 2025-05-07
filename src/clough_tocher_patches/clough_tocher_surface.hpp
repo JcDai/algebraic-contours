@@ -27,7 +27,7 @@ public:
 
   void write_cubic_surface_to_msh_with_conn(std::string filename);
   void write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
-      std::string filename);
+      std::string filename, bool write_bezier = false);
   void write_external_bd_interpolated_function_values_from_lagrange_nodes(
       std::string filename,
       std::vector<Eigen::Matrix<double, 12, 1>> &external_boundary_data);
@@ -74,14 +74,21 @@ public:
 
   // independent -> dependent matrices using bezier basis
   void Ci_endpoint_ind2dep(Eigen::SparseMatrix<double> &m,
-                           std::vector<int64_t> &constrained_row_ids);
+                           std::vector<int64_t> &constrained_row_ids,
+                           std::map<int64_t, int> &independent_node_map);
   void Ci_internal_ind2dep_1(Eigen::SparseMatrix<double> &m,
-                             std::vector<int64_t> &constrained_row_ids);
+                             std::vector<int64_t> &constrained_row_ids,
+                             std::map<int64_t, int> &independent_node_map);
   void Ci_midpoint_ind2dep(Eigen::SparseMatrix<double> &m,
-                           std::vector<int64_t> &constrained_row_ids);
+                           std::vector<int64_t> &constrained_row_ids,
+                           std::map<int64_t, int> &independent_node_map);
   void Ci_internal_ind2dep_2(Eigen::SparseMatrix<double> &m,
-                             std::vector<int64_t> &constrained_row_ids);
+                             std::vector<int64_t> &constrained_row_ids,
+                             std::map<int64_t, int> &independent_node_map);
   void Ci_cone_bezier(const Eigen::SparseMatrix<double> &m,
                       Eigen::SparseMatrix<double> &m_cone,
-                      Eigen::MatrixXd &v_normals);
+                      const Eigen::MatrixXd &v_normals);
+
+  void bezier2lag_full_mat(Eigen::SparseMatrix<double> &m);
+  void lag2bezier_full_mat(Eigen::SparseMatrix<double> &m);
 };

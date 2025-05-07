@@ -69,40 +69,41 @@ def on_tri(A, B, C, D, eps=1e-10):
 
     return False
 
+
 def sample1(n):
     v = np.array([
-        [0,0],
-        [1,0],
-        [0,1],
+        [0, 0],
+        [1, 0],
+        [0, 1],
         #
-        [1/3,0],
-        [2/3,0],
+        [1/3, 0],
+        [2/3, 0],
 
-        [2/3,1/3],
-        [1/3,2/3],
-    
-        [0,2/3],
-        [0,1/3],
+        [2/3, 1/3],
+        [1/3, 2/3],
 
-        [1/3,1/3]
+        [0, 2/3],
+        [0, 1/3],
+
+        [1/3, 1/3]
     ])
 
     f = np.array([
-        [0,3,8],
-        [3,9,8],
-        [3,4,9],
-        [4,5,9],
-        [4,1,5],
-        [8,9,7],
-        [9,6,7],
-        [9,5,6],
-        [7,6,2]
+        [0, 3, 8],
+        [3, 9, 8],
+        [3, 4, 9],
+        [4, 5, 9],
+        [4, 1, 5],
+        [8, 9, 7],
+        [9, 6, 7],
+        [9, 5, 6],
+        [7, 6, 2]
     ])
 
     v, f = igl.upsample(v, f, n)
 
-
     return v, f
+
 
 def sample(n):
     V = np.zeros((n*n, 2))
@@ -130,61 +131,76 @@ def sample(n):
     F = F[:index]
     return V, F
 
+
 def lagr0(x, y):
     helper_0 = pow(x, 2)
     helper_1 = pow(y, 2)
-    result_0 = -27.0 / 2.0 * helper_0 * y + 9 * helper_0 - 27.0 / 2.0 * helper_1 * x + 9 * helper_1 - 9.0 / 2.0 * pow(x, 3) + 18 * x * y - 11.0 / 2.0 * x - 9.0 / 2.0 * pow(y, 3) - 11.0 / 2.0 * y + 1
+    result_0 = -27.0 / 2.0 * helper_0 * y + 9 * helper_0 - 27.0 / 2.0 * helper_1 * x + 9 * helper_1 - \
+        9.0 / 2.0 * pow(x, 3) + 18 * x * y - 11.0 / 2.0 * x - \
+        9.0 / 2.0 * pow(y, 3) - 11.0 / 2.0 * y + 1
 
     return result_0
 
-def lagr1(x,y):
-    result_0 = (1.0 / 2.0) * x * (9 * pow(x, 2) - 9 * x + 2);
+
+def lagr1(x, y):
+    result_0 = (1.0 / 2.0) * x * (9 * pow(x, 2) - 9 * x + 2)
     return result_0
 
-def lagr2(x,y):
+
+def lagr2(x, y):
     result_0 = (1.0 / 2.0) * y * (9 * pow(y, 2) - 9 * y + 2)
     return result_0
 
-def lagr3(x,y):
+
+def lagr3(x, y):
     result_0 = (9.0 / 2.0) * x * (x + y - 1) * (3 * x + 3 * y - 2)
     return result_0
 
-def lagr4(x,y):
+
+def lagr4(x, y):
     result_0 = -9.0 / 2.0 * x * (3 * pow(x, 2) + 3 * x * y - 4 * x - y + 1)
     return result_0
 
-def lagr5(x,y):
+
+def lagr5(x, y):
     result_0 = (9.0 / 2.0) * x * y * (3 * x - 1)
     return result_0
 
-def lagr6(x,y):
+
+def lagr6(x, y):
     result_0 = (9.0 / 2.0) * x * y * (3 * y - 1)
     return result_0
 
-def lagr7(x,y):
+
+def lagr7(x, y):
     result_0 = -9.0 / 2.0 * y * (3 * x * y - x + 3 * pow(y, 2) - 4 * y + 1)
     return result_0
 
-def lagr8(x,y):
+
+def lagr8(x, y):
     result_0 = (9.0 / 2.0) * y * (x + y - 1) * (3 * x + 3 * y - 2)
     return result_0
 
-def lagr9(x,y):
+
+def lagr9(x, y):
     result_0 = -27 * x * y * (x + y - 1)
     return result_0
 
+
 def eval_lagr(p, nodes):
-	lagrs = [lagr0, lagr1, lagr2, lagr3, lagr4, lagr5, lagr6, lagr7, lagr8, lagr9]
+    lagrs = [lagr0, lagr1, lagr2, lagr3, lagr4,
+             lagr5, lagr6, lagr7, lagr8, lagr9]
 
-	x = p[:,0]
-	y = p[:,1]
+    x = p[:, 0]
+    y = p[:, 1]
 
-	res = np.zeros((p.shape[0], nodes.shape[1]))
-	
-	for i,n in enumerate(nodes):
-		res+=lagrs[i](x,y)[:, None]*n
+    res = np.zeros((p.shape[0], nodes.shape[1]))
 
-	return res
+    for i, n in enumerate(nodes):
+        res += lagrs[i](x, y)[:, None]*n
+
+    return res
+
 
 def write_matlab_script(file):
     with open(file, "w") as f:
@@ -452,9 +468,11 @@ if __name__ == "__main__":
     output_name = args.spec["output"]  # output name
     offset_file = args.spec["offset"]  # offset file
     weight_soft_1 = args.spec["weight_soft_1"]
-    bilap_k_ring_neighbor = args.spec["bilap_k_ring_neighbor"] # int, bilaplacian on k ring 5 to 20
-    bilap_sample_factor = args.spec["bilap_sample_factor"] # int, put 2
-    elasticity_mode = args.spec["elasticity_mode"] # LinearElasticity or Neohookean
+    # int, bilaplacian on k ring 5 to 20
+    bilap_k_ring_neighbor = args.spec["bilap_k_ring_neighbor"]
+    bilap_sample_factor = args.spec["bilap_sample_factor"]  # int, put 2
+    # LinearElasticity or Neohookean
+    elasticity_mode = args.spec["elasticity_mode"]
     enable_offset = args.spec["enable_offset"]
 
     path_to_para_exe = args.bins[
@@ -465,9 +483,9 @@ if __name__ == "__main__":
     ]  # path to Clough Tocher constraints bin
     path_to_polyfem_exe = args.bins["polyfem_binary"]  # path to polyfem bin
     path_to_matlab_exe = args.bins["matlab_binary"]  # path to matlab exe
-    path_to_toolkit_exe = args.bins["wmtk_c1_cone_split_binary"]  # path to toolkit app
+    # path to toolkit app
+    path_to_toolkit_exe = args.bins["wmtk_c1_cone_split_binary"]
     path_to_generate_cone_exe = args.bins["seamless_con_gen_binary"]
-
 
     # exit(0)
 
@@ -492,7 +510,8 @@ if __name__ == "__main__":
     tets_unsliced = tm.cells_dict["tetra"]
 
     # check orientation, TODO: only do in debug
-    print("[{}] ".format(datetime.datetime.now()), "checking tet orientation ...")
+    print("[{}] ".format(datetime.datetime.now()),
+          "checking tet orientation ...")
     for i in range(tets_unsliced.shape[0]):
         if not orient3d(
             vertices_unsliced[tets_unsliced[i][0]],
@@ -574,7 +593,8 @@ if __name__ == "__main__":
     )
     assert (igl.bfs_orient(para_in_f)[0] == para_in_f).all()
 
-    igl.write_obj(workspace_path + "embedded_surface.obj", para_in_v, para_in_f)
+    igl.write_obj(workspace_path + "embedded_surface.obj",
+                  para_in_v, para_in_f)
     print(
         "[{}] ".format(datetime.datetime.now()),
         "generated embedded_surface.obj for parametrization.",
@@ -650,7 +670,8 @@ if __name__ == "__main__":
     )
 
     # do simplicial embedding
-    print("[{}] ".format(datetime.datetime.now()), "Doing simplicial embedding ...")
+    print("[{}] ".format(datetime.datetime.now()),
+          "Doing simplicial embedding ...")
     tets_regular = copy.deepcopy(tets).tolist()
     tets_vertices_regular = copy.deepcopy(vertices).tolist()
     tet_surface = copy.deepcopy(tet_surface_origin)
@@ -709,13 +730,15 @@ if __name__ == "__main__":
 
     print(
         "[{}] ".format(datetime.datetime.now()),
-        "Done simplicial embedding. Splitted {} tets".format(simplicial_embedding_cnt),
+        "Done simplicial embedding. Splitted {} tets".format(
+            simplicial_embedding_cnt),
     )
 
     ####################################################
     #             Call generate frame field            #
     ####################################################
-    print("[{}] ".format(datetime.datetime.now()), "Calling generate frame field code")
+    print("[{}] ".format(datetime.datetime.now()),
+          "Calling generate frame field code")
     para_command = (
         path_to_generate_cone_exe
         + " --mesh "
@@ -809,11 +832,11 @@ if __name__ == "__main__":
 
     assert len(cone_vids_new) == len(cone_vids)
 
-
     ####################################################
     #             Call Parametrization Code            #
     ####################################################
-    print("[{}] ".format(datetime.datetime.now()), "Calling parametrization code")
+    print("[{}] ".format(datetime.datetime.now()),
+          "Calling parametrization code")
     para_command = (
         path_to_para_exe
         + " --mesh "
@@ -845,9 +868,6 @@ if __name__ == "__main__":
     #       Split the tet with new para vertices       #
     ####################################################
 
-
-
-
     # do not comment out this !!!!
     tets_regular = np.array(tets_regular)
     tets_vertices_regular = np.array(tets_vertices_regular)
@@ -870,7 +890,8 @@ if __name__ == "__main__":
             tid = surface_adj_tet[i][0]
             tet = tets_regular[tid]
             f = p_f[i]
-            f_tet_base = np.array([para_in_v_to_tet_v_map[f[i]] for i in range(3)])
+            f_tet_base = np.array([para_in_v_to_tet_v_map[f[i]]
+                                  for i in range(3)])
             tfs = np.array(
                 [
                     [tet[1], tet[2], tet[3]],
@@ -947,7 +968,8 @@ if __name__ == "__main__":
     with open("cone_split_json.json", "w") as f:
         json.dump(toolkit_json, f)
 
-    print("[{}] ".format(datetime.datetime.now()), "Calling toolkit c1 cone splitting")
+    print("[{}] ".format(datetime.datetime.now()),
+          "Calling toolkit c1 cone splitting")
     toolkit_command = (
         path_to_toolkit_exe + " -j " + workspace_path + "cone_split_json.json"
     )
@@ -1431,7 +1453,8 @@ if __name__ == "__main__":
         # non surface case
         if tid not in tet_surface_para_out:
             # propagate winding number
-            new_winding_numbers[len(tet_after_face_split_tets)] = winding_numbers[tid]
+            new_winding_numbers[len(
+                tet_after_face_split_tets)] = winding_numbers[tid]
             tet_after_face_split_tets.append(tet_after_para_tets[tid])
             continue
 
@@ -1452,7 +1475,8 @@ if __name__ == "__main__":
             new_vid = face_split_f_to_tet_v_map[t_sf]
         else:
             new_vid = len(tet_after_face_split_vertices)
-            new_v_coords = (f_vs_coords[0] + f_vs_coords[1] + f_vs_coords[2]) / 3.0
+            new_v_coords = (f_vs_coords[0] +
+                            f_vs_coords[1] + f_vs_coords[2]) / 3.0
             tet_after_face_split_vertices.append(new_v_coords.tolist())
             face_split_f_to_tet_v_map[t_sf] = new_vid
         assert new_vid != -1
@@ -1477,13 +1501,15 @@ if __name__ == "__main__":
 
         for new_t in new_tets:
             # propagate winding number
-            new_winding_numbers[len(tet_after_face_split_tets)] = winding_numbers[tid]
+            new_winding_numbers[len(
+                tet_after_face_split_tets)] = winding_numbers[tid]
             tet_after_face_split_tets.append(new_t)
 
     print("[{}] ".format(datetime.datetime.now()), "Done Face Split.")
     # save tetmesh to msh, use gmsh to create high order nodes
     tet_points_after_face_split = np.array(tet_after_face_split_vertices)
-    tet_cells_after_face_split = [("tetra", np.array(tet_after_face_split_tets))]
+    tet_cells_after_face_split = [
+        ("tetra", np.array(tet_after_face_split_tets))]
     tetmesh_after_face_split = mio.Mesh(
         tet_points_after_face_split, tet_cells_after_face_split
     )
@@ -1505,7 +1531,8 @@ if __name__ == "__main__":
     #                   Call CT Code                   #
     ####################################################
 
-    print("[{}] ".format(datetime.datetime.now()), "Calling Clough Tocher code")
+    print("[{}] ".format(datetime.datetime.now()),
+          "Calling Clough Tocher code")
     # ct_command = path_to_ct_exe + " --input " + workspace_path + "parameterized_mesh_splitted.obj -o CT"
     ct_command = (
         path_to_ct_exe
@@ -1522,11 +1549,13 @@ if __name__ == "__main__":
     ####################################################
     print("[{}] ".format(datetime.datetime.now()), "smoothing cone area")
 
-    c_area_vertices = np.loadtxt("CT_bilaplacian_nodes_values_cone_area_vertices.txt").astype(np.int32)
+    c_area_vertices = np.loadtxt(
+        "CT_bilaplacian_nodes_values_cone_area_vertices.txt").astype(np.int32)
     c_area_vertices = np.unique(c_area_vertices)
 
     ryan_mesh = mio.read("CT_from_lagrange_nodes.msh")
-    cone_area_face = np.loadtxt("CT_bilaplacian_nodes_values_cone_area_faces.txt").astype(np.int32)
+    cone_area_face = np.loadtxt(
+        "CT_bilaplacian_nodes_values_cone_area_faces.txt").astype(np.int32)
     cone_area_vertices = []
     tris = ryan_mesh.cells[0].data
     v_upsample_local, f_upsample_local = sample1(bilap_sample_factor)
@@ -1541,7 +1570,8 @@ if __name__ == "__main__":
 
         if any(tt[k] in c_area_vertices for k in range(10)):
             # print(i)
-            cone_area_vertices.extend(range(offset, offset + v_upsample_local.shape[0]))
+            cone_area_vertices.extend(
+                range(offset, offset + v_upsample_local.shape[0]))
 
         nodes = ryan_mesh.points[tt]
         newv = eval_lagr(v_upsample_local, nodes)
@@ -1554,7 +1584,8 @@ if __name__ == "__main__":
     f_upsample = np.row_stack(f_upsample)
     cone_area_vertices = np.array(cone_area_vertices)
 
-    SV,SVI,SVJ,SF = igl.remove_duplicate_vertices(v_upsample, f_upsample, 1e-10)
+    SV, SVI, SVJ, SF = igl.remove_duplicate_vertices(
+        v_upsample, f_upsample, 1e-10)
     cone_area_vertices = SVJ[cone_area_vertices]
     print(cone_area_vertices.shape)
     # SF = SVJ(f_upsample)
@@ -1574,10 +1605,9 @@ if __name__ == "__main__":
         cone_area_vertices_expanded = cone_area_vertices.tolist()
         for vv in cone_area_vertices:
             cone_area_vertices_expanded.extend(vv_adj[vv])
-        cone_area_vertices_expanded = np.unique(np.array(cone_area_vertices_expanded))
+        cone_area_vertices_expanded = np.unique(
+            np.array(cone_area_vertices_expanded))
         cone_area_vertices = cone_area_vertices_expanded
-
-
 
     # v_ct, _, _, f_ct, _, _ = igl.read_obj("CT_bilaplacian_nodes_values.obj")
     # cone_area_vertices = np.loadtxt("CT_bilaplacian_nodes_values_cone_area_vertices.txt").astype(np.int32)
@@ -1591,7 +1621,6 @@ if __name__ == "__main__":
     #         cone_area_vertices_expanded.extend(vv_adj[vv])
     #     cone_area_vertices_expanded = np.unique(np.array(cone_area_vertices_expanded))
     #     cone_area_vertices = cone_area_vertices_expanded
-    
 
     L_w = igl.cotmatrix(v_ct, f_ct)
     M = igl.massmatrix(v_ct, f_ct)
@@ -1610,13 +1639,12 @@ if __name__ == "__main__":
             non_cone_area_vertices.append(i)
     non_cone_area_vertices = np.array(non_cone_area_vertices)
 
-
     A = L_w @ M_inv @ L_w
     B = np.zeros((A.shape[0], 3))
     known = non_cone_area_vertices
     Y = v_ct[known]
     unknown = cone_area_vertices
-    
+
     # freeze input vertex
     # xyz = v_ct[freeze_nodes]
     # with open("frozen_vertices.xyz", "w") as f:
@@ -1628,9 +1656,9 @@ if __name__ == "__main__":
     # # exit()
     # Y = v_ct[known]
     # unknown = np.setdiff1d(np.arange(0, v_ct.shape[0]), known)
-    
-    Aeq = scipy.sparse.csr_matrix(np.zeros((0,0)))
-    Beq = np.zeros((0,3))
+
+    Aeq = scipy.sparse.csr_matrix(np.zeros((0, 0)))
+    Beq = np.zeros((0, 3))
 
     print("solving bilaplacian on upsampled")
     v_smoothed = igl.min_quad_with_fixed(A, B, known, Y, Aeq, Beq, True)
@@ -1654,8 +1682,10 @@ if __name__ == "__main__":
     m_xx = mio.Mesh(m_xx_points, [('triangle10', m_xx_cells)])
     m_xx.write("this_is_correct.msh", file_format='gmsh')
 
-    smoothed_normals = igl.per_vertex_normals(m_xx_points, ryan_mesh.cells[0].data[:, :3], 1)
-    igl.write_obj("CT_smoothed_cone.obj", m_xx_points, ryan_mesh.cells[0].data[:, :3])
+    smoothed_normals = igl.per_vertex_normals(
+        m_xx_points, ryan_mesh.cells[0].data[:, :3], 1)
+    igl.write_obj("CT_smoothed_cone.obj", m_xx_points,
+                  ryan_mesh.cells[0].data[:, :3])
 
     np.savetxt("CT_smoothed_normals.txt", smoothed_normals)
 
@@ -1663,7 +1693,6 @@ if __name__ == "__main__":
     with open("unsmoothed_cones.xyz", "w") as f:
         for i in range(xyz.shape[0]):
             f.write("{} {} {}\n".format(xyz[i][0], xyz[i][1], xyz[i][2]))
-
 
     # fit poly
     print("fit control points to sampled cubic polynomial")
@@ -1695,7 +1724,7 @@ if __name__ == "__main__":
     #             lagr8(v_upsample_local[:,0], v_upsample_local[:,1]),
     #             lagr9(v_upsample_local[:,0], v_upsample_local[:,1])
     #         ]).T
-        
+
     #     b_debug = v_smoothed_in_patch[i*v_upsample_local.shape[0]:(i+1) *v_upsample_local.shape[0], :]
 
     #     ATA = A_debug.T @ A_debug
@@ -1709,20 +1738,21 @@ if __name__ == "__main__":
 
     # exit()
 
-    print("v_sample_local size: ",v_upsample_local.shape)
+    print("v_sample_local size: ", v_upsample_local.shape)
     for i, tt in enumerate(tris):
-        v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]: (i+1) * v_upsample_local.shape[0], :]
+        v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]
+            : (i+1) * v_upsample_local.shape[0], :]
         A_fit_local = np.array([
-            lagr0(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr1(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr2(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr3(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr4(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr5(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr6(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr7(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr8(v_upsample_local[:,0], v_upsample_local[:,1]),
-            lagr9(v_upsample_local[:,0], v_upsample_local[:,1])
+            lagr0(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr1(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr2(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr3(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr4(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr5(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr6(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr7(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr8(v_upsample_local[:, 0], v_upsample_local[:, 1]),
+            lagr9(v_upsample_local[:, 0], v_upsample_local[:, 1])
         ])
         # print(A_fit_local.shape)
         A_fit_local = A_fit_local.T
@@ -1734,7 +1764,6 @@ if __name__ == "__main__":
         nodes = ryan_mesh.points[tt]
         newv = eval_lagr(v_upsample_local, nodes)
 
-        
         # if np.linalg.norm(A_fit_local@ nodes -newv) > 1e-15:
         #     print("test: ", np.linalg.norm(A_fit_local@ nodes -newv))
 
@@ -1756,7 +1785,7 @@ if __name__ == "__main__":
             P_fit_rows.append(i * A_fit_local.shape[1] + k)
             P_fit_cols.append(tt[k])
             P_fit_values.append(1.0)
-        
+
         for k in range(A_fit_local.shape[0]):
             b_fit.append(v_s_local[k])
 
@@ -1772,15 +1801,16 @@ if __name__ == "__main__":
     print(A_fit_values.shape)
 
     b_fit = np.array(b_fit)
-    A_fit = scipy.sparse.coo_array((A_fit_values, (A_fit_rows, A_fit_cols)), shape=(b_fit.shape[0], 10*tris.shape[0]))
+    A_fit = scipy.sparse.coo_array((A_fit_values, (A_fit_rows, A_fit_cols)), shape=(
+        b_fit.shape[0], 10*tris.shape[0]))
     # A_fit = scipy.sparse.coo_array((A_fit_values, (A_fit_rows, A_fit_cols)), shape=(b_fit.shape[0], ryan_mesh.points.shape[0]))
 
-    P_fit = scipy.sparse.coo_array((P_fit_values, (P_fit_rows, P_fit_cols)), shape=(10 * tris.shape[0], ryan_mesh.points.shape[0]))
+    P_fit = scipy.sparse.coo_array((P_fit_values, (P_fit_rows, P_fit_cols)), shape=(
+        10 * tris.shape[0], ryan_mesh.points.shape[0]))
 
     A_lsq = A_fit @ P_fit
     # A_lsq = A_fit
     A_lsq = A_lsq.tocsr()
-
 
     # fitting normal
     linear_mesh = mio.read("CT_bilaplacian_nodes.obj")
@@ -1799,13 +1829,16 @@ if __name__ == "__main__":
     M_inv_rows_sti = np.array([i for i in range(M_sti.shape[0])])
     M_inv_cols_sti = np.array([i for i in range(M_sti.shape[1])])
     M_inv_data_sti = np.array([(1.0 / M_sti[i, i]) for i in M_inv_rows_sti])
-    M_inv_data_sti_sqrt = np.array([1.0 / np.sqrt(M_sti[i, i]) for i in M_inv_rows_sti])
+    M_inv_data_sti_sqrt = np.array(
+        [1.0 / np.sqrt(M_sti[i, i]) for i in M_inv_rows_sti])
     M_size_sti = len(M_inv_cols_sti)
     M_inv_sti = scipy.sparse.csc_matrix(
-        (M_inv_data_sti, (M_inv_rows_sti, M_inv_cols_sti)), shape=(M_size_sti, M_size_sti)
+        (M_inv_data_sti, (M_inv_rows_sti, M_inv_cols_sti)), shape=(
+            M_size_sti, M_size_sti)
     )
     M_inv_sti_sqrt = scipy.sparse.csc_matrix(
-        (M_inv_data_sti_sqrt, (M_inv_rows_sti, M_inv_cols_sti)), shape=(M_size_sti, M_size_sti)
+        (M_inv_data_sti_sqrt, (M_inv_rows_sti, M_inv_cols_sti)), shape=(
+            M_size_sti, M_size_sti)
     )
 
     A_sti = M_inv_sti_sqrt @ L_w_sti @ A_lsq_sti
@@ -1813,8 +1846,8 @@ if __name__ == "__main__":
     b_sti = M_inv_sti @ L_w_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
     # M_inv_sti @ L_w_sti @ v_ct - A_sti @ linear_points
 
-    A_sti =  L_w_sti @ A_lsq_sti
-    b_sti =  L_w_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
+    A_sti = L_w_sti @ A_lsq_sti
+    b_sti = L_w_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
 
     print(A_lsq_sti.shape)
     print(v_smoothed[1].shape)
@@ -1823,7 +1856,6 @@ if __name__ == "__main__":
     A_sti_2 = M_inv_sti_sqrt @ A_lsq_sti
     b_sti_2 = M_inv_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
 
-    
     # exit()
 
     free_node_ids = c_area_vertices
@@ -1838,7 +1870,8 @@ if __name__ == "__main__":
     print(A_fixed_cols.shape)
     print(A_fixed_values.shape)
 
-    A_fixed = scipy.sparse.coo_array((A_fixed_values, (A_fixed_rows, A_fixed_cols)), shape=(fixed_node_ids.shape[0], ryan_mesh.points.shape[0]))
+    A_fixed = scipy.sparse.coo_array((A_fixed_values, (A_fixed_rows, A_fixed_cols)), shape=(
+        fixed_node_ids.shape[0], ryan_mesh.points.shape[0]))
     b_fixed = ryan_mesh.points[fixed_node_ids]
 
     print(A_lsq.shape)
@@ -1848,15 +1881,15 @@ if __name__ == "__main__":
 
     print(ATA.shape)
 
-    print("xxxxx: ",np.linalg.norm(A_lsq @ ryan_mesh.points - v_upsample))
-
+    print("xxxxx: ", np.linalg.norm(A_lsq @ ryan_mesh.points - v_upsample))
 
     # print(A_lsq[28:28*2,:] @ ryan_mesh.points)
     # print(v_upsample[:28])
     i = 4
-    print("xxxx: ",A_lsq[[28*i+1],:])
-    print("xxx: ",tris[i])
-    print(np.linalg.norm(A_lsq[28 * i:28*(i+1),:] @ ryan_mesh.points- v_upsample[28*i:28*(i+1)],axis=1))
+    print("xxxx: ", A_lsq[[28*i+1], :])
+    print("xxx: ", tris[i])
+    print(np.linalg.norm(A_lsq[28 * i:28*(i+1), :] @
+          ryan_mesh.points - v_upsample[28*i:28*(i+1)], axis=1))
     print(v_upsample[28*i+1])
     print(ryan_mesh.points[3])
 
@@ -1869,13 +1902,12 @@ if __name__ == "__main__":
 
     # node_pos = scipy.sparse.linalg.spsolve(lhs.tocsr(), rhs)
 
-    rrr_x = scipy.sparse.linalg.lsqr(A_lsq, b_fit[:,0])
-    rrr_y = scipy.sparse.linalg.lsqr(A_lsq, b_fit[:,1])
-    rrr_z = scipy.sparse.linalg.lsqr(A_lsq, b_fit[:,2])
+    rrr_x = scipy.sparse.linalg.lsqr(A_lsq, b_fit[:, 0])
+    rrr_y = scipy.sparse.linalg.lsqr(A_lsq, b_fit[:, 1])
+    rrr_z = scipy.sparse.linalg.lsqr(A_lsq, b_fit[:, 2])
 
     rrr = np.vstack((rrr_x[0], rrr_y[0], rrr_z[0])).T
     print(rrr.shape)
-
 
     # exit()
 
@@ -1888,14 +1920,14 @@ if __name__ == "__main__":
     m_fit = mio.Mesh(fit_points, [('triangle10', fit_cells)])
     m_fit.write("fit_p3.msh", file_format='gmsh')
 
-
     # exit()
 
     ####################################################
     #             Call CT with new normals             #
     ####################################################
 
-    print("[{}] ".format(datetime.datetime.now()), "Calling Clough Tocher code with new normals")
+    print("[{}] ".format(datetime.datetime.now()),
+          "Calling Clough Tocher code with new normals")
     ct_command_2 = (
         path_to_ct_exe
         + " --input "
@@ -1904,7 +1936,6 @@ if __name__ == "__main__":
     )
 
     subprocess.run(ct_command_2, shell=True, check=True)
-
 
     ####################################################
     #          Map tri langrange nodes to tet          #
@@ -1939,7 +1970,8 @@ if __name__ == "__main__":
             surface_input_to_output_v_map[int(values[0])] = int(values[1])
             surface_output_to_input_v_map[int(values[1])] = int(values[0])
 
-    surface_high_order_conn_with_input_v_idx = copy.deepcopy(surface_high_order_conn)
+    surface_high_order_conn_with_input_v_idx = copy.deepcopy(
+        surface_high_order_conn)
     surface_high_order_vertices_with_input_v_idx = copy.deepcopy(
         surface_high_order_vertices
     )
@@ -2061,7 +2093,8 @@ if __name__ == "__main__":
         tet_face_to_vertices[f123_str] = tet[19]
 
     print(
-        "[{}] ".format(datetime.datetime.now()), "constructing tri <-> tet v mappings"
+        "[{}] ".format(datetime.datetime.now()
+                       ), "constructing tri <-> tet v mappings"
     )
     # map high order tri vertices to tet vertices
     tri_to_tet_high_order_v_map = {}
@@ -2122,10 +2155,13 @@ if __name__ == "__main__":
     curved_cells = [("tetra20", curved_tet_conn)]
 
     curved_tetmesh = mio.Mesh(curved_points, curved_cells)
-    curved_tetmesh.write(workspace_path + curved_tet_file_name, file_format="gmsh")
+    curved_tetmesh.write(
+        workspace_path + curved_tet_file_name, file_format="gmsh")
 
-    linear_tetmesh = mio.Mesh(tetmesh_high_order.points, tetmesh_high_order.cells)
-    linear_tetmesh.write(workspace_path + linear_tet_file_name, file_format="gmsh")
+    linear_tetmesh = mio.Mesh(
+        tetmesh_high_order.points, tetmesh_high_order.cells)
+    linear_tetmesh.write(
+        workspace_path + linear_tet_file_name, file_format="gmsh")
 
     delta_mesh_points = curved_tetmesh.points - linear_tetmesh.points
     delta_mesh_cells = []
@@ -2195,8 +2231,10 @@ if __name__ == "__main__":
             else:
                 file.write(str(i) + " 1\n")
 
-    debug_incident_tetmesh = mio.Mesh(linear_tetmesh.points, [("tetra20", np.array(debug_cells))])
-    debug_incident_tetmesh.write("debug_incident_tetmesh.msh", file_format='gmsh')
+    debug_incident_tetmesh = mio.Mesh(
+        linear_tetmesh.points, [("tetra20", np.array(debug_cells))])
+    debug_incident_tetmesh.write(
+        "debug_incident_tetmesh.msh", file_format='gmsh')
 
     ####################################################
     #           Constuct Constraint Matrix             #
@@ -2210,7 +2248,8 @@ if __name__ == "__main__":
     edge_end_point_matrix = scipy.io.mmread(
         "CT_edge_endpoint_constraint_matrix_eliminated.txt"
     )
-    edge_mid_point_matrix = scipy.io.mmread("CT_edge_midpoint_constraint_matrix.txt")
+    edge_mid_point_matrix = scipy.io.mmread(
+        "CT_edge_midpoint_constraint_matrix.txt")
 
     full_matrix = scipy.sparse.vstack(
         (interior_matrix, edge_end_point_matrix, edge_mid_point_matrix)
@@ -2236,7 +2275,8 @@ if __name__ == "__main__":
         f.create_dataset("b", data=b)
 
     local2global_matrix_rows = [i for i in range(local2global.shape[0])]
-    local2global_matrix_cols = [local2global[i] for i in range(local2global.shape[0])]
+    local2global_matrix_cols = [local2global[i]
+                                for i in range(local2global.shape[0])]
     local2global_matrix_data = [1.0] * local2global.shape[0]
 
     with h5py.File(workspace_path + "local2global_matrix.hdf5", "w") as f:
@@ -2251,14 +2291,16 @@ if __name__ == "__main__":
             "weight_triplets/rows",
             data=np.array(local2global_matrix_rows).astype(np.int32),
         )
-        f["weight_triplets"].attrs["shape"] = (local2global.shape[0], v.shape[0])
+        f["weight_triplets"].attrs["shape"] = (
+            local2global.shape[0], v.shape[0])
 
     ####################################################
     #           Expanding Constraint Matrix            #
     ####################################################
     interior = scipy.io.mmread("CT_interior_constraint_matrix.txt")
     midpoint = scipy.io.mmread("CT_edge_midpoint_constraint_matrix.txt")
-    endpoint = scipy.io.mmread("CT_edge_endpoint_constraint_matrix_eliminated.txt")
+    endpoint = scipy.io.mmread(
+        "CT_edge_endpoint_constraint_matrix_eliminated.txt")
     cone = scipy.io.mmread("CT_cone_constraint_matrix.txt")
 
     local2global = np.loadtxt(
@@ -2374,8 +2416,10 @@ if __name__ == "__main__":
 
     with h5py.File("CT_constraint_with_cone_tet_ids.hdf5", "w") as f:
         f.create_dataset("A_triplets/values", data=full_trip.data)
-        f.create_dataset("A_triplets/cols", data=full_trip.col.astype(np.int32))
-        f.create_dataset("A_triplets/rows", data=full_trip.row.astype(np.int32))
+        f.create_dataset("A_triplets/cols",
+                         data=full_trip.col.astype(np.int32))
+        f.create_dataset("A_triplets/rows",
+                         data=full_trip.row.astype(np.int32))
         f.create_dataset("A_triplets/shape", data=full_trip.shape)
         f.create_dataset("b", data=b[:, None])
 
@@ -2402,7 +2446,8 @@ if __name__ == "__main__":
         # faces
         ff_sorted = [ff[0], ff[1], ff[2]]
         ff_sorted.sort()
-        ff_str = str(ff_sorted[0]) + "+" + str(ff_sorted[1]) + "+" + str(ff_sorted[2])
+        ff_str = str(ff_sorted[0]) + "+" + \
+            str(ff_sorted[1]) + "+" + str(ff_sorted[2])
         bd_v.append(tet_face_to_vertices[ff_str])
     bd_v = np.unique(np.array(bd_v))
 
@@ -2503,7 +2548,8 @@ if __name__ == "__main__":
 
     full_matrix_tet_row = full_matrix_row
     full_matrix_tet_col = np.array(
-        [local2global[full_matrix_col[i]] for i in range(full_matrix_col.shape[0])]
+        [local2global[full_matrix_col[i]]
+            for i in range(full_matrix_col.shape[0])]
     )
     full_matrix_tet_data = full_matrix_data
 
@@ -2521,7 +2567,8 @@ if __name__ == "__main__":
         f.create_dataset("C/rows", data=np.array(full_matrix_tet.row))
         f.create_dataset(
             "C/shape",
-            data=np.array([full_matrix_tet.shape[0], full_matrix_tet.shape[1]]),
+            data=np.array([full_matrix_tet.shape[0],
+                          full_matrix_tet.shape[1]]),
         )
 
     with h5py.File(workspace_path + "matlab_input_dirichlet_matrix.hdf5", "w") as f:
@@ -2548,7 +2595,8 @@ if __name__ == "__main__":
 
     cone_matrix_tet_row = cone_matrix_row
     cone_matrix_tet_col = np.array(
-        [local2global_cone[cone_matrix_col[i]] for i in range(cone_matrix_col.shape[0])]
+        [local2global_cone[cone_matrix_col[i]]
+            for i in range(cone_matrix_col.shape[0])]
     )
     cone_matrix_tet_data = cone_matrix_data
     cone_matrix_tet = scipy.sparse.coo_array(
@@ -2562,7 +2610,8 @@ if __name__ == "__main__":
         f.create_dataset("C_cone/rows", data=np.array(cone_matrix_tet.row))
         f.create_dataset(
             "C_cone/shape",
-            data=np.array([cone_matrix_tet.shape[0], cone_matrix_tet.shape[1]]),
+            data=np.array([cone_matrix_tet.shape[0],
+                          cone_matrix_tet.shape[1]]),
         )
 
     # exit()
@@ -2686,7 +2735,7 @@ if __name__ == "__main__":
     # smoothed_mesh = mio.read("CT_smoothed_cone.obj")
     # smoothed_points =  smoothed_mesh.points
     smoothed_mesh = mio.read("fit_p3.msh")
-    smoothed_points =  smoothed_mesh.points
+    smoothed_points = smoothed_mesh.points
     # smoothed_mesh = mio.read("CT_from_lagrange_nodes.msh")
     # smoothed_points = smoothed_mesh.points
     linear_mesh = mio.read("CT_bilaplacian_nodes.obj")
@@ -2845,7 +2894,6 @@ if __name__ == "__main__":
             },
         }
 
-    
     with open("constraints.json", "w") as f:
         json.dump(c_json, f)
 
@@ -2855,7 +2903,8 @@ if __name__ == "__main__":
     print("[{}] ".format(datetime.datetime.now()), "calling polyfem")
 
     # print("Calling Polyfem")
-    polyfem_command = path_to_polyfem_exe + " -j " + workspace_path + "constraints.json --log_level 0"
+    polyfem_command = path_to_polyfem_exe + " -j " + \
+        workspace_path + "constraints.json --log_level 0"
     print(polyfem_command)
     subprocess.run(polyfem_command, shell=True, check=True)
 
@@ -2879,7 +2928,8 @@ if __name__ == "__main__":
         new_winding_number_total = np.zeros(
             (len(polyfem_mesh.cells[0]), 1)
         )
-    new_winding_number_total[: len(polyfem_mesh.cells[0])] = new_winding_number_list
+    new_winding_number_total[: len(
+        polyfem_mesh.cells[0])] = new_winding_number_list
 
     polyfem_mesh.cell_data["winding"] = new_winding_number_total[:, None]
     polyfem_mesh.write(output_name + "_final_winding.vtu")

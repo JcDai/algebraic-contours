@@ -83,3 +83,18 @@ Eigen::Matrix<double, 10, 10> p3_lag2bezier_m() {
 
   return p3_lag2bezier_mat;
 }
+
+Eigen::Matrix<double, 10, 10> p3_bezier2lag_m() {
+  double c[10][10];
+  p3_bezier2lag_matrix(c);
+
+  Eigen::Matrix<double, 10, 10> p3_bezier2lag_mat;
+
+  for (int i = 0; i < 10; ++i) {
+    for (int j = 0; j < 10; ++j) {
+      p3_bezier2lag_mat(i, j) = c[i][j];
+    }
+  }
+
+  return p3_bezier2lag_mat;
+}
