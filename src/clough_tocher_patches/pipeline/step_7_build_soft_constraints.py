@@ -60,7 +60,7 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     SV, SVI, SVJ, SF = igl.remove_duplicate_vertices(
         v_upsample, f_upsample, 1e-10)
     cone_area_vertices = SVJ[cone_area_vertices]
-    print(cone_area_vertices.shape)
+    # print(cone_area_vertices.shape)
     # SF = SVJ(f_upsample)
 
     freeze_nodes = [SVJ[i] for i in freeze_nodes]
@@ -153,7 +153,7 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     P_fit_values = []
     b_fit = []
 
-    print("v_sample_local size: ", v_upsample_local.shape)
+    # print("v_sample_local size: ", v_upsample_local.shape)
     for i, tt in enumerate(tris):
         v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]: (i+1) * v_upsample_local.shape[0], :]
         A_fit_local = np.array([
@@ -210,9 +210,9 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     P_fit_cols = np.array(P_fit_cols)
     P_fit_values = np.array(P_fit_values)
 
-    print(A_fit_rows.shape)
-    print(A_fit_cols.shape)
-    print(A_fit_values.shape)
+    # print(A_fit_rows.shape)
+    # print(A_fit_cols.shape)
+    # print(A_fit_values.shape)
 
     b_fit = np.array(b_fit)
     A_fit = scipy.sparse.coo_array((A_fit_values, (A_fit_rows, A_fit_cols)), shape=(
@@ -263,8 +263,8 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     A_sti = L_w_sti @ A_lsq_sti
     b_sti = L_w_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
 
-    print(A_lsq_sti.shape)
-    print(v_smoothed[1].shape)
+    # print(A_lsq_sti.shape)
+    # print(v_smoothed[1].shape)
 
     eps = 1
     A_sti_2 = M_inv_sti_sqrt @ A_lsq_sti
@@ -280,20 +280,20 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     A_fixed_cols = fixed_node_ids
     A_fixed_values = np.ones(fixed_node_ids.shape[0])
 
-    print(A_fixed_rows.shape)
-    print(A_fixed_cols.shape)
-    print(A_fixed_values.shape)
+    # print(A_fixed_rows.shape)
+    # print(A_fixed_cols.shape)
+    # print(A_fixed_values.shape)
 
     A_fixed = scipy.sparse.coo_array((A_fixed_values, (A_fixed_rows, A_fixed_cols)), shape=(
         fixed_node_ids.shape[0], ryan_mesh.points.shape[0]))
     b_fixed = ryan_mesh.points[fixed_node_ids]
 
-    print(A_lsq.shape)
+    # print(A_lsq.shape)
     # solve ATAx = ATb
     ATA = A_lsq.T @ A_lsq
     ATb = A_lsq.T @ b_fit
 
-    print(ATA.shape)
+    # print(ATA.shape)
 
     # print("xxxxx: ", np.linalg.norm(A_lsq @ ryan_mesh.points - v_upsample))
 
@@ -321,7 +321,7 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     rrr_z = scipy.sparse.linalg.lsqr(A_lsq, b_fit[:, 2])
 
     rrr = np.vstack((rrr_x[0], rrr_y[0], rrr_z[0])).T
-    print(rrr.shape)
+    # print(rrr.shape)
 
     # exit()
 
@@ -380,9 +380,9 @@ def soft_constraint_fit_normal(workspace_path, tri_to_tet_index_mapping_file, li
     b2l_full_mat = scipy.io.mmread(b2l_mat_file)
     A_3 = (A_sti @ b2l_full_mat).tocoo(True)
 
-    print("soft shape: ", A_3.shape)
-    print("A_sti: ", A_sti.shape)
-    print("#v: ", v.shape[0])
+    # print("soft shape: ", A_3.shape)
+    # print("A_sti: ", A_sti.shape)
+    # print("#v: ", v.shape[0])
 
     with h5py.File("soft.hdf5", "w") as file:
         file.create_dataset("b", data=b_3)
