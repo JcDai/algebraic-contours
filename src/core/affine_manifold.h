@@ -80,6 +80,9 @@ struct EdgeManifoldChart {
   PlanarPoint reverse_right_global_uv_position;
 
   std::array<int64_t, 4> lagrange_nodes;
+
+  // for beizer cone constraint
+  bool processed = false;
 };
 
 /// Local layout manifold chart in R2 of a triangle.
@@ -177,6 +180,8 @@ public:
   /// @return chart for the given edge
   EdgeManifoldChart const &get_edge_chart(Index face_index,
                                           Index face_vertex_index) const;
+
+  EdgeManifoldChart &get_edge_chart(Index face_index, Index face_vertex_index);
 
   /// Get an isometric chart for the given face.
   ///

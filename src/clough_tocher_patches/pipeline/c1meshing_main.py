@@ -48,6 +48,7 @@ if __name__ == "__main__":
     # LinearElasticity or Neohookean
     elasticity_mode = args.spec["elasticity_mode"]
     enable_offset = args.spec["enable_offset"]
+    drop_unrelated_tet = args.spec["drop_unrelated_tet"]
 
     path_to_para_exe = args.bins[
         "seamless_parametrization_binary"
@@ -65,7 +66,7 @@ if __name__ == "__main__":
 
     # step 1 read
     tets, vertices, winding_numbers, tet_surface_origin, surface_adj_tet, para_in_v, para_in_f, para_in_v_to_tet_v_map, surface_tet_faces, surface_vertices = read_and_generate_embedded_surface(
-        workspace_path, input_file, debug=True)
+        workspace_path, input_file, slice=drop_unrelated_tet, debug=True)
 
     tets_regular, tets_vertices_regular, surface_adj_tet, tet_surface, winding_numbers = simplicial_embedding(
         tets, vertices, winding_numbers, tet_surface_origin, surface_adj_tet, surface_tet_faces)

@@ -91,4 +91,10 @@ public:
 
   void bezier2lag_full_mat(Eigen::SparseMatrix<double> &m);
   void lag2bezier_full_mat(Eigen::SparseMatrix<double> &m);
+
+  // beizer with cones
+  void bezier_cone_constraints_expanded(
+      Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
+      std::map<int64_t, int> &independent_node_map,
+      std::vector<bool> &node_assigned, const Eigen::MatrixXd &v_normals);
 };

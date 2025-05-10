@@ -2562,3 +2562,232 @@ void CloughTocherSurface::Ci_cone_bezier(const Eigen::SparseMatrix<double> &m,
     }
   }
 }
+
+std::array<int64_t, 19> Cone_face_node_helper(const int lid1, const int lid2) {
+  // assume lid1 is the cone local id in some triangle
+  // 0:p0 1:p1 2:p2 3:p01 4:p10 5:p12 6:p21 7:p20 8:p02 9:p01^m 10:p12^m
+  // 11:p20^m 12:p0c 13:pc0 14:p1c 15:pc1 16:p2c 17:pc2 18:pc
+  switch (lid1 * 10 + lid2) {
+  case 1:
+    return {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}};
+
+  case 10:
+    return {{1, 0, 2, 4, 3, 8, 7, 6, 5, 9, 11, 10, 14, 15, 12, 13, 16, 17, 18}};
+
+  case 12:
+    return {{1, 2, 0, 5, 6, 7, 8, 3, 4, 10, 11, 9, 14, 15, 16, 17, 12, 13, 18}};
+
+  case 21:
+    return {{2, 1, 0, 6, 5, 4, 3, 8, 7, 10, 9, 11, 16, 17, 14, 15, 12, 13, 18}};
+
+  case 20:
+    return {{2, 0, 1, 7, 8, 3, 4, 5, 6, 11, 9, 10, 16, 17, 12, 13, 14, 15, 18}};
+
+  case 2:
+    return {{0, 2, 1, 8, 7, 6, 5, 4, 3, 11, 10, 9, 16, 17, 12, 13, 14, 15, 18}};
+
+  default:
+    break;
+  }
+
+  return {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+           -1, -1}};
+}
+
+void CloughTocherSurface::bezier_cone_constraints_expanded(
+    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
+    std::map<int64_t, int> &independent_node_map,
+    std::vector<bool> &node_assigned, const Eigen::MatrixXd &v_normals) {
+
+  Eigen::Matrix<double, 5, 7> K_N;
+  K_N << 1, 0, 0, 0, 0, 0, 0, // p0
+      0, 1, 0, 0, 0, 0, 0,    // p1
+      -3, 0, 3, 0, 0, 0, 0,   // d01
+      0, -3, 0, 3, 0, 0, 0,   // d10
+      -3. / 8., -3. / 8., -9. / 8., -9. / 8., 3. / 4., 3. / 4.,
+      3. / 2.; // h01 redundant
+
+  const Eigen::Matrix<double, 5, 1> c_e = c_e_m();
+  const Eigen::Matrix<double, 7, 1> c_hij = c_hij_m();
+
+  // m has size 3*#node by 3*#node expanded for xyz, node i has row 3*i + 0/1/2
+  // for x/y/z
+
+  auto &v_charts = m_affine_manifold.m_vertex_charts;
+  auto &e_charts = m_affine_manifold.m_edge_charts;
+  auto &f_charts = m_affine_manifold.m_face_charts;
+
+  const auto &F = m_affine_manifold.get_faces();
+
+  for (size_t vid = 0; vid < v_charts.size(); ++vid) {
+    auto &v_chart = v_charts[vid];
+
+    if (!v_chart.is_cone) {
+      // check: non-cone vertex can be adjacent to at most one cone
+      // TODO:: setup in debug
+      int cone_cnt = 0;
+      for (const auto &v_one_ring : v_chart.vertex_one_ring) {
+        if (v_charts[v_one_ring].is_cone) {
+          cone_cnt++;
+        }
+      }
+
+      if (cone_cnt == 0) {
+        assert(!v_chart.is_cone_adjacent);
+      } else if (cone_cnt == 1) {
+        assert(v_chart.is_cone_adjacent);
+      } else if (cone_cnt > 1) {
+        assert(false);
+        throw std::runtime_error(
+            "non-cone vertex is adjacent to more than one cone, cannot setup "
+            "cone constraint! Try moving the cones or denser meshes!");
+      }
+    }
+
+    // cone case
+    // compute base on one ring edges
+
+    const Eigen::Vector3d &ni = v_normals.row(vid);
+    int ni_max_entry = 0;
+    for (int i = 0; i < 3; ++i) {
+      if (std::abs(ni[i]) > std::abs(ni[ni_max_entry])) {
+        ni_max_entry = i;
+      }
+    }
+
+    const auto &vids_one_ring = v_chart.vertex_one_ring;
+    const auto &fids_one_ring = v_chart.face_one_ring;
+    std::map<int64_t, bool> processed_vid; // record vid (edge chart) in one
+                                           // ring that has been processed
+    for (size_t i = 0; i < vids_one_ring.size(); ++i) {
+      processed_vid[i] = false;
+    }
+    processed_vid[vid] = true;
+
+    // iterate faces, get unprocessed edges
+    for (const auto &fid : fids_one_ring) {
+      for (int i = 0; i < 3; ++i) {
+        if (F.row(fid)[i] != vid) {
+          auto &e_chart = m_affine_manifold.get_edge_chart(fid, i);
+
+          // TODO: deal with boundary
+          // find an unprocessed vertex/edge to process
+          const auto &ev0 = e_chart.left_vertex_index;
+          const auto &ev1 = e_chart.right_vertex_index;
+          assert(ev0 == vid || ev1 == vid);
+
+          if (processed_vid[ev0] && processed_vid[ev1]) {
+            // proccessed edge, skip
+            assert(e_chart.processed == true);
+            continue;
+          }
+
+          const auto &fid_top = e_chart.top_face_index;
+          const auto &fid_bot = e_chart.bottom_face_index;
+          auto &f_chart_top = f_charts[fid_top];
+          auto &f_chart_bot = f_charts[fid_bot];
+          const auto &F_top = F.row(fid_top);
+          const auto &F_bot = F.row(fid_bot);
+
+          int lid1_top = -1, lid2_top = -1, lid1_bot = -1, lid2_bot = -1;
+          for (int i = 0; i < 3; ++i) {
+            if (F_top[i] == ev0) {
+              lid1_top = i;
+            }
+            if (F_top[i] == ev1) {
+              lid2_top = i;
+            }
+            if (F_bot[i] == ev1) {
+              lid1_bot = i;
+            }
+            if (F_bot[i] == ev0) {
+              lid2_bot = i;
+            }
+          }
+
+          assert(lid1_top > -1);
+          assert(lid2_top > -1);
+          assert(lid1_bot > -1);
+          assert(lid2_bot > -1);
+
+          // get node local ids
+          const auto &node_local_ids_top =
+              Cone_face_node_helper(lid1_top, lid2_top);
+          const auto &node_local_ids_bot =
+              Cone_face_node_helper(lid1_bot, lid2_bot);
+
+          // get all node ids (top: ev0 ev1 ev2, bot: ev1 ev0 ev2')
+          std::array<int64_t, 19> N_ids_top, N_ids_bot;
+          for (int i = 0; i < 19; ++i) {
+            N_ids_top[i] = f_chart_top.lagrange_nodes[node_local_ids_top[i]];
+            N_ids_bot[i] = f_chart_bot.lagrange_nodes[node_local_ids_bot[i]];
+          }
+
+          const int64_t p_i = N_ids_top[0];
+          const int64_t p_j = N_ids_top[1];
+          const int64_t p_ij = N_ids_top[3];
+          const int64_t p_ji = N_ids_top[4];
+          const int64_t p_ij_m = N_ids_top[9];
+          const int64_t p_ik = N_ids_top[8];
+          const int64_t p_jk = N_ids_top[5];
+          const int64_t p_ic = N_ids_top[12];
+          const int64_t p_jc = N_ids_top[14];
+
+          const int64_t p_ij_m_p = N_ids_bot[9];
+          const int64_t p_ik_p = N_ids_bot[5];
+          const int64_t p_jk_p = N_ids_bot[8];
+          const int64_t p_ic_p = N_ids_bot[14];
+          const int64_t p_jc_p = N_ids_bot[12];
+
+          if (ev0 == vid) {
+            // left is cone, p_i is cone
+
+            // assign cone as ind if needed
+            if (!node_assigned[p_i]) {
+              m.insert(p_i * 3 + 0, p_i * 3 + 0) = 1; // x_i
+              m.insert(p_i * 3 + 1, p_i * 3 + 1) = 1; // y_i
+              m.insert(p_i * 3 + 2, p_i * 3 + 2) = 1; // z_i
+              node_assigned[p_i] = true;
+            }
+
+            // p_ij p_ic p_ic_p p_ik p_ik_p degenerate to p_i
+            m.insert(p_ij * 3 + 0, p_i * 3 + 0) = 1; // x_ij = x_i
+            m.insert(p_ij * 3 + 1, p_i * 3 + 1) = 1; // y_ij = y_i
+            m.insert(p_ij * 3 + 2, p_i * 3 + 2) = 1; // z_ij = z_i
+            node_assigned[p_ij] = true;
+
+            m.insert(p_ic * 3 + 0, p_i * 3 + 0) = 1; // x_ic = x_i
+            m.insert(p_ic * 3 + 1, p_i * 3 + 1) = 1; // y_ic = y_i
+            m.insert(p_ic * 3 + 2, p_i * 3 + 2) = 1; // z_ic = z_i
+            node_assigned[p_ic] = true;
+
+            m.insert(p_ic_p * 3 + 0, p_i * 3 + 0) = 1; // x_ic_p = x_i
+            m.insert(p_ic_p * 3 + 1, p_i * 3 + 1) = 1; // y_ic_p = y_i
+            m.insert(p_ic_p * 3 + 2, p_i * 3 + 2) = 1; // z_ic_p = z_i
+            node_assigned[p_ic_p] = true;
+
+            if (!node_assigned[p_ik]) {
+              m.insert(p_ik * 3 + 0, p_i * 3 + 0) = 1; // x_ik = x_i
+              m.insert(p_ik * 3 + 1, p_i * 3 + 1) = 1; // y_ik = y_i
+              m.insert(p_ik * 3 + 2, p_i * 3 + 2) = 1; // z_ik = z_i
+              node_assigned[p_ik] = true;
+            }
+
+            if (!node_assigned[p_ik_p]) {
+              m.insert(p_ik_p * 3 + 0, p_i * 3 + 0) = 1; // x_ik_p = x_i
+              m.insert(p_ik_p * 3 + 1, p_i * 3 + 1) = 1; // y_ik_p = y_i
+              m.insert(p_ik_p * 3 + 2, p_i * 3 + 2) = 1; // z_ik_p = z_i
+              node_assigned[p_ik_p] = true;
+            }
+
+            // normal endpoint constraint for not-max axis
+          }
+
+          processed_vid[ev0] = true;
+          processed_vid[ev1] = true;
+          e_chart.processed = true;
+        }
+      }
+    }
+  }
+}

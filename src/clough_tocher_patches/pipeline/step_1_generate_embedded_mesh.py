@@ -63,9 +63,37 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
         for i in range(tets.shape[0]):
             winding_numbers[i] = winding_numbers_data[i]
     else:
-        # TODO: to be implemented
-        print("not implemented!")
-        exit(0)
+        tet_indices_touching_surface = np.unique(np.argwhere(
+            np.isin(tets_unsliced, surface_vertices))[:, 0])
+
+        tets = tets_unsliced[tet_indices_touching_surface]
+        winding_numbers_data = winding_numbers_data_unsliced[tet_indices_touching_surface]
+        vertices = vertices_unsliced
+        vertices, tets, _, sliced_to_unsliced_v_map = igl.remove_unreferenced(
+            vertices_unsliced, tets)
+
+        # print(winding_numbers_data.shape)
+        # print(tets.shape)
+        m_sliced = mio.Mesh(vertices, [('tetra', tets)], cell_data={
+                            "winding_number": winding_numbers_data.T})
+        m_sliced.write("test_slice.vtu")
+
+        # extract surface
+        winding_numbers = {}
+        for i in range(tets.shape[0]):
+            winding_numbers[i] = winding_numbers_data[i]
+
+        surface_tet_faces_unsliced = igl.boundary_facets(filtered_tets)
+        unsliced_to_sliced_v_map = {}
+        for i in range(len(sliced_to_unsliced_v_map)):
+            unsliced_to_sliced_v_map[sliced_to_unsliced_v_map[i]] = i
+        surface_tet_faces = surface_tet_faces_unsliced.copy().tolist()
+        for i in range(len(surface_tet_faces)):
+            for j in range(3):
+                # print(surface_tet_face[i][j])
+                surface_tet_faces[i][j] = unsliced_to_sliced_v_map[surface_tet_faces[i][j]]
+        surface_tet_faces = np.array(surface_tet_faces)
+        # print(surface_tet_faces)
 
     para_in_v, para_in_f, im, para_in_v_to_tet_v_map = igl.remove_unreferenced(
         vertices, surface_tet_faces

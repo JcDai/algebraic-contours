@@ -91,6 +91,12 @@ AffineManifold::get_edge_chart(Index face_index,
   return m_edge_charts[edge_index];
 }
 
+EdgeManifoldChart &AffineManifold::get_edge_chart(Index face_index,
+                                                  Index face_vertex_index) {
+  Index edge_index = m_corner_to_edge[face_index][face_vertex_index];
+  return m_edge_charts[edge_index];
+}
+
 FaceManifoldChart const &
 AffineManifold::get_face_chart(Index face_index) const {
   return m_face_charts[face_index];
