@@ -2741,9 +2741,9 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
 
     // // debug use
     // std::cout << std::setprecision(17);
-    std::cout << "ni max entry: " << ni_max_entry << std::endl;
+    // std::cout << "ni max entry: " << ni_max_entry << std::endl;
     // std::cout << "ni: " << ni[0] << ", " << ni[1] << ", " << ni[2] <<
-    // std::endl; ni_max_entry = 0;
+    // std::endl;
 
     // double nix = ni[0];
     // double niy = ni[1];
@@ -2904,9 +2904,10 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
 
           ag = -ag / CM_prime[6];
 
-          std::cout << "here" << std::endl;
+          // std::cout << "here0" << std::endl;
 
           if (ev0 == vid) {
+            // continue;
             /////////////////////////////////////////////////
             //////// left is cone, p_i is cone, p_j /////////
             /////////////////////////////////////////////////
@@ -3037,8 +3038,13 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
             Eigen::SparseVector<double> y_j = m.row(p_j * 3 + 1);
             Eigen::SparseVector<double> z_j = m.row(p_j * 3 + 2);
 
+            // continue;
+
+            // std::cout << "here1" << std::endl;
+
             // cases for max entry in the normal
             if (ni_max_entry == 0) {
+              // continue;
               // x is the max entry
 
               // assign ind vars
@@ -3050,8 +3056,6 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               independent_node_map[p_ji * 3 + 1] = 1;
               independent_node_map[p_ji * 3 + 2] = 1;
 
-              std::cout << "here2" << std::endl;
-
               // x_jk, y_jk, z_jk
               m.insert(p_jk * 3 + 0, p_jk * 3 + 0) = 1;
               m.insert(p_jk * 3 + 1, p_jk * 3 + 1) = 1;
@@ -3059,8 +3063,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               independent_node_map[p_jk * 3 + 0] = 1;
               independent_node_map[p_jk * 3 + 1] = 1;
               independent_node_map[p_jk * 3 + 2] = 1;
-
-              std::cout << "here3" << std::endl;
+              node_assigned[p_jk] = true;
 
               // y_mij, z_mij
               m.insert(p_ij_m * 3 + 1, p_ij_m * 3 + 1) = 1;
@@ -3134,16 +3137,21 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               node_assigned[p_jk_p] = true;
 
             } else if (ni_max_entry == 1) {
+              // continue;
               // y is the max entry
 
               // assign ind vars
               // [x_ji, z_ji, x_jk, z_jk, x_mij, z_mij]
+
+              // std::cout << "here2" << std::endl;
 
               // x_ji, z_ji
               m.insert(p_ji * 3 + 0, p_ji * 3 + 0) = 1;
               m.insert(p_ji * 3 + 2, p_ji * 3 + 2) = 1;
               independent_node_map[p_ji * 3 + 0] = 1;
               independent_node_map[p_ji * 3 + 2] = 1;
+
+              // std::cout << "here3" << std::endl;
 
               // x_jk, y_jk, z_jk
               m.insert(p_jk * 3 + 0, p_jk * 3 + 0) = 1;
@@ -3152,12 +3160,17 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               independent_node_map[p_jk * 3 + 0] = 1;
               independent_node_map[p_jk * 3 + 1] = 1;
               independent_node_map[p_jk * 3 + 2] = 1;
+              node_assigned[p_jk] = true;
+
+              // std::cout << "here4" << std::endl;
 
               // x_mij, z_mij
               m.insert(p_ij_m * 3 + 0, p_ij_m * 3 + 0) = 1;
               m.insert(p_ij_m * 3 + 2, p_ij_m * 3 + 2) = 1;
               independent_node_map[p_ij_m * 3 + 0] = 1;
               independent_node_map[p_ij_m * 3 + 2] = 1;
+
+              // std::cout << "here5" << std::endl;
 
               // get spvec for [x_ji, z_ji, x_jk, z_jk, x_mij, z_mij]
               Eigen::SparseVector<double> x_ji = m.row(p_ji * 3 + 0);
@@ -3172,6 +3185,8 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
                   {x_i, y_i, z_i, x_j, y_j, z_j, x_ji, z_ji, x_jk, y_jk, z_jk,
                    x_ij_m, z_ij_m}};
 
+              // std::cout << "here6" << std::endl;
+
               // assign compute dependent node wrt
               // [x_i, y_i, z_i, x_j, y_j, z_j, x_ji, z_ji, x_jk, z_jk, x_ij_m,
               // z_ij_m]
@@ -3181,6 +3196,8 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               // y_jk_p, z_jk_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
                   pi_cone_y_max_deps(ac, am, ni);
+
+              // std::cout << "here7" << std::endl;
 
               // // debug output
               // for (int i = 0; i < 8; ++i) {
@@ -3193,13 +3210,15 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
 
               // compute dep vecs
               std::vector<Eigen::SparseVector<double>> dep_vecs;
-              for (int i = 0; i < 9; ++i) {
+              for (int i = 0; i < 8; ++i) {
                 Eigen::SparseVector<double> sp_vec;
-                for (int j = 0; j < 12; ++j) {
+                for (int j = 0; j < 13; ++j) {
                   sp_vec += dep_coeffs[i][j] * ind_vecs[j];
                 }
                 dep_vecs.push_back(sp_vec);
               }
+
+              // std::cout << "here8" << std::endl;
 
               // assign dep vecs
               // y_ji
@@ -3233,7 +3252,10 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               independent_node_map[p_jk_p * 3 + 2] = 0;
               node_assigned[p_jk_p] = true;
 
+              // std::cout << "here9" << std::endl;
+
             } else if (ni_max_entry == 2) {
+              // continue;
               // z is the max entry
 
               // assign ind vars
@@ -3252,6 +3274,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               independent_node_map[p_jk * 3 + 0] = 1;
               independent_node_map[p_jk * 3 + 1] = 1;
               independent_node_map[p_jk * 3 + 2] = 1;
+              node_assigned[p_jk] = true;
 
               // x_mij, y_mij
               m.insert(p_ij_m * 3 + 0, p_ij_m * 3 + 0) = 1;
@@ -3293,9 +3316,9 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               }
 
               // // debug output
-              // for (int i = 0; i < 9; ++i) {
+              // for (int i = 0; i < 8; ++i) {
               //   std::cout << "dep coeff " << i << " :";
-              //   for (int j = 0; j < 12; ++j) {
+              //   for (int j = 0; j < 13; ++j) {
               //     std::cout << dep_coeffs[i][j] << ", ";
               //   }
               //   std::cout << std::endl;
@@ -3339,6 +3362,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
 
           } else {
             assert(ev1 == vid);
+            // continue;
             ////////////////////////////////////////////////////////
             //////// right is cone, p_j is cone, p_i free  /////////
             ////////////////////////////////////////////////////////
@@ -3361,7 +3385,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
             u_ik =
                 one_ring_uv_positions_pi[e_chart.top_vertex_index]; // pk - pi
 
-            U_ijik << u_ij[0], u_ik[0], u_ij[1], u_ik[0];
+            U_ijik << u_ij[0], u_ik[0], u_ij[1], u_ik[1];
             U_ijik_inv = inverse_2by2(U_ijik);
 
             // record U_ijik info to v_chart
@@ -3391,6 +3415,19 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
                 ag[6],                         // pik'
                 ag[8]                          // pijm
             }};
+
+            // // debug code
+            // std::cout << "ac: ";
+            // for (int i = 0; i < 3; ++i) {
+            //   std::cout << ac[i] << ", ";
+            // }
+            // std::cout << std::endl;
+
+            // std::cout << "am: ";
+            // for (int i = 0; i < 6; ++i) {
+            //   std::cout << am[i] << ", ";
+            // }
+            // std::cout << std::endl;
 
             // assign shared ind vars
             // [x_i, y_i, z_i, x_j, y_j, z_j]
@@ -3457,7 +3494,12 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
             Eigen::SparseVector<double> y_j = m.row(p_j * 3 + 1);
             Eigen::SparseVector<double> z_j = m.row(p_j * 3 + 2);
 
+            // std::cout << "here2" << std::endl;
+
+            // continue;
+
             if (ni_max_entry == 0) {
+              // continue;
               // x is the max entry
 
               // assign ind vars
@@ -3476,6 +3518,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               independent_node_map[p_ik * 3 + 0] = 1;
               independent_node_map[p_ik * 3 + 1] = 1;
               independent_node_map[p_ik * 3 + 2] = 1;
+              node_assigned[p_ik] = true;
 
               // y_mij, z_mij
               m.insert(p_ij_m * 3 + 1, p_ij_m * 3 + 1) = 1;
@@ -3550,6 +3593,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               node_assigned[p_ik_p] = true;
 
             } else if (ni_max_entry == 1) {
+              // continue;
               // y is the max entry
 
               // assign ind vars
@@ -3568,6 +3612,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               independent_node_map[p_ik * 3 + 0] = 1;
               independent_node_map[p_ik * 3 + 1] = 1;
               independent_node_map[p_ik * 3 + 2] = 1;
+              node_assigned[p_ik] = true;
 
               // x_mij, z_mij
               m.insert(p_ij_m * 3 + 0, p_ij_m * 3 + 0) = 1;
@@ -3597,6 +3642,15 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               // z_ik_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
                   pj_cone_y_max_deps(ac, am, ni);
+
+              // // debug output
+              // for (int i = 0; i < 8; ++i) {
+              //   std::cout << "dep coeff " << i << " :";
+              //   for (int j = 0; j < 13; ++j) {
+              //     std::cout << dep_coeffs[i][j] << ", ";
+              //   }
+              //   std::cout << std::endl;
+              // }
 
               // compute dep vecs
               std::vector<Eigen::SparseVector<double>> dep_vecs;
@@ -3642,6 +3696,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               node_assigned[p_ik_p] = true;
 
             } else if (ni_max_entry == 2) {
+              // continue;
               // z si the max entry
 
               // assign ind vars
@@ -3660,6 +3715,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               independent_node_map[p_ik * 3 + 0] = 1;
               independent_node_map[p_ik * 3 + 1] = 1;
               independent_node_map[p_ik * 3 + 2] = 1;
+              node_assigned[p_ik] = true;
 
               // x_mij, y_mij
               m.insert(p_ij_m * 3 + 0, p_ij_m * 3 + 0) = 1;
@@ -3689,6 +3745,15 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
               // z_ik_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
                   pj_cone_z_max_deps(ac, am, ni);
+
+              // // debug output
+              // for (int i = 0; i < 8; ++i) {
+              //   std::cout << "dep coeff " << i << " :";
+              //   for (int j = 0; j < 13; ++j) {
+              //     std::cout << dep_coeffs[i][j] << ", ";
+              //   }
+              //   std::cout << std::endl;
+              // }
 
               // compute dep vecs
               std::vector<Eigen::SparseVector<double>> dep_vecs;

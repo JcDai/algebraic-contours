@@ -390,7 +390,7 @@ int main(int argc, char *argv[]) {
   for (int64_t i = 0; i < node_cnt * 3; ++i) {
     // init to -1
     if (independent_node_map[i] < 0) {
-      std::cout << "node id: " << i << " not processed" << std::endl;
+      // std::cout << "node id: " << i << " not processed" << std::endl;
     } else if (independent_node_map[i] == 0) {
       dep_cnt++;
     } else if (independent_node_map[i] == 1) {
@@ -415,7 +415,7 @@ int main(int argc, char *argv[]) {
   int64_t ind_target_cnt =
       ct_surface.m_affine_manifold.m_vertex_charts.size() * 3 * 3 +
       ct_surface.m_affine_manifold.m_edge_charts.size() * 1 * 3 -
-      cone_valance * 3 - cone_cnt * 2 * 3;
+      cone_valance * 2 - cone_cnt * 2 * 3;
 
   std::cout << "ind target cnt: " << ind_target_cnt << std::endl;
 
@@ -436,6 +436,11 @@ int main(int argc, char *argv[]) {
     assign_spvec_to_spmat_row_main(bezier_constraint_matrix, cons_row, row_id);
     row_id++;
   }
+
+  Eigen::saveMarket(bezier_constraint_matrix,
+                    output_name + "_bezier_constraints_expanded.txt");
+
+  // exit(0);
 
   // compute reduce to full
   std::cout << "computing reduce to full" << std::endl;
@@ -510,8 +515,8 @@ int main(int argc, char *argv[]) {
   std::cout << "error from old cons max: " << max_error << std::endl;
   std::cout << "error from old cons min: " << min_error << std::endl;
 
-  Eigen::saveMarket(bezier_constraint_matrix,
-                    output_name + "_bezier_constraints_expanded.txt");
+  // Eigen::saveMarket(bezier_constraint_matrix,
+  //                   output_name + "_bezier_constraints_expanded.txt");
 
   exit(0);
 
