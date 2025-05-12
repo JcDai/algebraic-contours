@@ -392,3 +392,17 @@ def soft_constraint_fit_normal(workspace_path, tri_to_tet_index_mapping_file, li
         file.create_dataset("A_triplets/shape", data=A_3.shape)
 
         file.create_dataset("local2global", data=local2global.astype(np.int32))
+
+
+def call_CT_code_with_normals(workspace_path, path_to_ct_exe, meshfile, normals_file):
+    print("[{}] ".format(datetime.datetime.now()),
+          "Calling Clough Tocher code with normals")
+    ct_command = (
+        path_to_ct_exe
+        + " --input "
+        + workspace_path
+        + meshfile + " -o CT "
+        + "--vertex_normals " + normals_file
+    )
+
+    subprocess.run(ct_command, shell=True, check=True)

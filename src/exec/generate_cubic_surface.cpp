@@ -36,6 +36,7 @@ int main(int argc, char *argv[]) {
   std::string output_name = "CT";
   std::string boundary_data = "";
   std::string vertex_normal_file = "";
+  bool skip_constraint = false;
   spdlog::level::level_enum log_level = spdlog::level::off;
   Eigen::Matrix<double, 3, 1> color = SKY_BLUE;
   int num_subdivisions = DISCRETIZATION_LEVEL;
@@ -58,6 +59,8 @@ int main(int argc, char *argv[]) {
       "input boundary data. Only support 1 Function Value interpolant");
   app.add_option("--vertex_normals", vertex_normal_file,
                  "vertex normals in the order of lagrange nodes");
+  app.add_option("--skip_constraint", skip_constraint,
+                 "skip constraint computation if not needed");
   CLI11_PARSE(app, argc, argv);
 
   // Set logger level
@@ -123,6 +126,17 @@ int main(int argc, char *argv[]) {
                                             V);
   ct_surface.write_connected_lagrange_nodes_values(output_name +
                                                    "_bilaplacian_nodes_values");
+
+  Eigen::SparseMatrix<double> b2l_mat;
+  ct_surface.bezier2lag_full_mat(b2l_mat);
+
+  Eigen::saveMarket(b2l_mat,
+                    output_name + "_bezier_to_lag_convertion_matrix.txt");
+
+  if (skip_constraint) {
+    // skip constraint computation
+    exit(0);
+  }
 
   // get vertex normals
   Eigen::MatrixXd v_normals;
@@ -456,6 +470,17 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  std::ofstream r2f_idx_map_file(output_name +
+                                 "_bezier_r2f_mat_col_idx_map.txt");
+  for (size_t i = 0; i < col2nid_map.size(); ++i) {
+    r2f_idx_map_file << col2nid_map[i] << std::endl;
+  }
+  r2f_idx_map_file.close();
+
+  Eigen::saveMarket(r2f_expanded, output_name + "_bezier_r2f_expanded.txt");
+
+  exit(0);
+
   // compute expanded beizer control points
   std::cout << "computing bezier c points expanded" << std::endl;
   const auto &bezier_points = ct_surface.m_bezier_control_points;
@@ -482,8 +507,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  Eigen::SparseMatrix<double> b2l_mat;
-  ct_surface.bezier2lag_full_mat(b2l_mat);
+  // Eigen::SparseMatrix<double> b2l_mat;
+  // ct_surface.bezier2lag_full_mat(b2l_mat);
 
   Eigen::MatrixXd full_from_cone_lag = b2l_mat * full_from_cone;
 

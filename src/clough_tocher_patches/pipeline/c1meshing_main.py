@@ -20,8 +20,8 @@ from step_2_cone_arrangement_and_parametrization import *
 from step_3_face_split import *
 from step_4_generate_CT_constraints import *
 from step_5_map_nodes_tri2tet import *
-from step_6_build_hard_constraints import *
-from step_7_build_soft_constraints import *
+from step_7_build_hard_constraints import *
+from step_6_build_soft_constraints import *
 from step_8_polyfem import *
 
 
@@ -95,22 +95,28 @@ if __name__ == "__main__":
     tet_edge_to_vertices, tet_face_to_vertices = map_tri_nodes_to_tet_nodes(
         workspace_path, output_name, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map)
 
-    # step 6 build hard constraints
-    build_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                                        "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh")
-
-    build_bezier_reduce2full_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                                    "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
-
-    build_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                                                 "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
-
-    # step 7 build soft constraints
+    # step 6 build soft constraints
     A_sti, b_sti, A_sti_2, b_sti_2 = upsample_and_smooth_cones("CT_bilaplacian_nodes_values_cone_area_vertices.txt",
                                                                "CT_bilaplacian_nodes_values_cone_area_faces.txt", "CT_from_lagrange_nodes.msh", sample_factor, k_ring_factor)
 
     soft_constraint_fit_normal(workspace_path, output_name + "_tri_to_tet_v_map.txt",
                                output_name + "_initial_tetmesh.msh", A_sti, b_sti)
+
+    call_CT_code_with_normals(workspace_path, path_to_ct_exe,
+                              "surface_uv_after_cone_split.obj", "CT_smoothed_normals.txt")
+
+    # step 7 build hard constraints
+    # build_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+    #                                     "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh")
+
+    # build_bezier_reduce2full_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+    #                                 "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
+
+    # build_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+    #                                              "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
+
+    build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+                                                      "CT_bezier_constraints_expanded.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
 
     # step 8 polyfem
     create_polyfem_json(enable_offset, output_name, "soft.hdf5",
