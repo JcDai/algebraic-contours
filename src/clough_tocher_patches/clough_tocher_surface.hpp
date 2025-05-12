@@ -93,8 +93,22 @@ public:
   void lag2bezier_full_mat(Eigen::SparseMatrix<double> &m);
 
   // beizer with cones
-  void bezier_cone_constraints_expanded(
-      Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
-      std::map<int64_t, int> &independent_node_map,
-      std::vector<bool> &node_assigned, const Eigen::MatrixXd &v_normals);
+  void bezier_cone_constraints_expanded(Eigen::SparseMatrix<double> &m,
+                                        std::vector<int> &independent_node_map,
+                                        std::vector<bool> &node_assigned,
+                                        const Eigen::MatrixXd &v_normals);
+  void bezier_endpoint_ind2dep_expanded(Eigen::SparseMatrix<double> &m,
+                                        std::vector<int> &independent_node_map,
+                                        bool debug_isolate);
+  void
+  bezier_internal_ind2dep_1_expanded(Eigen::SparseMatrix<double> &m,
+                                     std::vector<int> &independent_node_map);
+  void bezier_midpoint_ind2dep_expanded(Eigen::SparseMatrix<double> &m,
+                                        std::vector<int> &independent_node_map);
+  void
+  bezier_internal_ind2dep_2_expanded(Eigen::SparseMatrix<double> &m,
+                                     std::vector<int> &independent_node_map);
+
+  void write_external_point_values_with_conn(const std::string &filename,
+                                             const Eigen::MatrixXd &vertices);
 };

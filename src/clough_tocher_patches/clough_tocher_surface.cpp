@@ -638,6 +638,79 @@ void CloughTocherSurface::
   }
 }
 
+void CloughTocherSurface::write_external_point_values_with_conn(
+    const std::string &filename, const Eigen::MatrixXd &vertices) {
+  std::ofstream file(filename + ".msh");
+
+  /*
+    $MeshFormat
+      4.1 0 8     MSH4.1, ASCII
+      $EndMeshFormat
+    */
+
+  file << "$MeshFormat\n"
+       << "4.1 0 8\n"
+       << "$EndMeshFormat\n";
+
+  /*
+  subtri0: 0 1 18 3 4 14 15 13 12 9
+  b0 b1 bc b01 b10 b1c bc1 bc0 b0c b01^c
+  subtri1: 1 2 18 5 6 16 17 15 14 10
+  b1 b2 bc b12 b21 b2c bc2 bc1 b1c b12^c
+  subtri2: 2 0 18 7 8 12 13 17 16 11
+  b2 b0 bc b20 b02 b0c bc0 bc2 b2c b20^c
+  */
+
+  // build faces
+  std::vector<std::array<int64_t, 10>> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    faces.push_back(
+        {{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+          l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}});
+    faces.push_back(
+        {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+          l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}});
+    faces.push_back(
+        {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+          l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}});
+  }
+
+  file << "$Nodes\n";
+
+  const size_t node_size = vertices.rows();
+  file << "1 " << node_size << " 1 " << node_size << "\n";
+  file << "2 1 0 " << node_size << "\n";
+
+  for (size_t i = 1; i <= node_size; ++i) {
+    file << i << "\n";
+  }
+
+  for (size_t i = 0; i < node_size; ++i) {
+    file << std::setprecision(16) << vertices(i, 0) << " " << vertices(i, 1)
+         << " " << vertices(i, 2) << "\n";
+  }
+
+  file << "$EndNodes\n";
+
+  // write elements
+  // assert(m_patches.size() * 3 == faces.size());
+  const size_t element_size = faces.size();
+
+  file << "$Elements\n";
+  file << "1 " << element_size << " 1 " << element_size << "\n";
+  file << "2 1 21 " << element_size << "\n";
+  for (size_t i = 0; i < element_size; ++i) {
+    file << i + 1 << " ";
+    for (int j = 0; j < 10; ++j) {
+      file << faces[i][j] + 1 << " ";
+    }
+    file << "\n";
+  }
+
+  file << "$EndElements\n";
+}
+
 void CloughTocherSurface::bezier2lag_full_mat(Eigen::SparseMatrix<double> &m) {
   Eigen::Matrix<double, 10, 10> p3_bezier2lag_matrix = p3_bezier2lag_m();
 
@@ -2595,39 +2668,45 @@ std::array<int64_t, 19> Cone_face_node_helper(const int lid1, const int lid2) {
 }
 
 void CloughTocherSurface::bezier_cone_constraints_expanded(
-    Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
-    std::map<int64_t, int> &independent_node_map,
+    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map,
     std::vector<bool> &node_assigned, const Eigen::MatrixXd &v_normals) {
 
-  Eigen::Matrix<double, 5, 7> K_N;
-  K_N << 1, 0, 0, 0, 0, 0, 0, // p0
-      0, 1, 0, 0, 0, 0, 0,    // p1
-      -3, 0, 3, 0, 0, 0, 0,   // d01
-      0, -3, 0, 3, 0, 0, 0,   // d10
-      -3. / 8., -3. / 8., -9. / 8., -9. / 8., 3. / 4., 3. / 4.,
+  Eigen::Matrix<double, 5, 7> K_N_p;
+  K_N_p << 1, 0, 0, 0, 0, 0, 0, // p0
+      0, 1, 0, 0, 0, 0, 0,      // p1
+      -3, 0, 3, 0, 0, 0, 0,     // d01
+      0, -3, 0, 3, 0, 0, 0,     // d10
+      -1. / 8., -1. / 8., -7. / 8., -7. / 8., 1. / 4., 1. / 4.,
       3. / 2.; // h01 redundant
 
+  Eigen::Matrix<double, 7, 1> c_hij_p;
+  c_hij_p << -1. / 8., -1. / 8., -7. / 8., -7. / 8., 1. / 4., 1. / 4., 3. / 2.;
+  // std::cout << c_hij_p << std::endl;
+  // w.r.t. pi pj pij pji pik pjk pijm
+
   const Eigen::Matrix<double, 5, 1> c_e = c_e_m();
-  const Eigen::Matrix<double, 7, 1> c_hij = c_hij_m();
+  // const Eigen::Matrix<double, 7, 1> c_hij = c_hij_m();
 
   // m has size 3*#node by 3*#node expanded for xyz, node i has row 3*i + 0/1/2
   // for x/y/z
 
   auto &v_charts = m_affine_manifold.m_vertex_charts;
-  auto &e_charts = m_affine_manifold.m_edge_charts;
+  // auto &e_charts = m_affine_manifold.m_edge_charts;
   auto &f_charts = m_affine_manifold.m_face_charts;
 
   const auto &F = m_affine_manifold.get_faces();
 
-  for (size_t vid = 0; vid < v_charts.size(); ++vid) {
+  for (size_t v_id = 0; v_id < v_charts.size(); ++v_id) {
+    int64_t vid = v_id;
     auto &v_chart = v_charts[vid];
 
     if (!v_chart.is_cone) {
+      // skip
       // check: non-cone vertex can be adjacent to at most one cone
       // TODO:: setup in debug
       int cone_cnt = 0;
-      for (const auto &v_one_ring : v_chart.vertex_one_ring) {
-        if (v_charts[v_one_ring].is_cone) {
+      for (size_t i = 0; i < v_chart.vertex_one_ring.size() - 1; ++i) {
+        if (v_charts[v_chart.vertex_one_ring[i]].is_cone) {
           cone_cnt++;
         }
       }
@@ -2637,23 +2716,38 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
       } else if (cone_cnt == 1) {
         assert(v_chart.is_cone_adjacent);
       } else if (cone_cnt > 1) {
-        assert(false);
+        // assert(false);
         throw std::runtime_error(
             "non-cone vertex is adjacent to more than one cone, cannot setup "
             "cone constraint! Try moving the cones or denser meshes!");
       }
+
+      continue;
     }
 
     // cone case
     // compute base on one ring edges
 
-    const Eigen::Vector3d &ni = v_normals.row(vid);
+    Eigen::Vector3d ni = v_normals.row(vid);
     int ni_max_entry = 0;
     for (int i = 0; i < 3; ++i) {
       if (std::abs(ni[i]) > std::abs(ni[ni_max_entry])) {
         ni_max_entry = i;
       }
     }
+
+    // regularize
+    // ni = ni / ni[ni_max_entry];
+
+    // // debug use
+    // std::cout << std::setprecision(17);
+    std::cout << "ni max entry: " << ni_max_entry << std::endl;
+    // std::cout << "ni: " << ni[0] << ", " << ni[1] << ", " << ni[2] <<
+    // std::endl; ni_max_entry = 0;
+
+    // double nix = ni[0];
+    // double niy = ni[1];
+    // double niz = ni[2];
 
     const auto &vids_one_ring = v_chart.vertex_one_ring;
     const auto &fids_one_ring = v_chart.face_one_ring;
@@ -2682,6 +2776,9 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
             continue;
           }
 
+          assert(!e_chart.processed);
+
+          // unprocessed edge
           const auto &fid_top = e_chart.top_face_index;
           const auto &fid_bot = e_chart.bottom_face_index;
           auto &f_chart_top = f_charts[fid_top];
@@ -2730,57 +2827,917 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
           const int64_t p_ij_m = N_ids_top[9];
           const int64_t p_ik = N_ids_top[8];
           const int64_t p_jk = N_ids_top[5];
-          const int64_t p_ic = N_ids_top[12];
-          const int64_t p_jc = N_ids_top[14];
+          // const int64_t p_ic = N_ids_top[12];
+          // const int64_t p_jc = N_ids_top[14];
 
           const int64_t p_ij_m_p = N_ids_bot[9];
           const int64_t p_ik_p = N_ids_bot[5];
           const int64_t p_jk_p = N_ids_bot[8];
-          const int64_t p_ic_p = N_ids_bot[14];
-          const int64_t p_jc_p = N_ids_bot[12];
+          // const int64_t p_ic_p = N_ids_bot[14];
+          // const int64_t p_jc_p = N_ids_bot[12];
+
+          assert(N_ids_bot[0] == N_ids_top[1]);
+          assert(N_ids_bot[1] == N_ids_top[0]);
+          assert(N_ids_bot[3] == N_ids_top[4]);
+          assert(N_ids_bot[4] == N_ids_top[3]);
+
+          // compute midpoint constraint
+          // v_pos and v_pos'
+          const Eigen::Vector2d &v0_pos = e_chart.left_vertex_uv_position;
+          const Eigen::Vector2d &v1_pos = e_chart.right_vertex_uv_position;
+          const Eigen::Vector2d &v2_pos_macro = e_chart.top_vertex_uv_position;
+          const Eigen::Vector2d &v2_pos = (v0_pos + v1_pos + v2_pos_macro) / 3.;
+
+          const Eigen::Vector2d &v0_pos_prime =
+              e_chart.right_vertex_uv_position;
+          const Eigen::Vector2d &v1_pos_prime = e_chart.left_vertex_uv_position;
+          const Eigen::Vector2d &v2_pos_prime_macro =
+              e_chart.bottom_vertex_uv_position;
+          const Eigen::Vector2d &v2_pos_prime =
+              (v0_pos_prime + v1_pos_prime + v2_pos_prime_macro) / 3.;
+
+          // u_ij and u_ij'
+          const Eigen::Vector2d u_01 = v1_pos - v0_pos;
+          const Eigen::Vector2d u_02 = v2_pos - v0_pos;
+          const Eigen::Vector2d u_12 = v2_pos - v1_pos;
+
+          const Eigen::Vector2d u_01_prime = v1_pos_prime - v0_pos_prime;
+          const Eigen::Vector2d u_02_prime = v2_pos_prime - v0_pos_prime;
+          const Eigen::Vector2d u_12_prime = v2_pos_prime - v1_pos_prime;
+
+          // m01 and m01_prime
+          const Eigen::Vector2d m_01 = (u_02 + u_12) / 2.0;
+          const Eigen::Vector2d m_01_prime = (u_02_prime + u_12_prime) / 2.0;
+
+          // u_01_prep u_01_prep_prime
+          Eigen::Vector2d u_01_prep(-u_01[1], u_01[0]);
+          Eigen::Vector2d u_01_prep_prime(-u_01_prime[1], u_01_prime[0]);
+
+          // compute M_N and k_N
+          Eigen::Matrix<double, 1, 7> M_N = (m_01.dot(u_01.normalized())) /
+                                            u_01.norm() * c_e.transpose() *
+                                            K_N_p;
+          auto k_N = m_01.dot(u_01_prep.normalized());
+          Eigen::Matrix<double, 1, 7> M_N_prime =
+              (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
+              c_e.transpose() * K_N_p;
+          auto k_N_prime = m_01_prime.dot(u_01_prep_prime.normalized());
+
+          // compute CM
+          Eigen::Matrix<double, 1, 7> CM =
+              (c_hij_p - M_N.transpose()) / k_N; // 7 x 1
+          Eigen::Matrix<double, 1, 7> CM_prime =
+              (c_hij_p - M_N_prime.transpose()) / k_N_prime;
+
+          // compute ag[1] wrt pijm' = ag * [pi pj pij pji pik pjk pik' pjk'
+          // pijm]
+          Eigen::Matrix<double, 9, 1> ag;
+          ag << CM[0] + CM_prime[1], // pi
+              CM[1] + CM_prime[0],   // pj
+              CM[2] + CM_prime[3],   // pij
+              CM[3] + CM_prime[2],   // pji
+              CM[4],                 // pik
+              CM[5],                 // pjk
+              CM_prime[5],           // pik'
+              CM_prime[4],           // pjk'
+              CM[6];                 // pijm
+
+          ag = -ag / CM_prime[6];
+
+          std::cout << "here" << std::endl;
 
           if (ev0 == vid) {
-            // left is cone, p_i is cone
-
-            // assign cone as ind if needed
-            if (!node_assigned[p_i]) {
-              m.insert(p_i * 3 + 0, p_i * 3 + 0) = 1; // x_i
-              m.insert(p_i * 3 + 1, p_i * 3 + 1) = 1; // y_i
-              m.insert(p_i * 3 + 2, p_i * 3 + 2) = 1; // z_i
-              node_assigned[p_i] = true;
+            /////////////////////////////////////////////////
+            //////// left is cone, p_i is cone, p_j /////////
+            /////////////////////////////////////////////////
+            // compute endpoint constraint ac where pjk'= ac * [pji, pj, pjk]
+            // get one ring positions for pj
+            std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_pj;
+            const auto &v_one_ring_pj = v_charts[ev1].vertex_one_ring;
+            const auto &uv_pos_one_ring_pj =
+                v_charts[ev1].one_ring_uv_positions;
+            for (int i = 0; i < uv_pos_one_ring_pj.rows(); ++i) {
+              one_ring_uv_positions_pj[v_one_ring_pj[i]] =
+                  uv_pos_one_ring_pj.row(i);
             }
 
-            // p_ij p_ic p_ic_p p_ik p_ik_p degenerate to p_i
-            m.insert(p_ij * 3 + 0, p_i * 3 + 0) = 1; // x_ij = x_i
-            m.insert(p_ij * 3 + 1, p_i * 3 + 1) = 1; // y_ij = y_i
-            m.insert(p_ij * 3 + 2, p_i * 3 + 2) = 1; // z_ij = z_i
-            node_assigned[p_ij] = true;
+            Eigen::Matrix2d U_jijk, U_jijk_inv;
+            Eigen::Vector2d u_ji, u_jk;
+            u_ji = one_ring_uv_positions_pj[ev0]; // pi - pj/(0,0)
+            u_jk = one_ring_uv_positions_pj
+                [e_chart.top_vertex_index]; // pk/pos(e_top)
+                                            // - pi
+            U_jijk << u_ji[0], u_jk[0], u_ji[1], u_jk[1];
+            U_jijk_inv = inverse_2by2(U_jijk);
 
-            m.insert(p_ic * 3 + 0, p_i * 3 + 0) = 1; // x_ic = x_i
-            m.insert(p_ic * 3 + 1, p_i * 3 + 1) = 1; // y_ic = y_i
-            m.insert(p_ic * 3 + 2, p_i * 3 + 2) = 1; // z_ic = z_i
-            node_assigned[p_ic] = true;
+            // record U_ijik info to v_chart
+            v_charts[ev1].base_decided = true;
+            v_charts[ev1].U_ijik = U_jijk;
+            v_charts[ev1].U_ijik_inv = U_jijk_inv;
+            v_charts[ev1].vid_j_k = {{ev0, e_chart.top_vertex_index}};
+            v_charts[ev1].node_id_i_j_k = {{p_j, p_ji, p_jk}};
 
-            m.insert(p_ic_p * 3 + 0, p_i * 3 + 0) = 1; // x_ic_p = x_i
-            m.insert(p_ic_p * 3 + 1, p_i * 3 + 1) = 1; // y_ic_p = y_i
-            m.insert(p_ic_p * 3 + 2, p_i * 3 + 2) = 1; // z_ic_p = z_i
-            node_assigned[p_ic_p] = true;
+            // compute ac
+            Eigen::Vector2d u_jk_p =
+                one_ring_uv_positions_pj[e_chart.bottom_vertex_index]; // pos
+                                                                       // pk'
+            Eigen::Vector2d U_jkp = U_jijk_inv * u_jk_p;
+
+            std::array<double, 3> ac = {
+                {U_jkp[0], 1 - U_jkp[0] - U_jkp[1], U_jkp[1]}}; // pji pj pjk
+
+            // compute am for [pi pj pji pjk pjk' pijm]
+            // from ag for [pi pj pij pji pik pjk pik' pjk' pijm]
+            // pi == pij == pik == pik'
+            std::array<double, 6> am = {{
+                ag[0] + ag[2] + ag[4] + ag[6], // pi + pij + pik + pik'
+                ag[1],                         // pj
+                ag[3],                         // pji
+                ag[5],                         // pjk
+                ag[7],                         // pjk'
+                ag[8]                          // pijm
+            }};
+
+            // // debug code
+            // std::cout << "ac: ";
+            // for (int i = 0; i < 3; ++i) {
+            //   std::cout << ac[i] << ", ";
+            // }
+            // std::cout << std::endl;
+
+            // std::cout << "am: ";
+            // for (int i = 0; i < 6; ++i) {
+            //   std::cout << am[i] << ", ";
+            // }
+            // std::cout << std::endl;
+
+            // assign shared ind vars
+            // [x_i, y_i, z_i, x_j, y_j, z_j]
+
+            // x_i, y_i, z_i, might be already assigned in previous iteration
+            if (!node_assigned[p_i]) {
+              m.insert(p_i * 3 + 0, p_i * 3 + 0) = 1;
+              m.insert(p_i * 3 + 1, p_i * 3 + 1) = 1;
+              m.insert(p_i * 3 + 2, p_i * 3 + 2) = 1;
+              node_assigned[p_i] = true;
+              independent_node_map[p_i * 3 + 0] = 1;
+              independent_node_map[p_i * 3 + 1] = 1;
+              independent_node_map[p_i * 3 + 2] = 1;
+            }
+
+            // x_j, y_j z_j
+            assert(!node_assigned[p_j]);
+            m.insert(p_j * 3 + 0, p_j * 3 + 0) = 1;
+            m.insert(p_j * 3 + 1, p_j * 3 + 1) = 1;
+            m.insert(p_j * 3 + 2, p_j * 3 + 2) = 1;
+            node_assigned[p_j] = true;
+            independent_node_map[p_j * 3 + 0] = 1;
+            independent_node_map[p_j * 3 + 1] = 1;
+            independent_node_map[p_j * 3 + 2] = 1;
+
+            // assign dependent degenerated nodes [pij pic pic' pik pik'] = pi
+            // can be already assigned in previous iteration
+            // pic pic' assign in interior constraints, skip for now
+
+            if (!node_assigned[p_ij]) {
+              m.insert(p_ij * 3 + 0, p_i * 3 + 0) = 1;
+              m.insert(p_ij * 3 + 1, p_i * 3 + 1) = 1;
+              m.insert(p_ij * 3 + 2, p_i * 3 + 2) = 1;
+              node_assigned[p_ij] = true;
+              independent_node_map[p_ij * 3 + 0] = 0;
+              independent_node_map[p_ij * 3 + 1] = 0;
+              independent_node_map[p_ij * 3 + 2] = 0;
+            }
 
             if (!node_assigned[p_ik]) {
-              m.insert(p_ik * 3 + 0, p_i * 3 + 0) = 1; // x_ik = x_i
-              m.insert(p_ik * 3 + 1, p_i * 3 + 1) = 1; // y_ik = y_i
-              m.insert(p_ik * 3 + 2, p_i * 3 + 2) = 1; // z_ik = z_i
+              m.insert(p_ik * 3 + 0, p_i * 3 + 0) = 1;
+              m.insert(p_ik * 3 + 1, p_i * 3 + 1) = 1;
+              m.insert(p_ik * 3 + 2, p_i * 3 + 2) = 1;
               node_assigned[p_ik] = true;
+              independent_node_map[p_ik * 3 + 0] = 0;
+              independent_node_map[p_ik * 3 + 1] = 0;
+              independent_node_map[p_ik * 3 + 2] = 0;
             }
 
             if (!node_assigned[p_ik_p]) {
-              m.insert(p_ik_p * 3 + 0, p_i * 3 + 0) = 1; // x_ik_p = x_i
-              m.insert(p_ik_p * 3 + 1, p_i * 3 + 1) = 1; // y_ik_p = y_i
-              m.insert(p_ik_p * 3 + 2, p_i * 3 + 2) = 1; // z_ik_p = z_i
+              m.insert(p_ik_p * 3 + 0, p_i * 3 + 0) = 1;
+              m.insert(p_ik_p * 3 + 1, p_i * 3 + 1) = 1;
+              m.insert(p_ik_p * 3 + 2, p_i * 3 + 2) = 1;
               node_assigned[p_ik_p] = true;
+              independent_node_map[p_ik_p * 3 + 0] = 0;
+              independent_node_map[p_ik_p * 3 + 1] = 0;
+              independent_node_map[p_ik_p * 3 + 2] = 0;
             }
 
-            // normal endpoint constraint for not-max axis
+            // get sparse vecs of pi and pj
+            Eigen::SparseVector<double> x_i = m.row(p_i * 3 + 0);
+            Eigen::SparseVector<double> y_i = m.row(p_i * 3 + 1);
+            Eigen::SparseVector<double> z_i = m.row(p_i * 3 + 2);
+            Eigen::SparseVector<double> x_j = m.row(p_j * 3 + 0);
+            Eigen::SparseVector<double> y_j = m.row(p_j * 3 + 1);
+            Eigen::SparseVector<double> z_j = m.row(p_j * 3 + 2);
+
+            // cases for max entry in the normal
+            if (ni_max_entry == 0) {
+              // x is the max entry
+
+              // assign ind vars
+              // [y_ji, z_ji, y_jk, z_jk, y_mij, z_mij]
+
+              // y_ji, z_ji
+              m.insert(p_ji * 3 + 1, p_ji * 3 + 1) = 1;
+              m.insert(p_ji * 3 + 2, p_ji * 3 + 2) = 1;
+              independent_node_map[p_ji * 3 + 1] = 1;
+              independent_node_map[p_ji * 3 + 2] = 1;
+
+              std::cout << "here2" << std::endl;
+
+              // x_jk, y_jk, z_jk
+              m.insert(p_jk * 3 + 0, p_jk * 3 + 0) = 1;
+              m.insert(p_jk * 3 + 1, p_jk * 3 + 1) = 1;
+              m.insert(p_jk * 3 + 2, p_jk * 3 + 2) = 1;
+              independent_node_map[p_jk * 3 + 0] = 1;
+              independent_node_map[p_jk * 3 + 1] = 1;
+              independent_node_map[p_jk * 3 + 2] = 1;
+
+              std::cout << "here3" << std::endl;
+
+              // y_mij, z_mij
+              m.insert(p_ij_m * 3 + 1, p_ij_m * 3 + 1) = 1;
+              m.insert(p_ij_m * 3 + 2, p_ij_m * 3 + 2) = 1;
+              independent_node_map[p_ij_m * 3 + 1] = 1;
+              independent_node_map[p_ij_m * 3 + 2] = 1;
+
+              // get spvec for [y_ji, z_ji, y_jk, z_jk, y_ij_m, z_ij_m]
+              Eigen::SparseVector<double> y_ji = m.row(p_ji * 3 + 1);
+              Eigen::SparseVector<double> z_ji = m.row(p_ji * 3 + 2);
+              Eigen::SparseVector<double> x_jk = m.row(p_jk * 3 + 0);
+              Eigen::SparseVector<double> y_jk = m.row(p_jk * 3 + 1);
+              Eigen::SparseVector<double> z_jk = m.row(p_jk * 3 + 2);
+              Eigen::SparseVector<double> y_ij_m = m.row(p_ij_m * 3 + 1);
+              Eigen::SparseVector<double> z_ij_m = m.row(p_ij_m * 3 + 2);
+
+              std::array<Eigen::SparseVector<double>, 13> ind_vecs = {
+                  {x_i, y_i, z_i, x_j, y_j, z_j, y_ji, z_ji, x_jk, y_jk, z_jk,
+                   y_ij_m, z_ij_m}};
+
+              // assign compute dependent node wrt
+              // [x_i, y_i, z_i, x_j, y_j, z_j, y_ji, z_ji, y_jk, z_jk, y_ij_m,
+              // z_ij_m]
+
+              // get dep coeffs
+              // [x_ji, x_ij_m, x_ij_m_p, y_ij_m_p, z_ij_m_p, x_jk, x_jk_p,
+              // y_jk_p, z_jk_p]
+              std::array<std::array<double, 13>, 8> dep_coeffs =
+                  pi_cone_x_max_deps(ac, am, ni);
+
+              // compute dep vecs
+              std::vector<Eigen::SparseVector<double>> dep_vecs;
+              for (int i = 0; i < 8; ++i) {
+                Eigen::SparseVector<double> sp_vec;
+                for (int j = 0; j < 13; ++j) {
+                  sp_vec += dep_coeffs[i][j] * ind_vecs[j];
+                }
+                dep_vecs.push_back(sp_vec);
+              }
+
+              // assign dep vecs
+              // x_ji
+              assign_spvec_to_spmat_row(m, dep_vecs[0], p_ji * 3 + 0);
+              independent_node_map[p_ji * 3 + 0] = 0;
+              node_assigned[p_ji] = true;
+
+              // x_ij_m
+              assign_spvec_to_spmat_row(m, dep_vecs[1], p_ij_m * 3 + 0);
+              independent_node_map[p_ij_m * 3 + 0] = 0;
+              node_assigned[p_ij_m] = true;
+
+              // x_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[2], p_ij_m_p * 3 + 0);
+              independent_node_map[p_ij_m_p * 3 + 0] = 0;
+              // y_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[3], p_ij_m_p * 3 + 1);
+              independent_node_map[p_ij_m_p * 3 + 1] = 0;
+              // z_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[4], p_ij_m_p * 3 + 2);
+              independent_node_map[p_ij_m_p * 3 + 2] = 0;
+              node_assigned[p_ij_m_p] = true;
+              // x_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[5], p_jk_p * 3 + 0);
+              independent_node_map[p_jk_p * 3 + 0] = 0;
+              // y_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[6], p_jk_p * 3 + 1);
+              independent_node_map[p_jk_p * 3 + 1] = 0;
+              // z_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[7], p_jk_p * 3 + 2);
+              independent_node_map[p_jk_p * 3 + 2] = 0;
+              node_assigned[p_jk_p] = true;
+
+            } else if (ni_max_entry == 1) {
+              // y is the max entry
+
+              // assign ind vars
+              // [x_ji, z_ji, x_jk, z_jk, x_mij, z_mij]
+
+              // x_ji, z_ji
+              m.insert(p_ji * 3 + 0, p_ji * 3 + 0) = 1;
+              m.insert(p_ji * 3 + 2, p_ji * 3 + 2) = 1;
+              independent_node_map[p_ji * 3 + 0] = 1;
+              independent_node_map[p_ji * 3 + 2] = 1;
+
+              // x_jk, y_jk, z_jk
+              m.insert(p_jk * 3 + 0, p_jk * 3 + 0) = 1;
+              m.insert(p_jk * 3 + 1, p_jk * 3 + 1) = 1;
+              m.insert(p_jk * 3 + 2, p_jk * 3 + 2) = 1;
+              independent_node_map[p_jk * 3 + 0] = 1;
+              independent_node_map[p_jk * 3 + 1] = 1;
+              independent_node_map[p_jk * 3 + 2] = 1;
+
+              // x_mij, z_mij
+              m.insert(p_ij_m * 3 + 0, p_ij_m * 3 + 0) = 1;
+              m.insert(p_ij_m * 3 + 2, p_ij_m * 3 + 2) = 1;
+              independent_node_map[p_ij_m * 3 + 0] = 1;
+              independent_node_map[p_ij_m * 3 + 2] = 1;
+
+              // get spvec for [x_ji, z_ji, x_jk, z_jk, x_mij, z_mij]
+              Eigen::SparseVector<double> x_ji = m.row(p_ji * 3 + 0);
+              Eigen::SparseVector<double> z_ji = m.row(p_ji * 3 + 2);
+              Eigen::SparseVector<double> x_jk = m.row(p_jk * 3 + 0);
+              Eigen::SparseVector<double> y_jk = m.row(p_jk * 3 + 1);
+              Eigen::SparseVector<double> z_jk = m.row(p_jk * 3 + 2);
+              Eigen::SparseVector<double> x_ij_m = m.row(p_ij_m * 3 + 0);
+              Eigen::SparseVector<double> z_ij_m = m.row(p_ij_m * 3 + 2);
+
+              std::array<Eigen::SparseVector<double>, 13> ind_vecs = {
+                  {x_i, y_i, z_i, x_j, y_j, z_j, x_ji, z_ji, x_jk, y_jk, z_jk,
+                   x_ij_m, z_ij_m}};
+
+              // assign compute dependent node wrt
+              // [x_i, y_i, z_i, x_j, y_j, z_j, x_ji, z_ji, x_jk, z_jk, x_ij_m,
+              // z_ij_m]
+
+              // get dep coeffs
+              // [y_ji, y_ij_m, x_ij_m_p, y_ij_m_p, z_ij_m_p, y_jk, x_jk_p,
+              // y_jk_p, z_jk_p]
+              std::array<std::array<double, 13>, 8> dep_coeffs =
+                  pi_cone_y_max_deps(ac, am, ni);
+
+              // // debug output
+              // for (int i = 0; i < 8; ++i) {
+              //   std::cout << "dep coeff " << i << " :";
+              //   for (int j = 0; j < 13; ++j) {
+              //     std::cout << dep_coeffs[i][j] << ", ";
+              //   }
+              //   std::cout << std::endl;
+              // }
+
+              // compute dep vecs
+              std::vector<Eigen::SparseVector<double>> dep_vecs;
+              for (int i = 0; i < 9; ++i) {
+                Eigen::SparseVector<double> sp_vec;
+                for (int j = 0; j < 12; ++j) {
+                  sp_vec += dep_coeffs[i][j] * ind_vecs[j];
+                }
+                dep_vecs.push_back(sp_vec);
+              }
+
+              // assign dep vecs
+              // y_ji
+              assign_spvec_to_spmat_row(m, dep_vecs[0], p_ji * 3 + 1);
+              independent_node_map[p_ji * 3 + 1] = 0;
+              node_assigned[p_ji] = true;
+
+              // y_ij_m
+              assign_spvec_to_spmat_row(m, dep_vecs[1], p_ij_m * 3 + 1);
+              independent_node_map[p_ij_m * 3 + 1] = 0;
+              node_assigned[p_ij_m] = true;
+
+              // x_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[2], p_ij_m_p * 3 + 0);
+              independent_node_map[p_ij_m_p * 3 + 0] = 0;
+              // y_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[3], p_ij_m_p * 3 + 1);
+              independent_node_map[p_ij_m_p * 3 + 1] = 0;
+              // z_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[4], p_ij_m_p * 3 + 2);
+              independent_node_map[p_ij_m_p * 3 + 2] = 0;
+              node_assigned[p_ij_m_p] = true;
+              // x_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[5], p_jk_p * 3 + 0);
+              independent_node_map[p_jk_p * 3 + 0] = 0;
+              // y_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[6], p_jk_p * 3 + 1);
+              independent_node_map[p_jk_p * 3 + 1] = 0;
+              // z_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[7], p_jk_p * 3 + 2);
+              independent_node_map[p_jk_p * 3 + 2] = 0;
+              node_assigned[p_jk_p] = true;
+
+            } else if (ni_max_entry == 2) {
+              // z is the max entry
+
+              // assign ind vars
+              // [x_ji, y_ji, x_cj, y_cj, x_mij, y_mij]
+
+              // x_ji, y_ji
+              m.insert(p_ji * 3 + 0, p_ji * 3 + 0) = 1;
+              m.insert(p_ji * 3 + 1, p_ji * 3 + 1) = 1;
+              independent_node_map[p_ji * 3 + 0] = 1;
+              independent_node_map[p_ji * 3 + 1] = 1;
+
+              // x_jk, y_jk, z_jk
+              m.insert(p_jk * 3 + 0, p_jk * 3 + 0) = 1;
+              m.insert(p_jk * 3 + 1, p_jk * 3 + 1) = 1;
+              m.insert(p_jk * 3 + 2, p_jk * 3 + 2) = 1;
+              independent_node_map[p_jk * 3 + 0] = 1;
+              independent_node_map[p_jk * 3 + 1] = 1;
+              independent_node_map[p_jk * 3 + 2] = 1;
+
+              // x_mij, y_mij
+              m.insert(p_ij_m * 3 + 0, p_ij_m * 3 + 0) = 1;
+              m.insert(p_ij_m * 3 + 1, p_ij_m * 3 + 1) = 1;
+              independent_node_map[p_ij_m * 3 + 0] = 1;
+              independent_node_map[p_ij_m * 3 + 1] = 1;
+
+              // get spvec for [x_ji, y_ji, x_cj, y_cj, x_mij, y_mij]
+              Eigen::SparseVector<double> x_ji = m.row(p_ji * 3 + 0);
+              Eigen::SparseVector<double> y_ji = m.row(p_ji * 3 + 1);
+              Eigen::SparseVector<double> x_jk = m.row(p_jk * 3 + 0);
+              Eigen::SparseVector<double> y_jk = m.row(p_jk * 3 + 1);
+              Eigen::SparseVector<double> z_jk = m.row(p_jk * 3 + 2);
+              Eigen::SparseVector<double> x_ij_m = m.row(p_ij_m * 3 + 0);
+              Eigen::SparseVector<double> y_ij_m = m.row(p_ij_m * 3 + 1);
+
+              std::array<Eigen::SparseVector<double>, 13> ind_vecs = {
+                  {x_i, y_i, z_i, x_j, y_j, z_j, x_ji, y_ji, x_jk, y_jk, z_jk,
+                   x_ij_m, y_ij_m}};
+
+              // assign compute dependent node wrt
+              // [x_i, y_i, z_i, x_j, y_j, z_j, x_ji, y_ji, x_jk, y_jk, x_ij_m,
+              // y_ij_m]
+
+              // get dep coeffs
+              // [z_ji, z_ij_m, x_ij_m_p, y_ij_m_p, z_ij_m_p, z_jk, x_jk_p,
+              // y_jk_p, z_jk_p]
+              std::array<std::array<double, 13>, 8> dep_coeffs =
+                  pi_cone_z_max_deps(ac, am, ni);
+
+              // compute dep vecs
+              std::vector<Eigen::SparseVector<double>> dep_vecs;
+              for (int i = 0; i < 8; ++i) {
+                Eigen::SparseVector<double> sp_vec;
+                for (int j = 0; j < 13; ++j) {
+                  sp_vec += dep_coeffs[i][j] * ind_vecs[j];
+                }
+                dep_vecs.push_back(sp_vec);
+              }
+
+              // // debug output
+              // for (int i = 0; i < 9; ++i) {
+              //   std::cout << "dep coeff " << i << " :";
+              //   for (int j = 0; j < 12; ++j) {
+              //     std::cout << dep_coeffs[i][j] << ", ";
+              //   }
+              //   std::cout << std::endl;
+              // }
+
+              // assign dep vecs
+              // z_ji
+              assign_spvec_to_spmat_row(m, dep_vecs[0], p_ji * 3 + 2);
+              independent_node_map[p_ji * 3 + 2] = 0;
+              node_assigned[p_ji] = true;
+
+              // z_ij_m
+              assign_spvec_to_spmat_row(m, dep_vecs[1], p_ij_m * 3 + 2);
+              independent_node_map[p_ij_m * 3 + 2] = 0;
+              node_assigned[p_ij_m] = true;
+
+              // x_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[2], p_ij_m_p * 3 + 0);
+              independent_node_map[p_ij_m_p * 3 + 0] = 0;
+              // y_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[3], p_ij_m_p * 3 + 1);
+              independent_node_map[p_ij_m_p * 3 + 1] = 0;
+              // z_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[4], p_ij_m_p * 3 + 2);
+              independent_node_map[p_ij_m_p * 3 + 2] = 0;
+              node_assigned[p_ij_m_p] = true;
+              // x_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[5], p_jk_p * 3 + 0);
+              independent_node_map[p_jk_p * 3 + 0] = 0;
+              // y_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[6], p_jk_p * 3 + 1);
+              independent_node_map[p_jk_p * 3 + 1] = 0;
+              // z_jk_p
+              assign_spvec_to_spmat_row(m, dep_vecs[7], p_jk_p * 3 + 2);
+              independent_node_map[p_jk_p * 3 + 2] = 0;
+              node_assigned[p_jk_p] = true;
+
+            } else {
+              throw std::runtime_error("wrong max ni axis!");
+            }
+
+          } else {
+            assert(ev1 == vid);
+            ////////////////////////////////////////////////////////
+            //////// right is cone, p_j is cone, p_i free  /////////
+            ////////////////////////////////////////////////////////
+
+            // compute endpoint constraint ac where pik' = ac * [pij, pi, pik]
+            // get one ring position for pi
+
+            std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_pi;
+            const auto &v_one_ring_pi = v_charts[ev0].vertex_one_ring;
+            const auto &uv_pos_one_ring_pi =
+                v_charts[ev0].one_ring_uv_positions;
+            for (int i = 0; i < uv_pos_one_ring_pi.rows(); ++i) {
+              one_ring_uv_positions_pi[v_one_ring_pi[i]] =
+                  uv_pos_one_ring_pi.row(i);
+            }
+
+            Eigen::Matrix2d U_ijik, U_ijik_inv;
+            Eigen::Vector2d u_ij, u_ik;
+            u_ij = one_ring_uv_positions_pi[ev1]; // pj - pi
+            u_ik =
+                one_ring_uv_positions_pi[e_chart.top_vertex_index]; // pk - pi
+
+            U_ijik << u_ij[0], u_ik[0], u_ij[1], u_ik[0];
+            U_ijik_inv = inverse_2by2(U_ijik);
+
+            // record U_ijik info to v_chart
+            v_charts[ev0].base_decided = true;
+            v_charts[ev0].U_ijik = U_ijik;
+            v_charts[ev0].U_ijik_inv = U_ijik_inv;
+            v_charts[ev0].vid_j_k = {{ev1, e_chart.top_vertex_index}};
+            v_charts[ev0].node_id_i_j_k = {{p_i, p_ij, p_ik}};
+
+            // compute ac
+            Eigen::Vector2d u_ik_p =
+                one_ring_uv_positions_pi[e_chart.bottom_vertex_index]; // pk'
+
+            Eigen::Vector2d U_ikp = U_ijik_inv * u_ik_p;
+
+            std::array<double, 3> ac = {
+                {U_ikp[0], 1 - U_ikp[0] - U_ikp[1], U_ikp[1]}}; // pij pi pik
+
+            // compute am for [pi pj pij pik pik' pijm]
+            // from ag for [pi pj pij pji pik pjk pik' pjk' pijm]
+            // pj == pji == pjk == pjk'
+            std::array<double, 6> am = {{
+                ag[0],                         // pi
+                ag[1] + ag[3] + ag[5] + ag[7], // pj
+                ag[2],                         // pij
+                ag[4],                         // pik
+                ag[6],                         // pik'
+                ag[8]                          // pijm
+            }};
+
+            // assign shared ind vars
+            // [x_i, y_i, z_i, x_j, y_j, z_j]
+
+            // x_j, y_j, z_j, might be already assigned in previous iteration
+            if (!node_assigned[p_j]) {
+              m.insert(p_j * 3 + 0, p_j * 3 + 0) = 1;
+              m.insert(p_j * 3 + 1, p_j * 3 + 1) = 1;
+              m.insert(p_j * 3 + 2, p_j * 3 + 2) = 1;
+              node_assigned[p_j] = true;
+              independent_node_map[p_j * 3 + 0] = 1;
+              independent_node_map[p_j * 3 + 1] = 1;
+              independent_node_map[p_j * 3 + 2] = 1;
+            }
+
+            // x_i, y_i z_i
+            assert(!node_assigned[p_i]);
+            m.insert(p_i * 3 + 0, p_i * 3 + 0) = 1;
+            m.insert(p_i * 3 + 1, p_i * 3 + 1) = 1;
+            m.insert(p_i * 3 + 2, p_i * 3 + 2) = 1;
+            node_assigned[p_i] = true;
+            independent_node_map[p_i * 3 + 0] = 1;
+            independent_node_map[p_i * 3 + 1] = 1;
+            independent_node_map[p_i * 3 + 2] = 1;
+
+            // assign dependent degenerated nodes [pji pjc pjc' pjk pjk'] = pj
+            // can be already assigned in previous iteration
+            // pjc pjc' assign in interior constraints, skip for now
+            if (!node_assigned[p_ji]) {
+              m.insert(p_ji * 3 + 0, p_j * 3 + 0) = 1;
+              m.insert(p_ji * 3 + 1, p_j * 3 + 1) = 1;
+              m.insert(p_ji * 3 + 2, p_j * 3 + 2) = 1;
+              node_assigned[p_ji] = true;
+              independent_node_map[p_ji * 3 + 0] = 0;
+              independent_node_map[p_ji * 3 + 1] = 0;
+              independent_node_map[p_ji * 3 + 2] = 0;
+            }
+
+            if (!node_assigned[p_jk]) {
+              m.insert(p_jk * 3 + 0, p_j * 3 + 0) = 1;
+              m.insert(p_jk * 3 + 1, p_j * 3 + 1) = 1;
+              m.insert(p_jk * 3 + 2, p_j * 3 + 2) = 1;
+              node_assigned[p_jk] = true;
+              independent_node_map[p_jk * 3 + 0] = 0;
+              independent_node_map[p_jk * 3 + 1] = 0;
+              independent_node_map[p_jk * 3 + 2] = 0;
+            }
+
+            if (!node_assigned[p_jk_p]) {
+              m.insert(p_jk_p * 3 + 0, p_j * 3 + 0) = 1;
+              m.insert(p_jk_p * 3 + 1, p_j * 3 + 1) = 1;
+              m.insert(p_jk_p * 3 + 2, p_j * 3 + 2) = 1;
+              node_assigned[p_jk_p] = true;
+              independent_node_map[p_jk_p * 3 + 0] = 0;
+              independent_node_map[p_jk_p * 3 + 1] = 0;
+              independent_node_map[p_jk_p * 3 + 2] = 0;
+            }
+
+            // get sparse vecs of pi and pj
+            Eigen::SparseVector<double> x_i = m.row(p_i * 3 + 0);
+            Eigen::SparseVector<double> y_i = m.row(p_i * 3 + 1);
+            Eigen::SparseVector<double> z_i = m.row(p_i * 3 + 2);
+            Eigen::SparseVector<double> x_j = m.row(p_j * 3 + 0);
+            Eigen::SparseVector<double> y_j = m.row(p_j * 3 + 1);
+            Eigen::SparseVector<double> z_j = m.row(p_j * 3 + 2);
+
+            if (ni_max_entry == 0) {
+              // x is the max entry
+
+              // assign ind vars
+              // [y_ij, z_ij, y_ik, z_ik, y_mij, z_mij]
+
+              // y_ij, z_ij
+              m.insert(p_ij * 3 + 1, p_ij * 3 + 1) = 1;
+              m.insert(p_ij * 3 + 2, p_ij * 3 + 2) = 1;
+              independent_node_map[p_ij * 3 + 1] = 1;
+              independent_node_map[p_ij * 3 + 2] = 1;
+
+              // x_ik, y_ik, z_ik
+              m.insert(p_ik * 3 + 0, p_ik * 3 + 0) = 1;
+              m.insert(p_ik * 3 + 1, p_ik * 3 + 1) = 1;
+              m.insert(p_ik * 3 + 2, p_ik * 3 + 2) = 1;
+              independent_node_map[p_ik * 3 + 0] = 1;
+              independent_node_map[p_ik * 3 + 1] = 1;
+              independent_node_map[p_ik * 3 + 2] = 1;
+
+              // y_mij, z_mij
+              m.insert(p_ij_m * 3 + 1, p_ij_m * 3 + 1) = 1;
+              m.insert(p_ij_m * 3 + 2, p_ij_m * 3 + 2) = 1;
+              independent_node_map[p_ij_m * 3 + 1] = 1;
+              independent_node_map[p_ij_m * 3 + 2] = 1;
+
+              // get spvec for [y_ij, z_ij, y_ik, z_ik, y_mij, z_mij]
+              Eigen::SparseVector<double> y_ij = m.row(p_ij * 3 + 1);
+              Eigen::SparseVector<double> z_ij = m.row(p_ij * 3 + 2);
+              Eigen::SparseVector<double> x_ik = m.row(p_ik * 3 + 0);
+              Eigen::SparseVector<double> y_ik = m.row(p_ik * 3 + 1);
+              Eigen::SparseVector<double> z_ik = m.row(p_ik * 3 + 2);
+              Eigen::SparseVector<double> y_ij_m = m.row(p_ij_m * 3 + 1);
+              Eigen::SparseVector<double> z_ij_m = m.row(p_ij_m * 3 + 2);
+
+              std::array<Eigen::SparseVector<double>, 13> ind_vecs = {
+                  {x_i, y_i, z_i, x_j, y_j, z_j, y_ij, z_ij, x_ik, y_ik, z_ik,
+                   y_ij_m, z_ij_m}};
+
+              // assign compute dependent node wrt
+              // [x_i, y_i, z_i, x_j, y_j, z_j, y_ij, z_ij, y_ik, z_ik, y_ij_m,
+              // z_ij_m]
+
+              // get dep coeffs
+              // [x_ij, x_mij, x_mij_p, y_mij_p, z_mij_p, x_ik, x_ik_p, y_ik_p,
+              // z_ik_p]
+              std::array<std::array<double, 13>, 8> dep_coeffs =
+                  pj_cone_x_max_deps(ac, am, ni);
+
+              // compute dep vecs
+              std::vector<Eigen::SparseVector<double>> dep_vecs;
+              for (int i = 0; i < 8; ++i) {
+                Eigen::SparseVector<double> sp_vec;
+                for (int j = 0; j < 13; ++j) {
+                  sp_vec += dep_coeffs[i][j] * ind_vecs[j];
+                }
+                dep_vecs.push_back(sp_vec);
+              }
+
+              // assign dep vecs
+              // x_ij
+              assign_spvec_to_spmat_row(m, dep_vecs[0], p_ij * 3 + 0);
+              independent_node_map[p_ij * 3 + 0] = 0;
+              node_assigned[p_ij] = true;
+
+              // x_ij_m
+              assign_spvec_to_spmat_row(m, dep_vecs[1], p_ij_m * 3 + 0);
+              independent_node_map[p_ij_m * 3 + 0] = 0;
+              node_assigned[p_ij_m] = true;
+
+              // x_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[2], p_ij_m_p * 3 + 0);
+              independent_node_map[p_ij_m_p * 3 + 0] = 0;
+              // y_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[3], p_ij_m_p * 3 + 1);
+              independent_node_map[p_ij_m_p * 3 + 1] = 0;
+              // z_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[4], p_ij_m_p * 3 + 2);
+              independent_node_map[p_ij_m_p * 3 + 2] = 0;
+              node_assigned[p_ij_m_p] = true;
+
+              // x_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[5], p_ik_p * 3 + 0);
+              independent_node_map[p_ik_p * 3 + 0] = 0;
+              // y_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[6], p_ik_p * 3 + 1);
+              independent_node_map[p_ik_p * 3 + 1] = 0;
+              // z_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[7], p_ik_p * 3 + 2);
+              independent_node_map[p_ik_p * 3 + 2] = 0;
+              node_assigned[p_ik_p] = true;
+
+            } else if (ni_max_entry == 1) {
+              // y is the max entry
+
+              // assign ind vars
+              // [x_ij, z_ij, x_ik, z_ik, x_mij, z_mij]
+
+              // x_ij, z_ij
+              m.insert(p_ij * 3 + 0, p_ij * 3 + 0) = 1;
+              m.insert(p_ij * 3 + 2, p_ij * 3 + 2) = 1;
+              independent_node_map[p_ij * 3 + 0] = 1;
+              independent_node_map[p_ij * 3 + 2] = 1;
+
+              // x_ik, y_ik, z_ik
+              m.insert(p_ik * 3 + 0, p_ik * 3 + 0) = 1;
+              m.insert(p_ik * 3 + 1, p_ik * 3 + 1) = 1;
+              m.insert(p_ik * 3 + 2, p_ik * 3 + 2) = 1;
+              independent_node_map[p_ik * 3 + 0] = 1;
+              independent_node_map[p_ik * 3 + 1] = 1;
+              independent_node_map[p_ik * 3 + 2] = 1;
+
+              // x_mij, z_mij
+              m.insert(p_ij_m * 3 + 0, p_ij_m * 3 + 0) = 1;
+              m.insert(p_ij_m * 3 + 2, p_ij_m * 3 + 2) = 1;
+              independent_node_map[p_ij_m * 3 + 0] = 1;
+              independent_node_map[p_ij_m * 3 + 2] = 1;
+
+              // get spvec for [x_ij, z_ij, x_ik, z_ik, x_mij, z_mij]
+              Eigen::SparseVector<double> x_ij = m.row(p_ij * 3 + 0);
+              Eigen::SparseVector<double> z_ij = m.row(p_ij * 3 + 2);
+              Eigen::SparseVector<double> x_ik = m.row(p_ik * 3 + 0);
+              Eigen::SparseVector<double> y_ik = m.row(p_ik * 3 + 1);
+              Eigen::SparseVector<double> z_ik = m.row(p_ik * 3 + 2);
+              Eigen::SparseVector<double> x_ij_m = m.row(p_ij_m * 3 + 0);
+              Eigen::SparseVector<double> z_ij_m = m.row(p_ij_m * 3 + 2);
+
+              std::array<Eigen::SparseVector<double>, 13> ind_vecs = {
+                  {x_i, y_i, z_i, x_j, y_j, z_j, x_ij, z_ij, x_ik, y_ik, z_ik,
+                   x_ij_m, z_ij_m}};
+
+              // assign compute dependent node wrt
+              // [x_i, y_i, z_i, x_j, y_j, z_j, x_ij, z_ij, x_ik, z_ik, x_ij_m,
+              // z_ij_m]
+
+              // get dep coeffs
+              // [y_ij, y_mij, x_mij_p, y_mij_p, z_mij_p, y_ik, x_ik_p, y_ik_p,
+              // z_ik_p]
+              std::array<std::array<double, 13>, 8> dep_coeffs =
+                  pj_cone_y_max_deps(ac, am, ni);
+
+              // compute dep vecs
+              std::vector<Eigen::SparseVector<double>> dep_vecs;
+              for (int i = 0; i < 8; ++i) {
+                Eigen::SparseVector<double> sp_vec;
+                for (int j = 0; j < 13; ++j) {
+                  sp_vec += dep_coeffs[i][j] * ind_vecs[j];
+                }
+                dep_vecs.push_back(sp_vec);
+              }
+
+              // assign dep vecs
+              // y_ij
+              assign_spvec_to_spmat_row(m, dep_vecs[0], p_ij * 3 + 1);
+              independent_node_map[p_ij * 3 + 1] = 0;
+              node_assigned[p_ij] = true;
+
+              // y_ij_m
+              assign_spvec_to_spmat_row(m, dep_vecs[1], p_ij_m * 3 + 1);
+              independent_node_map[p_ij_m * 3 + 1] = 0;
+              node_assigned[p_ij_m] = true;
+
+              // x_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[2], p_ij_m_p * 3 + 0);
+              independent_node_map[p_ij_m_p * 3 + 0] = 0;
+              // y_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[3], p_ij_m_p * 3 + 1);
+              independent_node_map[p_ij_m_p * 3 + 1] = 0;
+              // z_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[4], p_ij_m_p * 3 + 2);
+              independent_node_map[p_ij_m_p * 3 + 2] = 0;
+              node_assigned[p_ij_m_p] = true;
+
+              // x_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[5], p_ik_p * 3 + 0);
+              independent_node_map[p_ik_p * 3 + 0] = 0;
+              // y_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[6], p_ik_p * 3 + 1);
+              independent_node_map[p_ik_p * 3 + 1] = 0;
+              // z_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[7], p_ik_p * 3 + 2);
+              independent_node_map[p_ik_p * 3 + 2] = 0;
+              node_assigned[p_ik_p] = true;
+
+            } else if (ni_max_entry == 2) {
+              // z si the max entry
+
+              // assign ind vars
+              // [x_ij, y_ij, x_ik, y_ik, x_mij, y_mij]
+
+              // x_ij, y_ij
+              m.insert(p_ij * 3 + 0, p_ij * 3 + 0) = 1;
+              m.insert(p_ij * 3 + 1, p_ij * 3 + 1) = 1;
+              independent_node_map[p_ij * 3 + 0] = 1;
+              independent_node_map[p_ij * 3 + 1] = 1;
+
+              // x_ik, y_ik, z_ik
+              m.insert(p_ik * 3 + 0, p_ik * 3 + 0) = 1;
+              m.insert(p_ik * 3 + 1, p_ik * 3 + 1) = 1;
+              m.insert(p_ik * 3 + 2, p_ik * 3 + 2) = 1;
+              independent_node_map[p_ik * 3 + 0] = 1;
+              independent_node_map[p_ik * 3 + 1] = 1;
+              independent_node_map[p_ik * 3 + 2] = 1;
+
+              // x_mij, y_mij
+              m.insert(p_ij_m * 3 + 0, p_ij_m * 3 + 0) = 1;
+              m.insert(p_ij_m * 3 + 1, p_ij_m * 3 + 1) = 1;
+              independent_node_map[p_ij_m * 3 + 0] = 1;
+              independent_node_map[p_ij_m * 3 + 1] = 1;
+
+              // get spvec for [x_ij, y_ij, x_ik, y_ik, x_mij, y_mij]
+              Eigen::SparseVector<double> x_ij = m.row(p_ij * 3 + 0);
+              Eigen::SparseVector<double> y_ij = m.row(p_ij * 3 + 1);
+              Eigen::SparseVector<double> x_ik = m.row(p_ik * 3 + 0);
+              Eigen::SparseVector<double> y_ik = m.row(p_ik * 3 + 1);
+              Eigen::SparseVector<double> z_ik = m.row(p_ik * 3 + 2);
+              Eigen::SparseVector<double> x_ij_m = m.row(p_ij_m * 3 + 0);
+              Eigen::SparseVector<double> y_ij_m = m.row(p_ij_m * 3 + 1);
+
+              std::array<Eigen::SparseVector<double>, 13> ind_vecs = {
+                  {x_i, y_i, z_i, x_j, y_j, z_j, x_ij, y_ij, x_ik, y_ik, z_ik,
+                   x_ij_m, y_ij_m}};
+
+              // assign compute dependent node wrt
+              // [x_i, y_i, z_i, x_j, y_j, z_j, x_ij, y_ij, x_ik, y_ik, x_ij_m,
+              // y_ij_m]
+
+              // get dep coeffs
+              // [z_ij, z_mij, x_mij_p, y_mij_p, z_mij_p, z_ik, x_ik_p, y_ik_p,
+              // z_ik_p]
+              std::array<std::array<double, 13>, 8> dep_coeffs =
+                  pj_cone_z_max_deps(ac, am, ni);
+
+              // compute dep vecs
+              std::vector<Eigen::SparseVector<double>> dep_vecs;
+              for (int i = 0; i < 8; ++i) {
+                Eigen::SparseVector<double> sp_vec;
+                for (int j = 0; j < 13; ++j) {
+                  sp_vec += dep_coeffs[i][j] * ind_vecs[j];
+                }
+                dep_vecs.push_back(sp_vec);
+              }
+
+              // assign dep vecs
+              // z_ij
+              assign_spvec_to_spmat_row(m, dep_vecs[0], p_ij * 3 + 2);
+              independent_node_map[p_ij * 3 + 2] = 0;
+              node_assigned[p_ij] = true;
+
+              // z_ij_m
+              assign_spvec_to_spmat_row(m, dep_vecs[1], p_ij_m * 3 + 2);
+              independent_node_map[p_ij_m * 3 + 2] = 0;
+              node_assigned[p_ij_m] = true;
+
+              // x_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[2], p_ij_m_p * 3 + 0);
+              independent_node_map[p_ij_m_p * 3 + 0] = 0;
+              // y_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[3], p_ij_m_p * 3 + 1);
+              independent_node_map[p_ij_m_p * 3 + 1] = 0;
+              // z_ij_m_p
+              assign_spvec_to_spmat_row(m, dep_vecs[4], p_ij_m_p * 3 + 2);
+              independent_node_map[p_ij_m_p * 3 + 2] = 0;
+              node_assigned[p_ij_m_p] = true;
+
+              // x_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[5], p_ik_p * 3 + 0);
+              independent_node_map[p_ik_p * 3 + 0] = 0;
+              // y_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[6], p_ik_p * 3 + 1);
+              independent_node_map[p_ik_p * 3 + 1] = 0;
+              // z_ik_p
+              assign_spvec_to_spmat_row(m, dep_vecs[7], p_ik_p * 3 + 2);
+              independent_node_map[p_ik_p * 3 + 2] = 0;
+              node_assigned[p_ik_p] = true;
+
+            } else {
+              throw std::runtime_error("wrong max entry of ni!");
+            }
+
+            // end mark
           }
 
           processed_vid[ev0] = true;
@@ -2788,6 +3745,584 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
           e_chart.processed = true;
         }
       }
+    }
+    // debug message
+    std::cout << "cone " << vid << " computed." << std::endl;
+  }
+}
+
+void CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
+    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map,
+    bool debug_isolate = false) {
+  const auto &v_charts = m_affine_manifold.m_vertex_charts;
+  // const auto &f_charts = m_affine_manifold.m_face_charts;
+  const auto &F = m_affine_manifold.get_faces();
+
+  for (size_t v_id = 0; v_id < v_charts.size(); ++v_id) {
+    int64_t vid = v_id;
+
+    const auto &v_chart = v_charts[vid];
+    const auto &v_one_ring = v_chart.vertex_one_ring;
+    const auto &f_one_ring = v_chart.face_one_ring;
+
+    // get vertex uv positions
+    std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_map;
+    for (int i = 0; i < v_chart.one_ring_uv_positions.rows(); ++i) {
+      one_ring_uv_positions_map[v_one_ring[i]] =
+          v_chart.one_ring_uv_positions.row(i);
+    }
+
+    std::map<int64_t, bool> processed_id; // vid processed, caution! not node id
+
+    processed_id[vid] = true;
+
+    Eigen::Matrix2d U_ijik_inv;
+    std::vector<int64_t>
+        indep_node_ids; // pi pij pik (need to be size 3 after push)
+
+    if (v_chart.is_cone && !debug_isolate) {
+      // cone already processed, skip
+      continue;
+    }
+
+    if (v_chart.base_decided) {
+      // cone adjacent vertex
+      assert(!debug_isolate);
+      assert(v_chart.is_cone_adjacent);
+      assert(v_chart.vid_j_k[0] > -1);
+      assert(v_chart.vid_j_k[1] > -1);
+      assert(v_chart.node_id_i_j_k[0] > -1);
+      assert(v_chart.node_id_i_j_k[1] > -1);
+      assert(v_chart.node_id_i_j_k[2] > -1);
+
+      U_ijik_inv = v_chart.U_ijik_inv;
+      processed_id[v_chart.vid_j_k[0]] = true;
+      processed_id[v_chart.vid_j_k[1]] = true;
+
+      for (int i = 0; i < 3; ++i) {
+        indep_node_ids.push_back(v_chart.node_id_i_j_k[i]);
+      }
+
+    } else {
+      // pick nodes on the first face to be independent
+      // find the two edges
+      const auto &first_fid = f_one_ring[0];
+      const auto &first_Fv = F.row(first_fid);
+      // const auto &first_f_chart = f_charts[first_fid];
+
+      std::vector<Eigen::Vector2d>
+          u_ijik; // uij uik (need to be size 2 after push)
+
+      // find the node id of vid and push it into indep node ids
+      for (int i = 0; i < 3; ++i) {
+        // find the edges connected to vid
+        if (first_Fv[i] != vid) {
+          const auto &e_chart = m_affine_manifold.get_edge_chart(first_fid, i);
+
+          if (e_chart.left_vertex_index == vid) {
+            indep_node_ids.push_back(e_chart.lagrange_nodes[0]);
+          } else {
+            indep_node_ids.push_back(e_chart.lagrange_nodes[3]);
+          }
+
+          // break after found
+          break;
+        }
+      }
+
+      for (int i = 0; i < 3; ++i) {
+        // find the edges connected to vid
+        if (first_Fv[i] != vid) {
+          const auto &e_chart = m_affine_manifold.get_edge_chart(first_fid, i);
+
+          // get the indep node id on this edge
+          if (e_chart.left_vertex_index == vid) {
+            indep_node_ids.push_back(e_chart.lagrange_nodes[1]);
+            Eigen::Vector2d uij =
+                one_ring_uv_positions_map[e_chart.right_vertex_index] -
+                Eigen::Vector2d(0, 0);
+            // Eigen::Vector2d uij = e_chart.right_global_uv_position -
+            //                       e_chart.left_global_uv_position;
+            u_ijik.push_back(uij);
+            processed_id[e_chart.right_vertex_index] = true;
+          } else {
+            indep_node_ids.push_back(e_chart.lagrange_nodes[2]);
+            Eigen::Vector2d uij =
+                one_ring_uv_positions_map[e_chart.left_vertex_index] -
+                Eigen::Vector2d(0, 0);
+            // Eigen::Vector2d uij = e_chart.left_global_uv_position -
+            //                       e_chart.right_global_uv_position;
+            u_ijik.push_back(uij);
+            processed_id[e_chart.left_vertex_index] = true;
+          }
+
+          //   processed_id[first_Fv[i]] = true;
+        }
+      }
+
+      assert(indep_node_ids.size() == 3);
+      assert(u_ijik.size() == 2);
+
+      Eigen::Matrix2d U_ijik;
+      U_ijik << u_ijik[0][0], u_ijik[1][0], u_ijik[0][1], u_ijik[1][1];
+      U_ijik_inv = inverse_2by2(U_ijik);
+    }
+
+    // set indep vids in the whole matrix
+    if (debug_isolate) {
+      // have cone cases
+      if (!v_chart.is_cone) {
+        // not cone
+        for (int i = 0; i < 3; ++i) {
+          // set for xyz
+          m.insert(indep_node_ids[i] * 3 + 0, indep_node_ids[i] * 3 + 0) = 1;
+          m.insert(indep_node_ids[i] * 3 + 1, indep_node_ids[i] * 3 + 1) = 1;
+          m.insert(indep_node_ids[i] * 3 + 2, indep_node_ids[i] * 3 + 2) = 1;
+          // constrained_row_ids.push_back(indep_node_ids[i]);
+          independent_node_map[indep_node_ids[i] * 3 + 0] =
+              1; // set node as independent
+          independent_node_map[indep_node_ids[i] * 3 + 1] =
+              1; // set node as independent
+          independent_node_map[indep_node_ids[i] * 3 + 2] =
+              1; // set node as independent
+        }
+      } else {
+        // is cone
+        for (int i = 0; i < 3; ++i) {
+          // set for xyz
+          if (i == 0) {
+            m.insert(indep_node_ids[i] * 3 + 0, indep_node_ids[0] * 3 + 0) = 1;
+            m.insert(indep_node_ids[i] * 3 + 1, indep_node_ids[0] * 3 + 1) = 1;
+            m.insert(indep_node_ids[i] * 3 + 2, indep_node_ids[0] * 3 + 2) = 1;
+            // constrained_row_ids.push_back(indep_node_ids[i]);
+            independent_node_map[indep_node_ids[i] * 3 + 0] =
+                1; // set node as independent
+            independent_node_map[indep_node_ids[i] * 3 + 1] =
+                1; // set node as independent
+            independent_node_map[indep_node_ids[i] * 3 + 2] =
+                1; // set node as independent
+          } else {
+            m.insert(indep_node_ids[i] * 3 + 0, indep_node_ids[0] * 3 + 0) = 1;
+            m.insert(indep_node_ids[i] * 3 + 1, indep_node_ids[0] * 3 + 1) = 1;
+            m.insert(indep_node_ids[i] * 3 + 2, indep_node_ids[0] * 3 + 2) = 1;
+            // constrained_row_ids.push_back(indep_node_ids[i]);
+            independent_node_map[indep_node_ids[i] * 3 + 0] =
+                0; // set node as dependent
+            independent_node_map[indep_node_ids[i] * 3 + 1] =
+                0; // set node as dependent
+            independent_node_map[indep_node_ids[i] * 3 + 2] =
+                0; // set node as dependent
+          }
+        }
+      }
+
+    } else {
+      // dont have cone case
+      if (!v_chart.is_cone_adjacent) {
+        // not cone
+        for (int i = 0; i < 3; ++i) {
+          // set for xyz
+          m.insert(indep_node_ids[i] * 3 + 0, indep_node_ids[i] * 3 + 0) = 1;
+          m.insert(indep_node_ids[i] * 3 + 1, indep_node_ids[i] * 3 + 1) = 1;
+          m.insert(indep_node_ids[i] * 3 + 2, indep_node_ids[i] * 3 + 2) = 1;
+          // constrained_row_ids.push_back(indep_node_ids[i]);
+          independent_node_map[indep_node_ids[i] * 3 + 0] =
+              1; // set node as independent
+          independent_node_map[indep_node_ids[i] * 3 + 1] =
+              1; // set node as independent
+          independent_node_map[indep_node_ids[i] * 3 + 2] =
+              1; // set node as independent
+        }
+      } else if (v_chart.is_cone_adjacent) {
+        assert(independent_node_map[indep_node_ids[0] * 3 + 0] == 1); // pi
+        assert(independent_node_map[indep_node_ids[0] * 3 + 1] == 1); // pi
+        assert(independent_node_map[indep_node_ids[0] * 3 + 2] == 1); // pi
+
+        assert(independent_node_map[indep_node_ids[1] * 3 + 0] == 0 ||
+               independent_node_map[indep_node_ids[1] * 3 + 1] == 0 ||
+               independent_node_map[indep_node_ids[1] * 3 + 2] == 0 ||
+               independent_node_map[indep_node_ids[2] * 3 + 0] == 0 ||
+               independent_node_map[indep_node_ids[2] * 3 + 1] == 0 ||
+               independent_node_map[indep_node_ids[2] * 3 + 2] ==
+                   0); // pik or pij
+      }
+    }
+
+    Eigen::SparseVector<double> x_i = m.row(indep_node_ids[0] * 3 + 0);
+    Eigen::SparseVector<double> y_i = m.row(indep_node_ids[0] * 3 + 1);
+    Eigen::SparseVector<double> z_i = m.row(indep_node_ids[0] * 3 + 2);
+    Eigen::SparseVector<double> x_ij = m.row(indep_node_ids[1] * 3 + 0);
+    Eigen::SparseVector<double> y_ij = m.row(indep_node_ids[1] * 3 + 1);
+    Eigen::SparseVector<double> z_ij = m.row(indep_node_ids[1] * 3 + 2);
+    Eigen::SparseVector<double> x_ik = m.row(indep_node_ids[2] * 3 + 0);
+    Eigen::SparseVector<double> y_ik = m.row(indep_node_ids[2] * 3 + 1);
+    Eigen::SparseVector<double> z_ik = m.row(indep_node_ids[2] * 3 + 2);
+
+    // iterate each face, process other dep vertices
+    for (const auto &fid : f_one_ring) {
+      for (int i = 0; i < 3; ++i) {
+        if (F.row(fid)[i] != vid) {
+          const auto &e_chart = m_affine_manifold.get_edge_chart(fid, i);
+
+          // find a unprocessed vertex to process
+          if (e_chart.left_vertex_index != vid &&
+              processed_id.find(e_chart.left_vertex_index) ==
+                  processed_id.end()) {
+
+            // get node id
+            auto dep_node_id =
+                e_chart.lagrange_nodes[2]; // right is vid, so node is lag[2]
+
+            Eigen::Vector2d u_im =
+                one_ring_uv_positions_map[e_chart.left_vertex_index] -
+                Eigen::Vector2d(0, 0);
+            // Eigen::Vector2d u_im = e_chart.left_global_uv_position -
+            //                        e_chart.right_global_uv_position;
+            Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
+
+            // p_im = (1-Umj-Umk)*pi + Umj*pij + Umk*pik
+            Eigen::SparseVector<double> x_m = (1 - U_ijm[0] - U_ijm[1]) * x_i +
+                                              U_ijm[0] * x_ij + U_ijm[1] * x_ik;
+            Eigen::SparseVector<double> y_m = (1 - U_ijm[0] - U_ijm[1]) * y_i +
+                                              U_ijm[0] * y_ij + U_ijm[1] * y_ik;
+            Eigen::SparseVector<double> z_m = (1 - U_ijm[0] - U_ijm[1]) * z_i +
+                                              U_ijm[0] * z_ij + U_ijm[1] * z_ik;
+
+            assign_spvec_to_spmat_row(m, x_m, dep_node_id * 3 + 0);
+            assign_spvec_to_spmat_row(m, y_m, dep_node_id * 3 + 1);
+            assign_spvec_to_spmat_row(m, z_m, dep_node_id * 3 + 2);
+
+            independent_node_map[dep_node_id * 3 + 0] = 0; // set as dependent
+            independent_node_map[dep_node_id * 3 + 1] = 0;
+            independent_node_map[dep_node_id * 3 + 2] = 0;
+
+            processed_id[e_chart.left_vertex_index] = true;
+          }
+          if (e_chart.right_vertex_index != vid &&
+              processed_id.find(e_chart.right_vertex_index) ==
+                  processed_id.end()) {
+
+            // get node id
+            auto dep_node_id =
+                e_chart.lagrange_nodes[1]; // left is vid, so node is lag[1]
+
+            Eigen::Vector2d u_im =
+                one_ring_uv_positions_map[e_chart.right_vertex_index] -
+                Eigen::Vector2d(0, 0);
+            // Eigen::Vector2d u_im = e_chart.right_global_uv_position -
+            //                        e_chart.left_global_uv_position;
+            Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
+
+            Eigen::SparseVector<double> x_m = (1 - U_ijm[0] - U_ijm[1]) * x_i +
+                                              U_ijm[0] * x_ij + U_ijm[1] * x_ik;
+            Eigen::SparseVector<double> y_m = (1 - U_ijm[0] - U_ijm[1]) * y_i +
+                                              U_ijm[0] * y_ij + U_ijm[1] * y_ik;
+            Eigen::SparseVector<double> z_m = (1 - U_ijm[0] - U_ijm[1]) * z_i +
+                                              U_ijm[0] * z_ij + U_ijm[1] * z_ik;
+
+            assign_spvec_to_spmat_row(m, x_m, dep_node_id * 3 + 0);
+            assign_spvec_to_spmat_row(m, y_m, dep_node_id * 3 + 1);
+            assign_spvec_to_spmat_row(m, z_m, dep_node_id * 3 + 2);
+
+            independent_node_map[dep_node_id * 3 + 0] = 0; // set as dependent
+            independent_node_map[dep_node_id * 3 + 1] = 0;
+            independent_node_map[dep_node_id * 3 + 2] = 0;
+
+            processed_id[e_chart.right_vertex_index] = true;
+          }
+        }
+      }
+    }
+
+    if (!v_chart.is_boundary) {
+      assert(processed_id.size() == v_one_ring.size());
+    } else {
+      assert(processed_id.size() == v_one_ring.size() + 1);
+    }
+  }
+}
+
+void CloughTocherSurface::bezier_internal_ind2dep_1_expanded(
+    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map) {
+  const auto &f_charts = m_affine_manifold.m_face_charts;
+
+  for (size_t fid = 0; fid < f_charts.size(); ++fid) {
+
+    const auto &f_chart = f_charts[fid];
+    const auto &node_ids = f_chart.lagrange_nodes;
+
+    for (int i = 0; i < 3; ++i) {
+      // loop for xyz
+      // p0c = (p0 + p01 + p02) / 3
+      Eigen::SparseVector<double> p0 = m.row(node_ids[0] * 3 + i);
+      Eigen::SparseVector<double> p01 = m.row(node_ids[3] * 3 + i);
+      Eigen::SparseVector<double> p02 = m.row(node_ids[8] * 3 + i);
+
+      // m.row(node_ids[12]) = (p0 + p01 + p02) / 3.0;
+      Eigen::SparseVector<double> p0c = (p0 + p01 + p02) / 3.0;
+      assign_spvec_to_spmat_row(m, p0c, node_ids[12] * 3 + i);
+
+      independent_node_map[node_ids[12] * 3 + i] = 0; // set as dependent
+
+      // p1c = (p1 + p12 + p10) / 3
+      Eigen::SparseVector<double> p1 = m.row(node_ids[1] * 3 + i);
+      Eigen::SparseVector<double> p12 = m.row(node_ids[5] * 3 + i);
+      Eigen::SparseVector<double> p10 = m.row(node_ids[4] * 3 + i);
+
+      // m.row(node_ids[14]) = (p1 + p12 + p10) / 3.0;
+      Eigen::SparseVector<double> p1c = (p1 + p12 + p10) / 3.0;
+      assign_spvec_to_spmat_row(m, p1c, node_ids[14] * 3 + i);
+
+      independent_node_map[node_ids[14] * 3 + i] = 0; // set as dependent
+
+      // p2c = (p2 + p21 + p20) / 3
+      Eigen::SparseVector<double> p2 = m.row(node_ids[2] * 3 + i);
+      Eigen::SparseVector<double> p21 = m.row(node_ids[6] * 3 + i);
+      Eigen::SparseVector<double> p20 = m.row(node_ids[7] * 3 + i);
+
+      // m.row(node_ids[16]) = (p2 + p21 + p20) / 3.0;
+      Eigen::SparseVector<double> p2c = (p2 + p21 + p20) / 3.0;
+      assign_spvec_to_spmat_row(m, p2c, node_ids[16] * 3 + i);
+
+      independent_node_map[node_ids[16] * 3 + i] = 0; // set as dependent
+    }
+  }
+}
+
+void CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
+    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map) {
+  Eigen::Matrix<double, 5, 7> K_N;
+  K_N << 1, 0, 0, 0, 0, 0, 0, // p0
+      0, 1, 0, 0, 0, 0, 0,    // p1
+      -3, 0, 3, 0, 0, 0, 0,   // d01
+      0, -3, 0, 3, 0, 0, 0,   // d10
+      -3. / 8., -3. / 8., -9. / 8., -9. / 8., 3. / 4., 3. / 4.,
+      3. / 2.; // h01 redundant
+
+  // std::cout << "K_N: " << std::endl << K_N << std::endl;
+
+  const Eigen::Matrix<double, 5, 1> c_e = c_e_m();
+  const Eigen::Matrix<double, 7, 1> c_hij = c_hij_m();
+
+  const auto &e_charts = m_affine_manifold.m_edge_charts;
+  const auto &F = m_affine_manifold.get_faces();
+
+  for (size_t eid = 0; eid < e_charts.size(); ++eid) {
+    const auto &e_chart = e_charts[eid];
+    if (e_chart.processed) {
+      // processed in cone constraint
+      continue;
+    } else if (e_chart.is_boundary) {
+      // TODO:
+      // skip boundary edges
+      // assign pij_c as 1
+      const auto &fid_top = e_chart.top_face_index;
+      const auto &f_top = m_affine_manifold.m_face_charts[fid_top];
+
+      // get local indices in T
+      int lid1_top = -1;
+      int lid2_top = -1;
+      for (int i = 0; i < 3; ++i) {
+        if (F.row(fid_top)[i] == e_chart.left_vertex_index) {
+          lid1_top = i;
+        }
+        if (F.row(fid_top)[i] == e_chart.right_vertex_index) {
+          lid2_top = i;
+        }
+      }
+
+      assert(lid1_top > -1);
+      assert(lid2_top > -1);
+
+      // get N_full, N
+      const auto &node_ids_top = N_helper(lid1_top, lid2_top);
+
+      std::array<int64_t, 7> N;
+      for (int i = 0; i < 7; ++i) {
+        N[i] = f_top.lagrange_nodes[node_ids_top[i]];
+      }
+
+      for (int dim = 0; dim < 3; ++dim) {
+        m.insert(N[6] * 3 + dim, N[6] * 3 + dim) = 1;
+        independent_node_map[N[6] * 3 + dim] = 1; // set as independent
+      }
+
+      continue;
+    }
+
+    const auto &fid_top = e_chart.top_face_index;
+    const auto &fid_bot = e_chart.bottom_face_index;
+    const auto &f_top = m_affine_manifold.m_face_charts[fid_top];
+    const auto &f_bot = m_affine_manifold.m_face_charts[fid_bot];
+
+    // v_pos and v_pos'
+    const Eigen::Vector2d &v0_pos = e_chart.left_vertex_uv_position;
+    const Eigen::Vector2d &v1_pos = e_chart.right_vertex_uv_position;
+    const Eigen::Vector2d &v2_pos_macro = e_chart.top_vertex_uv_position;
+    const Eigen::Vector2d &v2_pos = (v0_pos + v1_pos + v2_pos_macro) / 3.;
+
+    const Eigen::Vector2d &v0_pos_prime = e_chart.right_vertex_uv_position;
+    const Eigen::Vector2d &v1_pos_prime = e_chart.left_vertex_uv_position;
+    const Eigen::Vector2d &v2_pos_prime_macro =
+        e_chart.bottom_vertex_uv_position;
+    const Eigen::Vector2d &v2_pos_prime =
+        (v0_pos_prime + v1_pos_prime + v2_pos_prime_macro) / 3.;
+
+    // u_ij and u_ij'
+    const Eigen::Vector2d u_01 = v1_pos - v0_pos;
+    const Eigen::Vector2d u_02 = v2_pos - v0_pos;
+    const Eigen::Vector2d u_12 = v2_pos - v1_pos;
+
+    const Eigen::Vector2d u_01_prime = v1_pos_prime - v0_pos_prime;
+    const Eigen::Vector2d u_02_prime = v2_pos_prime - v0_pos_prime;
+    const Eigen::Vector2d u_12_prime = v2_pos_prime - v1_pos_prime;
+
+    // m01 and m01_prime
+    const Eigen::Vector2d m_01 = (u_02 + u_12) / 2.0;
+    const Eigen::Vector2d m_01_prime = (u_02_prime + u_12_prime) / 2.0;
+
+    // u_01_prep u_01_prep_prime
+    Eigen::Vector2d u_01_prep(-u_01[1], u_01[0]);
+    Eigen::Vector2d u_01_prep_prime(-u_01_prime[1], u_01_prime[0]);
+
+    // compute M_N and k_N
+    Eigen::Matrix<double, 1, 7> M_N =
+        (m_01.dot(u_01.normalized())) / u_01.norm() * c_e.transpose() * K_N;
+    auto k_N = m_01.dot(u_01_prep.normalized());
+    Eigen::Matrix<double, 1, 7> M_N_prime =
+        (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
+        c_e.transpose() * K_N;
+    auto k_N_prime = m_01_prime.dot(u_01_prep_prime.normalized());
+
+    // compute CM
+    Eigen::Matrix<double, 1, 7> CM = c_hij - M_N.transpose(); // 7 x 1
+    Eigen::Matrix<double, 1, 7> CM_prime = c_hij - M_N_prime.transpose();
+
+    // get local indices in T and T'
+    int lid1_top = -1;
+    int lid2_top = -1;
+    int lid1_bot = -1;
+    int lid2_bot = -1;
+    for (int i = 0; i < 3; ++i) {
+      if (F.row(fid_top)[i] == e_chart.left_vertex_index) {
+        lid1_top = i;
+      }
+      if (F.row(fid_top)[i] == e_chart.right_vertex_index) {
+        lid2_top = i;
+      }
+      if (F.row(fid_bot)[i] == e_chart.right_vertex_index) {
+        lid1_bot = i;
+      }
+      if (F.row(fid_bot)[i] == e_chart.left_vertex_index) {
+        lid2_bot = i;
+      }
+    }
+
+    assert(lid1_top > -1);
+    assert(lid1_bot > -1);
+    assert(lid2_top > -1);
+    assert(lid2_bot > -1);
+
+    // get N_full, N, N_prime
+    const auto &node_ids_top = N_helper(lid1_top, lid2_top);
+    const auto &node_ids_bot = N_helper(lid1_bot, lid2_bot);
+
+    std::array<int64_t, 7> N;
+    std::array<int64_t, 7> N_prime;
+    for (int i = 0; i < 7; ++i) {
+      N[i] = f_top.lagrange_nodes[node_ids_top[i]];
+      N_prime[i] = f_bot.lagrange_nodes[node_ids_bot[i]];
+    }
+
+    assert(N[0] == N_prime[1]);
+    assert(N[1] == N_prime[0]);
+    assert(N[2] == N_prime[3]);
+    assert(N[3] == N_prime[2]);
+
+    for (int dim = 0; dim < 3; ++dim) {
+      // loop x y z
+      auto p_0 = m.row(N[0] * 3 + dim);
+      auto p_1 = m.row(N[1] * 3 + dim);
+      auto p_01 = m.row(N[2] * 3 + dim);
+      auto p_10 = m.row(N[3] * 3 + dim);
+      auto p_0c = m.row(N[4] * 3 + dim);
+      auto p_1c = m.row(N[5] * 3 + dim);
+
+      auto p_0_prime = p_1;
+      auto p_1_prime = p_0;
+      auto p_01_prime = p_10;
+      auto p_10_prime = p_01;
+
+      auto p_0c_prime = m.row(N_prime[4] * 3 + dim);
+      auto p_1c_prime = m.row(N_prime[5] * 3 + dim);
+
+      // assign p_01_c as indep
+      m.insert(N[6] * 3 + dim, N[6] * 3 + dim) = 1;
+      independent_node_map[N[6] * 3 + dim] = 1; // set as independent
+
+      auto p_01_c = m.row(N[6] * 3 + dim);
+
+      Eigen::SparseVector<double> p_01_c_prime =
+          (k_N_prime *
+               (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10 +
+                CM[4] * p_0c + CM[5] * p_1c + CM[6] * p_01_c) +
+           k_N * (CM_prime[0] * p_0_prime + CM_prime[1] * p_1_prime +
+                  CM_prime[2] * p_01_prime + CM_prime[3] * p_10_prime +
+                  CM_prime[4] * p_0c_prime + CM_prime[5] * p_1c_prime)) /
+          (-k_N * CM_prime[6]);
+
+      assign_spvec_to_spmat_row(m, p_01_c_prime, N_prime[6] * 3 + dim);
+      independent_node_map[N_prime[6] * 3 + dim] = 0; // set as dependent
+    }
+  }
+}
+
+void CloughTocherSurface::bezier_internal_ind2dep_2_expanded(
+    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map) {
+  const auto &f_charts = m_affine_manifold.m_face_charts;
+
+  for (size_t fid = 0; fid < f_charts.size(); ++fid) {
+    const auto &f_chart = f_charts[fid];
+    const auto &node_ids = f_chart.lagrange_nodes;
+
+    for (int dim = 0; dim < 3; ++dim) {
+      // pc0 = (p0c + p01^c + p20^c) / 3
+      Eigen::SparseVector<double> p0c = m.row(node_ids[12] * 3 + dim);
+      Eigen::SparseVector<double> p01_c = m.row(node_ids[9] * 3 + dim);
+      Eigen::SparseVector<double> p20_c = m.row(node_ids[11] * 3 + dim);
+
+      Eigen::SparseVector<double> pc0 = (p0c + p01_c + p20_c) / 3.0;
+
+      assign_spvec_to_spmat_row(m, pc0, node_ids[13] * 3 + dim);
+      independent_node_map[node_ids[13] * 3 + dim] = 0; // set as dependent
+
+      // pc1 = (p1c + p12^c + p01^c) / 3
+      Eigen::SparseVector<double> p1c = m.row(node_ids[14] * 3 + dim);
+      Eigen::SparseVector<double> p12_c = m.row(node_ids[10] * 3 + dim);
+      // Eigen::SparseMatrix<double> p01_c = m.row(node_ids[9]);
+
+      Eigen::SparseVector<double> pc1 = (p1c + p12_c + p01_c) / 3.0;
+      // m.row(node_ids[15]) = pc1;
+
+      assign_spvec_to_spmat_row(m, pc1, node_ids[15] * 3 + dim);
+      independent_node_map[node_ids[15] * 3 + dim] = 0; // set as dependent
+
+      // pc2 = (p2c + p20^c + p12^c) / 3
+      Eigen::SparseVector<double> p2c = m.row(node_ids[16] * 3 + dim);
+      // Eigen::SparseMatrix<double> p20_c = m.row(node_ids[11]);
+      // Eigen::SparseMatrix<double> p12_c = m.row(node_ids[10]);
+
+      Eigen::SparseVector<double> pc2 = (p2c + p20_c + p12_c) / 3.0;
+      // m.row(node_ids[17]) = pc2;
+
+      assign_spvec_to_spmat_row(m, pc2, node_ids[17] * 3 + dim);
+      independent_node_map[node_ids[17] * 3 + dim] = 0; // set as dependent
+
+      // pc = (pc0 + pc1 + pc2) / 3
+      // m.row(node_ids[18]) = (pc0 + pc1 + pc2) / 3.0;
+      Eigen::SparseVector<double> pc = (pc0 + pc1 + pc2) / 3.0;
+      assign_spvec_to_spmat_row(m, pc, node_ids[18] * 3 + dim);
+      independent_node_map[node_ids[18] * 3 + dim] = 0; // set as dependent
     }
   }
 }

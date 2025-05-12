@@ -176,170 +176,342 @@ int main(int argc, char *argv[]) {
 
   // v_normals = test_normals;
 
-  // bezier form
+  //////////////////////////////////
+  /////     bezier form    /////////
+  //////////////////////////////////
 
-  int64_t node_cnt = ct_surface.m_affine_manifold.m_lagrange_nodes.size();
-  Eigen::SparseMatrix<double> bezier_full_to_full(node_cnt, node_cnt);
+  // int64_t node_cnt = ct_surface.m_affine_manifold.m_lagrange_nodes.size();
+  // Eigen::SparseMatrix<double> bezier_full_to_full(node_cnt, node_cnt);
 
-  std::vector<int64_t> constrained_row_ids;
-  std::map<int64_t, int> independent_node_map;
-  ct_surface.Ci_endpoint_ind2dep(bezier_full_to_full, constrained_row_ids,
-                                 independent_node_map);
-  // Eigen::saveMarket(bezier_full_to_full, output_name +
-  // "_bezier_1_r2f.txt");
-  ct_surface.Ci_internal_ind2dep_1(bezier_full_to_full, constrained_row_ids,
-                                   independent_node_map);
-  // Eigen::saveMarket(bezier_full_to_full, output_name +
-  // "_bezier_12_r2f.txt");
-  ct_surface.Ci_midpoint_ind2dep(bezier_full_to_full, constrained_row_ids,
-                                 independent_node_map);
-  ct_surface.Ci_internal_ind2dep_2(bezier_full_to_full, constrained_row_ids,
-                                   independent_node_map);
+  // std::vector<int64_t> constrained_row_ids;
+  // std::map<int64_t, int> independent_node_map;
+  // ct_surface.Ci_endpoint_ind2dep(bezier_full_to_full, constrained_row_ids,
+  //                                independent_node_map);
+  // // Eigen::saveMarket(bezier_full_to_full, output_name +
+  // // "_bezier_1_r2f.txt");
+  // ct_surface.Ci_internal_ind2dep_1(bezier_full_to_full, constrained_row_ids,
+  //                                  independent_node_map);
+  // // Eigen::saveMarket(bezier_full_to_full, output_name +
+  // // "_bezier_12_r2f.txt");
+  // ct_surface.Ci_midpoint_ind2dep(bezier_full_to_full, constrained_row_ids,
+  //                                independent_node_map);
+  // ct_surface.Ci_internal_ind2dep_2(bezier_full_to_full, constrained_row_ids,
+  //                                  independent_node_map);
 
-  std::cout << "constrained row count: " << constrained_row_ids.size()
-            << std::endl;
-  // Eigen::saveMarket(bezier_full_to_full, output_name + "_bezier_r2f.txt");
+  // std::cout << "constrained row count: " << constrained_row_ids.size()
+  //           << std::endl;
+  // // Eigen::saveMarket(bezier_full_to_full, output_name + "_bezier_r2f.txt");
 
-  Eigen::SparseMatrix<double> bezier_cone_matrix;
-  ct_surface.Ci_cone_bezier(bezier_full_to_full, bezier_cone_matrix, v_normals);
+  // Eigen::SparseMatrix<double> bezier_cone_matrix;
+  // ct_surface.Ci_cone_bezier(bezier_full_to_full, bezier_cone_matrix,
+  // v_normals);
 
-  Eigen::saveMarket(bezier_cone_matrix, output_name + "_bezier_cone.txt");
+  // Eigen::saveMarket(bezier_cone_matrix, output_name + "_bezier_cone.txt");
 
-  // check bezier constraint
-  auto bezier_control_points = ct_surface.m_bezier_control_points;
-  Eigen::MatrixXd bezier_points_mat(bezier_control_points.size(), 3);
-  for (size_t i = 0; i < bezier_control_points.size(); ++i) {
-    bezier_points_mat.row(i) = bezier_control_points[i].transpose();
-  }
+  // // check bezier constraint
+  // auto bezier_control_points = ct_surface.m_bezier_control_points;
+  // Eigen::MatrixXd bezier_points_mat(bezier_control_points.size(), 3);
+  // for (size_t i = 0; i < bezier_control_points.size(); ++i) {
+  //   bezier_points_mat.row(i) = bezier_control_points[i].transpose();
+  // }
 
-  // bezier_points_mat.setConstant(1);
+  // // bezier_points_mat.setConstant(1);
 
-  // extract constrained lines
-  Eigen::SparseMatrix<double> bezier_endpoint_cons(constrained_row_ids.size(),
-                                                   node_cnt);
+  // // extract constrained lines
+  // Eigen::SparseMatrix<double>
+  // bezier_endpoint_cons(constrained_row_ids.size(),
+  //                                                  node_cnt);
 
-  Eigen::MatrixXd endpoint_bezier_points_mat;
-  endpoint_bezier_points_mat.resize(constrained_row_ids.size(), 3);
-  for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
-    Eigen::SparseVector<double> tmpvec =
-        bezier_full_to_full.row(constrained_row_ids[i]);
-    assign_spvec_to_spmat_row_main(bezier_endpoint_cons, tmpvec, i);
+  // Eigen::MatrixXd endpoint_bezier_points_mat;
+  // endpoint_bezier_points_mat.resize(constrained_row_ids.size(), 3);
+  // for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
+  //   Eigen::SparseVector<double> tmpvec =
+  //       bezier_full_to_full.row(constrained_row_ids[i]);
+  //   assign_spvec_to_spmat_row_main(bezier_endpoint_cons, tmpvec, i);
 
-    endpoint_bezier_points_mat.row(i) =
-        bezier_points_mat.row(constrained_row_ids[i]);
-  }
-
-  auto beizer_end_error =
-      bezier_endpoint_cons * bezier_points_mat - endpoint_bezier_points_mat;
+  //   endpoint_bezier_points_mat.row(i) =
+  //       bezier_points_mat.row(constrained_row_ids[i]);
+  // }
 
   // auto beizer_end_error =
-  //     bezier_full_to_full * bezier_points_mat - bezier_points_mat;
-  double bezier_end_max_error = beizer_end_error.maxCoeff();
-  double bezier_end_min_error = beizer_end_error.minCoeff();
+  //     bezier_endpoint_cons * bezier_points_mat - endpoint_bezier_points_mat;
 
-  std::cout << "beizer max error: "
-            << ((std::abs(bezier_end_max_error) >
-                 std::abs(bezier_end_min_error))
-                    ? std::abs(bezier_end_max_error)
-                    : std::abs(bezier_end_min_error))
-            << std::endl;
+  // // auto beizer_end_error =
+  // //     bezier_full_to_full * bezier_points_mat - bezier_points_mat;
+  // double bezier_end_max_error = beizer_end_error.maxCoeff();
+  // double bezier_end_min_error = beizer_end_error.minCoeff();
 
-  // std::cout << beizer_end_error << std::endl;
+  // std::cout << "beizer max error: "
+  //           << ((std::abs(bezier_end_max_error) >
+  //                std::abs(bezier_end_min_error))
+  //                   ? std::abs(bezier_end_max_error)
+  //                   : std::abs(bezier_end_min_error))
+  //           << std::endl;
 
-  // std::cout << bezier_endpoint_cons * bezier_points_mat << std::endl;
+  // // std::cout << beizer_end_error << std::endl;
 
-  // std::cout << std::endl << endpoint_bezier_points_mat << std::endl;
+  // // std::cout << bezier_endpoint_cons * bezier_points_mat << std::endl;
 
-  std::cout << constrained_row_ids.size() << "  " << node_cnt << std::endl;
+  // // std::cout << std::endl << endpoint_bezier_points_mat << std::endl;
 
-  // compute bezier constraint matrix without cone cons
-  Eigen::SparseMatrix<double> bezier_cons_no_cone;
+  // std::cout << constrained_row_ids.size() << "  " << node_cnt << std::endl;
 
-  // count dep rows
-  int64_t dep_cnt = 0;
+  // // compute bezier constraint matrix without cone cons
+  // Eigen::SparseMatrix<double> bezier_cons_no_cone;
+
+  // // count dep rows
+  // int64_t dep_cnt = 0;
+  // int64_t ind_cnt = 0;
+  // for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
+  //   if (independent_node_map[i] == 0) {
+  //     dep_cnt++;
+  //   } else if (independent_node_map[i] == 1) {
+  //     ind_cnt++;
+  //   }
+  // }
+
+  // assert(dep_cnt + ind_cnt == node_cnt);
+
+  // bezier_cons_no_cone.resize(dep_cnt, node_cnt);
+
+  // int64_t row_id = 0;
+  // for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
+  //   if (independent_node_map[i] == 1) {
+  //     // skip indepdent nodes
+  //     continue;
+  //   }
+
+  //   const Eigen::SparseVector<double> &r2f_row = bezier_full_to_full.row(i);
+  //   Eigen::SparseVector<double> eye_row;
+  //   eye_row.resize(node_cnt);
+  //   eye_row.insert(i) = 1;
+
+  //   Eigen::SparseVector<double> cons_row = r2f_row - eye_row;
+  //   assign_spvec_to_spmat_row_main(bezier_cons_no_cone, cons_row, row_id);
+  //   row_id++;
+  // }
+
+  // Eigen::saveMarket(bezier_cons_no_cone,
+  //                   output_name + "_bezier_constraints_no_cone.txt");
+
+  // // compute reduce to full without cones
+  // Eigen::SparseMatrix<double> bezier_no_cone_r2f(node_cnt, ind_cnt);
+  // std::vector<int64_t> col2nodeid_map;
+  // int64_t col_cnt = 0;
+  // for (int64_t i = 0; i < bezier_full_to_full.cols(); ++i) {
+  //   if (independent_node_map[i] == 1) {
+  //     const Eigen::SparseVector<double> &c = bezier_full_to_full.col(i);
+  //     bezier_no_cone_r2f.col(col_cnt) = c;
+  //     col_cnt++;
+  //     col2nodeid_map.push_back(i);
+  //   } else {
+  //     // do nothing
+  //   }
+  // }
+
+  // std::cout << "ind node cnt: " << ind_cnt << std::endl;
+
+  // Eigen::saveMarket(bezier_no_cone_r2f,
+  //                   output_name + "_bezier_r2f_no_cone.txt");
+
+  // std::ofstream r2f_idx_map_file(output_name +
+  //                                "_bezier_r2f_mat_col_idx_map.txt");
+  // for (size_t i = 0; i < col2nodeid_map.size(); ++i) {
+  //   r2f_idx_map_file << col2nodeid_map[i] << std::endl;
+  // }
+  // r2f_idx_map_file.close();
+
+  // // test bezier lag convertion
+  // Eigen::SparseMatrix<double> b2l_full_mat, l2b_full_mat;
+  // ct_surface.bezier2lag_full_mat(b2l_full_mat);
+  // ct_surface.lag2bezier_full_mat(l2b_full_mat);
+
+  // Eigen::MatrixXd lag_mat(ct_surface.m_lagrange_node_values.size(), 3);
+  // for (size_t i = 0; i < ct_surface.m_lagrange_node_values.size(); ++i) {
+  //   lag_mat.row(i) = ct_surface.m_lagrange_node_values[i].transpose();
+  // }
+
+  // Eigen::MatrixXd bezier_mat(ct_surface.m_bezier_control_points.size(), 3);
+  // for (size_t i = 0; i < ct_surface.m_bezier_control_points.size(); ++i) {
+  //   bezier_mat.row(i) = ct_surface.m_bezier_control_points[i].transpose();
+  // }
+
+  // std::cout << (b2l_full_mat * bezier_mat - lag_mat).norm() << std::endl;
+  // std::cout << (l2b_full_mat * lag_mat - bezier_mat).norm() << std::endl;
+
+  // Eigen::saveMarket(b2l_full_mat,
+  //                   output_name + "_bezier_to_lag_convertion_matrix.txt");
+
+  // Eigen::saveMarket(l2b_full_mat,
+  //                   output_name + "_lag_to_bezier_convertion_matrix.txt");
+
+  // exit(0);
+
+  ////////////////////////////////////////////////////
+  /////     bezier form  expanded with cone  /////////
+  ////////////////////////////////////////////////////
+
+  int64_t node_cnt = ct_surface.m_affine_manifold.m_lagrange_nodes.size();
+  Eigen::SparseMatrix<double> f2f_expanded(node_cnt * 3, node_cnt * 3);
+
+  // std::map<int64_t, int> independent_node_map;
+  std::vector<int> independent_node_map(node_cnt * 3, -1);
+  // for (int64_t i = 0; i < node_cnt * 3; ++i) {
+  //   // init to -1
+  //   independent_node_map[i] = -1;
+  // }
+
+  std::vector<bool> node_assigned(node_cnt, false);
+
+  std::cout << "compute cone constraints ..." << std::endl;
+  ct_surface.bezier_cone_constraints_expanded(
+      f2f_expanded, independent_node_map, node_assigned, v_normals);
+
+  std::cout << "compute endpoint constraints ..." << std::endl;
+  ct_surface.bezier_endpoint_ind2dep_expanded(f2f_expanded,
+                                              independent_node_map, false);
+
+  std::cout << "compute interior 1 constraints ..." << std::endl;
+  ct_surface.bezier_internal_ind2dep_1_expanded(f2f_expanded,
+                                                independent_node_map);
+
+  std::cout << "compute midpoint constraints ..." << std::endl;
+  ct_surface.bezier_midpoint_ind2dep_expanded(f2f_expanded,
+                                              independent_node_map);
+
+  std::cout << "compute interior 2 constraints ..." << std::endl;
+  ct_surface.bezier_internal_ind2dep_2_expanded(f2f_expanded,
+                                                independent_node_map);
+
+  std::cout << "done constraint computation" << std::endl;
+
   int64_t ind_cnt = 0;
-  for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
-    if (independent_node_map[i] == 0) {
+  int64_t dep_cnt = 0;
+  for (int64_t i = 0; i < node_cnt * 3; ++i) {
+    // init to -1
+    if (independent_node_map[i] < 0) {
+      std::cout << "node id: " << i << " not processed" << std::endl;
+    } else if (independent_node_map[i] == 0) {
       dep_cnt++;
     } else if (independent_node_map[i] == 1) {
       ind_cnt++;
     }
   }
 
-  assert(dep_cnt + ind_cnt == node_cnt);
+  std::cout << "node cnt: " << node_cnt * 3 << std::endl;
+  std::cout << "dep cnt: " << dep_cnt << std::endl;
+  std::cout << "ind cnt: " << ind_cnt << std::endl;
 
-  bezier_cons_no_cone.resize(dep_cnt, node_cnt);
+  int64_t cone_valance = 0;
+  int64_t cone_cnt = 0;
+  for (const auto &v_chart : ct_surface.m_affine_manifold.m_vertex_charts) {
+    if (v_chart.is_cone) {
+      cone_valance += (v_chart.vertex_one_ring.size() - 1);
+      cone_cnt++;
+    }
+  }
+  std::cout << "cone total valance: " << cone_valance << std::endl;
 
+  int64_t ind_target_cnt =
+      ct_surface.m_affine_manifold.m_vertex_charts.size() * 3 * 3 +
+      ct_surface.m_affine_manifold.m_edge_charts.size() * 1 * 3 -
+      cone_valance * 3 - cone_cnt * 2 * 3;
+
+  std::cout << "ind target cnt: " << ind_target_cnt << std::endl;
+
+  Eigen::SparseMatrix<double> bezier_constraint_matrix(dep_cnt, node_cnt * 3);
   int64_t row_id = 0;
-  for (size_t i = 0; i < constrained_row_ids.size(); ++i) {
+  for (size_t i = 0; i < independent_node_map.size(); ++i) {
     if (independent_node_map[i] == 1) {
-      // skip indepdent nodes
+      // ind, skip
       continue;
     }
 
-    const Eigen::SparseVector<double> &r2f_row = bezier_full_to_full.row(i);
+    const Eigen::SparseVector<double> &f2f_row = f2f_expanded.row(i);
     Eigen::SparseVector<double> eye_row;
-    eye_row.resize(node_cnt);
+    eye_row.resize(node_cnt * 3);
     eye_row.insert(i) = 1;
 
-    Eigen::SparseVector<double> cons_row = r2f_row - eye_row;
-    assign_spvec_to_spmat_row_main(bezier_cons_no_cone, cons_row, row_id);
+    Eigen::SparseVector<double> cons_row = f2f_row - eye_row;
+    assign_spvec_to_spmat_row_main(bezier_constraint_matrix, cons_row, row_id);
     row_id++;
   }
 
-  Eigen::saveMarket(bezier_cons_no_cone,
-                    output_name + "_bezier_constraints_no_cone.txt");
-
-  // compute reduce to full without cones
-  Eigen::SparseMatrix<double> bezier_no_cone_r2f(node_cnt, ind_cnt);
-  std::vector<int64_t> col2nodeid_map;
+  // compute reduce to full
+  std::cout << "computing reduce to full" << std::endl;
+  Eigen::SparseMatrix<double> r2f_expanded(node_cnt * 3, ind_cnt);
+  std::vector<int64_t> col2nid_map;
   int64_t col_cnt = 0;
-  for (int64_t i = 0; i < bezier_full_to_full.cols(); ++i) {
+  for (int64_t i = 0; i < f2f_expanded.cols(); ++i) {
     if (independent_node_map[i] == 1) {
-      const Eigen::SparseVector<double> &c = bezier_full_to_full.col(i);
-      bezier_no_cone_r2f.col(col_cnt) = c;
+      const Eigen::SparseVector<double> &c = f2f_expanded.col(i);
+      r2f_expanded.col(col_cnt) = c;
       col_cnt++;
-      col2nodeid_map.push_back(i);
-    } else {
-      // do nothing
+      col2nid_map.push_back(i);
     }
   }
 
-  std::cout << "ind node cnt: " << ind_cnt << std::endl;
+  // compute expanded beizer control points
+  std::cout << "computing bezier c points expanded" << std::endl;
+  const auto &bezier_points = ct_surface.m_bezier_control_points;
+  Eigen::VectorXd bezier_points_expanded(bezier_points.size() * 3);
 
-  Eigen::saveMarket(bezier_no_cone_r2f,
-                    output_name + "_bezier_r2f_no_cone.txt");
-
-  std::ofstream r2f_idx_map_file(output_name +
-                                 "_bezier_r2f_mat_col_idx_map.txt");
-  for (size_t i = 0; i < col2nodeid_map.size(); ++i) {
-    r2f_idx_map_file << col2nodeid_map[i] << std::endl;
-  }
-  r2f_idx_map_file.close();
-
-  // test bezier lag convertion
-  Eigen::SparseMatrix<double> b2l_full_mat, l2b_full_mat;
-  ct_surface.bezier2lag_full_mat(b2l_full_mat);
-  ct_surface.lag2bezier_full_mat(l2b_full_mat);
-
-  Eigen::MatrixXd lag_mat(ct_surface.m_lagrange_node_values.size(), 3);
-  for (size_t i = 0; i < ct_surface.m_lagrange_node_values.size(); ++i) {
-    lag_mat.row(i) = ct_surface.m_lagrange_node_values[i].transpose();
+  for (size_t i = 0; i < bezier_points.size(); ++i) {
+    for (int j = 0; j < 3; ++j) {
+      bezier_points_expanded[i * 3 + j] = bezier_points[i][j];
+    }
   }
 
-  Eigen::MatrixXd bezier_mat(ct_surface.m_bezier_control_points.size(), 3);
-  for (size_t i = 0; i < ct_surface.m_bezier_control_points.size(); ++i) {
-    bezier_mat.row(i) = ct_surface.m_bezier_control_points[i].transpose();
+  // extract ind bezier control points
+  Eigen::VectorXd bezier_ind(ind_cnt);
+  for (int64_t i = 0; i < ind_cnt; ++i) {
+    bezier_ind[i] = bezier_points_expanded[col2nid_map[i]];
   }
 
-  std::cout << (b2l_full_mat * bezier_mat - lag_mat).norm() << std::endl;
-  std::cout << (l2b_full_mat * lag_mat - bezier_mat).norm() << std::endl;
+  // compute contraint bezier cp
+  Eigen::VectorXd full_from_cone_expanded = r2f_expanded * bezier_ind;
+  Eigen::MatrixXd full_from_cone(node_cnt, 3);
+  for (int64_t i = 0; i < node_cnt; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      full_from_cone(i, j) = full_from_cone_expanded[i * 3 + j];
+    }
+  }
 
-  Eigen::saveMarket(b2l_full_mat,
-                    output_name + "_bezier_to_lag_convertion_matrix.txt");
+  Eigen::SparseMatrix<double> b2l_mat;
+  ct_surface.bezier2lag_full_mat(b2l_mat);
 
-  Eigen::saveMarket(l2b_full_mat,
-                    output_name + "_lag_to_bezier_convertion_matrix.txt");
+  Eigen::MatrixXd full_from_cone_lag = b2l_mat * full_from_cone;
+
+  ct_surface.write_external_point_values_with_conn("cone_cons_lag_nodes_mesh",
+                                                   full_from_cone_lag);
+  ct_surface.write_external_point_values_with_conn(
+      "cone_cons_bezier_nodes_mesh", full_from_cone);
+
+  Eigen::SparseMatrix<double> old_cons(node_cnt, node_cnt);
+  std::vector<int64_t> old_constrained_row_ids;
+  std::map<int64_t, int> old_independent_node_map;
+  ct_surface.Ci_endpoint_ind2dep(old_cons, old_constrained_row_ids,
+                                 old_independent_node_map);
+  ct_surface.Ci_internal_ind2dep_1(old_cons, old_constrained_row_ids,
+                                   old_independent_node_map);
+  ct_surface.Ci_midpoint_ind2dep(old_cons, old_constrained_row_ids,
+                                 old_independent_node_map);
+  ct_surface.Ci_internal_ind2dep_2(old_cons, old_constrained_row_ids,
+                                   old_independent_node_map);
+
+  Eigen::SparseMatrix<double> eye(node_cnt, node_cnt);
+  for (int64_t i = 0; i < node_cnt; ++i) {
+    eye.insert(i, i) = 1;
+  }
+
+  Eigen::MatrixXd error_mat = (old_cons - eye) * full_from_cone;
+  double max_error = error_mat.maxCoeff();
+  double min_error = error_mat.minCoeff();
+  std::cout << "error from old cons max: " << max_error << std::endl;
+  std::cout << "error from old cons min: " << min_error << std::endl;
+
+  Eigen::saveMarket(bezier_constraint_matrix,
+                    output_name + "_bezier_constraints_expanded.txt");
 
   exit(0);
 

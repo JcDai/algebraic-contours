@@ -32,6 +32,12 @@ struct VertexManifoldChart {
   bool is_boundary = false;  // Mark boundary vertices
   bool is_cone = false;      // Mark cone vertices
   bool is_cone_adjacent = false; // Mark vertices adjacent to a cone
+
+  // for bezier cone constraints
+  bool base_decided = false;
+  Eigen::Matrix2d U_ijik_inv, U_ijik;
+  std::array<int64_t, 2> vid_j_k = {{-1, -1}};
+  std::array<int64_t, 3> node_id_i_j_k = {{-1, -1, -1}};
 };
 
 /// Local layout manifold chart in R2 of the triangles around an edge.
