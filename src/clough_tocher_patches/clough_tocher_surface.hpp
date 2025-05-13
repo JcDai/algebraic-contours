@@ -89,24 +89,24 @@ public:
                       Eigen::SparseMatrix<double> &m_cone,
                       const Eigen::MatrixXd &v_normals);
 
-  void bezier2lag_full_mat(Eigen::SparseMatrix<double> &m);
-  void lag2bezier_full_mat(Eigen::SparseMatrix<double> &m);
+  void bezier2lag_full_mat(Eigen::SparseMatrix<double, 1> &m);
+  void lag2bezier_full_mat(Eigen::SparseMatrix<double, 1> &m);
 
   // beizer with cones
-  void bezier_cone_constraints_expanded(Eigen::SparseMatrix<double> &m,
+  void bezier_cone_constraints_expanded(Eigen::SparseMatrix<double, 1> &m,
                                         std::vector<int> &independent_node_map,
                                         std::vector<bool> &node_assigned,
                                         const Eigen::MatrixXd &v_normals);
-  void bezier_endpoint_ind2dep_expanded(Eigen::SparseMatrix<double> &m,
+  void bezier_endpoint_ind2dep_expanded(Eigen::SparseMatrix<double, 1> &m,
                                         std::vector<int> &independent_node_map,
                                         bool debug_isolate);
   void
-  bezier_internal_ind2dep_1_expanded(Eigen::SparseMatrix<double> &m,
+  bezier_internal_ind2dep_1_expanded(Eigen::SparseMatrix<double, 1> &m,
                                      std::vector<int> &independent_node_map);
-  void bezier_midpoint_ind2dep_expanded(Eigen::SparseMatrix<double> &m,
+  void bezier_midpoint_ind2dep_expanded(Eigen::SparseMatrix<double, 1> &m,
                                         std::vector<int> &independent_node_map);
   void
-  bezier_internal_ind2dep_2_expanded(Eigen::SparseMatrix<double> &m,
+  bezier_internal_ind2dep_2_expanded(Eigen::SparseMatrix<double, 1> &m,
                                      std::vector<int> &independent_node_map);
 
   void write_external_point_values_with_conn(const std::string &filename,

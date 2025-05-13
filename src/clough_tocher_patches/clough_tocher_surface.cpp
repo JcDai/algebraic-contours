@@ -711,12 +711,14 @@ void CloughTocherSurface::write_external_point_values_with_conn(
   file << "$EndElements\n";
 }
 
-void CloughTocherSurface::bezier2lag_full_mat(Eigen::SparseMatrix<double> &m) {
+void CloughTocherSurface::bezier2lag_full_mat(
+    Eigen::SparseMatrix<double, 1> &m) {
   Eigen::Matrix<double, 10, 10> p3_bezier2lag_matrix = p3_bezier2lag_m();
 
   const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
 
   m.resize(lagrange_nodes.size(), lagrange_nodes.size());
+  m.reserve(Eigen::VectorXi::Constant(lagrange_nodes.size(), 20));
   std::vector<bool> processed(lagrange_nodes.size(), false);
 
   for (const auto &f_chart : m_affine_manifold.m_face_charts) {
@@ -741,14 +743,17 @@ void CloughTocherSurface::bezier2lag_full_mat(Eigen::SparseMatrix<double> &m) {
       }
     }
   }
+  m.makeCompressed();
 }
 
-void CloughTocherSurface::lag2bezier_full_mat(Eigen::SparseMatrix<double> &m) {
+void CloughTocherSurface::lag2bezier_full_mat(
+    Eigen::SparseMatrix<double, 1> &m) {
   Eigen::Matrix<double, 10, 10> p3_lag2bezier_matrix = p3_lag2bezier_m();
 
   const auto &lagrange_nodes = m_affine_manifold.m_lagrange_nodes;
 
   m.resize(lagrange_nodes.size(), lagrange_nodes.size());
+  m.reserve(Eigen::VectorXi::Constant(lagrange_nodes.size(), 20));
   std::vector<bool> processed(lagrange_nodes.size(), false);
 
   for (const auto &f_chart : m_affine_manifold.m_face_charts) {
@@ -773,6 +778,7 @@ void CloughTocherSurface::lag2bezier_full_mat(Eigen::SparseMatrix<double> &m) {
       }
     }
   }
+  m.makeCompressed();
 }
 
 Eigen::Vector3d bc_to_cart(const Eigen::Vector3i &f, const Eigen::MatrixXd &V,
@@ -2010,6 +2016,14 @@ void assign_spvec_to_spmat_row(Eigen::SparseMatrix<double> &mat,
   }
 }
 
+void assign_spvec_to_spmat_row(Eigen::SparseMatrix<double, 1> &mat,
+                               Eigen::SparseVector<double> &vec,
+                               const int row) {
+  for (Eigen::SparseVector<double>::InnerIterator it(vec); it; ++it) {
+    mat.coeffRef(row, it.index()) = it.value();
+  }
+}
+
 void CloughTocherSurface::Ci_endpoint_ind2dep(
     Eigen::SparseMatrix<double> &m, std::vector<int64_t> &constrained_row_ids,
     std::map<int64_t, int> &independent_node_map) {
@@ -2668,7 +2682,7 @@ std::array<int64_t, 19> Cone_face_node_helper(const int lid1, const int lid2) {
 }
 
 void CloughTocherSurface::bezier_cone_constraints_expanded(
-    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map,
+    Eigen::SparseMatrix<double, 1> &m, std::vector<int> &independent_node_map,
     std::vector<bool> &node_assigned, const Eigen::MatrixXd &v_normals) {
 
   Eigen::Matrix<double, 5, 7> K_N_p;
@@ -3817,7 +3831,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
 }
 
 void CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
-    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map,
+    Eigen::SparseMatrix<double, 1> &m, std::vector<int> &independent_node_map,
     bool debug_isolate = false) {
   const auto &v_charts = m_affine_manifold.m_vertex_charts;
   // const auto &f_charts = m_affine_manifold.m_face_charts;
@@ -4108,7 +4122,7 @@ void CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 }
 
 void CloughTocherSurface::bezier_internal_ind2dep_1_expanded(
-    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map) {
+    Eigen::SparseMatrix<double, 1> &m, std::vector<int> &independent_node_map) {
   const auto &f_charts = m_affine_manifold.m_face_charts;
 
   for (size_t fid = 0; fid < f_charts.size(); ++fid) {
@@ -4155,7 +4169,7 @@ void CloughTocherSurface::bezier_internal_ind2dep_1_expanded(
 }
 
 void CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
-    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map) {
+    Eigen::SparseMatrix<double, 1> &m, std::vector<int> &independent_node_map) {
   Eigen::Matrix<double, 5, 7> K_N;
   K_N << 1, 0, 0, 0, 0, 0, 0, // p0
       0, 1, 0, 0, 0, 0, 0,    // p1
@@ -4343,7 +4357,7 @@ void CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
 }
 
 void CloughTocherSurface::bezier_internal_ind2dep_2_expanded(
-    Eigen::SparseMatrix<double> &m, std::vector<int> &independent_node_map) {
+    Eigen::SparseMatrix<double, 1> &m, std::vector<int> &independent_node_map) {
   const auto &f_charts = m_affine_manifold.m_face_charts;
 
   for (size_t fid = 0; fid < f_charts.size(); ++fid) {

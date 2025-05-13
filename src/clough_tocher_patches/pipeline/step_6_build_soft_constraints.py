@@ -155,7 +155,8 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
 
     # print("v_sample_local size: ", v_upsample_local.shape)
     for i, tt in enumerate(tris):
-        v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]: (i+1) * v_upsample_local.shape[0], :]
+        v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]
+            :(i+1) * v_upsample_local.shape[0], :]
         A_fit_local = np.array([
             lagr0(v_upsample_local[:, 0], v_upsample_local[:, 1]),
             lagr1(v_upsample_local[:, 0], v_upsample_local[:, 1]),
@@ -229,7 +230,7 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     # fitting normal
     linear_mesh = mio.read("CT_bilaplacian_nodes.obj")
     linear_points = linear_mesh.points
-    A_lsq_sti = A_lsq[SVI, :]
+    A_lsq_sti = A_lsq[SVI, :]  # sti stands for stiched
     sti_point = A_lsq_sti @ ryan_mesh.points
     # sti_point = A_lsq_sti @ linear_points
 
@@ -237,6 +238,10 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
 
     # L_w_sti = igl.cotmatrix(v_smoothed[1], f_ct)
     # M_sti = igl.massmatrix(v_smoothed[1], f_ct)
+
+    # TODO: this is changed for test
+    # L_w_sti = igl.cotmatrix(A_lsq_sti @ linear_points, f_ct)
+    # M_sti = igl.massmatrix(A_lsq_sti @ linear_points, f_ct)
     L_w_sti = igl.cotmatrix(A_lsq_sti @ linear_points, f_ct)
     M_sti = igl.massmatrix(A_lsq_sti @ linear_points, f_ct)
 

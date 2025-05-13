@@ -21,6 +21,22 @@ void assign_spvec_to_spmat_row_main(Eigen::SparseMatrix<double> &mat,
   }
 }
 
+void assign_spvec_to_spmat_row_main(Eigen::SparseMatrix<double, 1> &mat,
+                                    Eigen::SparseVector<double> &vec,
+                                    const int row) {
+  for (Eigen::SparseVector<double>::InnerIterator it(vec); it; ++it) {
+    mat.coeffRef(row, it.index()) = it.value();
+  }
+}
+
+void assign_spvec_to_spmat_row_main(Eigen::SparseMatrix<double, 1> &mat,
+                                    const Eigen::SparseVector<double> &vec,
+                                    const int row) {
+  for (Eigen::SparseVector<double>::InnerIterator it(vec); it; ++it) {
+    mat.coeffRef(row, it.index()) = it.value();
+  }
+}
+
 int main(int argc, char *argv[]) {
   // Build maps from strings to enums
   std::map<std::string, spdlog::level::level_enum> log_level_map{
@@ -127,7 +143,7 @@ int main(int argc, char *argv[]) {
   ct_surface.write_connected_lagrange_nodes_values(output_name +
                                                    "_bilaplacian_nodes_values");
 
-  Eigen::SparseMatrix<double> b2l_mat;
+  Eigen::SparseMatrix<double, 1> b2l_mat;
   ct_surface.bezier2lag_full_mat(b2l_mat);
 
   Eigen::saveMarket(b2l_mat,
@@ -366,7 +382,10 @@ int main(int argc, char *argv[]) {
   ////////////////////////////////////////////////////
 
   int64_t node_cnt = ct_surface.m_affine_manifold.m_lagrange_nodes.size();
-  Eigen::SparseMatrix<double> f2f_expanded(node_cnt * 3, node_cnt * 3);
+  Eigen::SparseMatrix<double, Eigen::RowMajor> f2f_expanded(node_cnt * 3,
+                                                            node_cnt * 3);
+  // f2f_expanded.reserve(node_cnt * 3 * 5);
+  f2f_expanded.reserve(Eigen::VectorXi::Constant(node_cnt * 3, 40));
 
   // std::map<int64_t, int> independent_node_map;
   std::vector<int> independent_node_map(node_cnt * 3, -1);
@@ -433,7 +452,9 @@ int main(int argc, char *argv[]) {
 
   std::cout << "ind target cnt: " << ind_target_cnt << std::endl;
 
-  Eigen::SparseMatrix<double> bezier_constraint_matrix(dep_cnt, node_cnt * 3);
+  Eigen::SparseMatrix<double, 1> bezier_constraint_matrix(dep_cnt,
+                                                          node_cnt * 3);
+  bezier_constraint_matrix.reserve(Eigen::VectorXi::Constant(dep_cnt, 40));
   int64_t row_id = 0;
   for (size_t i = 0; i < independent_node_map.size(); ++i) {
     if (independent_node_map[i] == 1) {
@@ -442,12 +463,16 @@ int main(int argc, char *argv[]) {
     }
 
     const Eigen::SparseVector<double> &f2f_row = f2f_expanded.row(i);
-    Eigen::SparseVector<double> eye_row;
-    eye_row.resize(node_cnt * 3);
-    eye_row.insert(i) = 1;
+    assign_spvec_to_spmat_row_main(bezier_constraint_matrix, f2f_row, row_id);
+    bezier_constraint_matrix.coeffRef(row_id, i) -= 1;
 
-    Eigen::SparseVector<double> cons_row = f2f_row - eye_row;
-    assign_spvec_to_spmat_row_main(bezier_constraint_matrix, cons_row, row_id);
+    // Eigen::SparseVector<double> eye_row;
+    // eye_row.resize(node_cnt * 3);
+    // eye_row.insert(i) = 1;
+
+    // Eigen::SparseVector<double> cons_row = f2f_row - eye_row;
+    // assign_spvec_to_spmat_row_main(bezier_constraint_matrix, cons_row,
+    // row_id);
     row_id++;
   }
 
@@ -459,6 +484,8 @@ int main(int argc, char *argv[]) {
   // compute reduce to full
   std::cout << "computing reduce to full" << std::endl;
   Eigen::SparseMatrix<double> r2f_expanded(node_cnt * 3, ind_cnt);
+  // r2f_expanded.reserve(node_cnt * 3 * 5);
+  r2f_expanded.reserve(Eigen::VectorXi::Constant(ind_cnt, 40));
   std::vector<int64_t> col2nid_map;
   int64_t col_cnt = 0;
   for (int64_t i = 0; i < f2f_expanded.cols(); ++i) {
