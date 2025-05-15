@@ -2925,6 +2925,9 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
             /////////////////////////////////////////////////
             //////// left is cone, p_i is cone, p_j /////////
             /////////////////////////////////////////////////
+
+            // std::cout << "in left" << std::endl;
+
             // compute endpoint constraint ac where pjk'= ac * [pji, pj, pjk]
             // get one ring positions for pj
             std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_pj;
@@ -3380,6 +3383,8 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
             ////////////////////////////////////////////////////////
             //////// right is cone, p_j is cone, p_i free  /////////
             ////////////////////////////////////////////////////////
+
+            // std::cout << "in right" << std::endl;
 
             // compute endpoint constraint ac where pik' = ac * [pij, pi, pik]
             // get one ring position for pi

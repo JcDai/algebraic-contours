@@ -115,7 +115,15 @@ int main(int argc, char *argv[]) {
   Eigen::SparseMatrix<double> energy_hessian;
   Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>
       energy_hessian_inverse;
+
+  // std::cout << "V:" << V << std::endl;
+  // std::cout << "F:" << F << std::endl;
+  // std::cout << "uv:" << uv << std::endl;
+  // std::cout << "FT:" << FT << std::endl;
+
+  // std::cout << "here" << std::endl;
   AffineManifold affine_manifold(F, uv, FT);
+  // std::cout << "here2" << std::endl;
 
   CloughTocherSurface ct_surface(V, affine_manifold, optimization_params,
                                  fit_matrix, energy_hessian,

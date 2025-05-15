@@ -100,7 +100,7 @@ if __name__ == "__main__":
                                                                "CT_bilaplacian_nodes_values_cone_area_faces.txt", "CT_from_lagrange_nodes.msh", sample_factor, k_ring_factor)
 
     soft_constraint_fit_normal(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                               output_name + "_initial_tetmesh.msh", A_sti, b_sti)
+                               output_name + "_initial_tetmesh.msh", A_sti, b_sti, A_sti_2, b_sti_2)
 
     call_CT_code_with_normals(workspace_path, path_to_ct_exe,
                               "surface_uv_after_cone_split.obj", "CT_smoothed_normals.txt")
@@ -119,7 +119,9 @@ if __name__ == "__main__":
                                                       "CT_bezier_constraints_expanded.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
 
     # step 8 polyfem
-    create_polyfem_json(enable_offset, output_name, "soft.hdf5",
+    # create_polyfem_json(enable_offset, output_name, "soft.hdf5",
+    #                     "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
+    create_polyfem_json(enable_offset, output_name, "soft_uni.hdf5",
                         "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
 
     call_polyfem(workspace_path, path_to_polyfem_exe, "constraints.json")

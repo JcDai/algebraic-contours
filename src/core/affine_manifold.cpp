@@ -44,6 +44,8 @@ AffineManifold::AffineManifold(const Eigen::MatrixXi &F,
   }
 #endif
 
+  // std::cout << "F shape: " << m_F.rows() << " " << m_F.cols() << std::endl;
+
   // Build halfedge
   m_halfedge = Halfedge(F, m_corner_to_he, m_he_to_corner);
   std::vector<Halfedge::Index> he_to_edge =

@@ -30,6 +30,11 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     cone_area_vertices = []
     tris = ryan_mesh.cells[0].data
     v_upsample_local, f_upsample_local = sample1(sample_factor)
+
+    v_upsample_local_3d = np.array([[v_upsample_local[i][0], v_upsample_local[i][1], 0]
+                                    for i in range(v_upsample_local.shape[0])])
+    igl.write_obj("upsample_local.obj", v_upsample_local_3d, f_upsample_local)
+
     h_nodes = []
     freeze_nodes = []
     v_upsample = []
@@ -155,8 +160,7 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
 
     # print("v_sample_local size: ", v_upsample_local.shape)
     for i, tt in enumerate(tris):
-        v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]
-            :(i+1) * v_upsample_local.shape[0], :]
+        v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]                                        :(i+1) * v_upsample_local.shape[0], :]
         A_fit_local = np.array([
             lagr0(v_upsample_local[:, 0], v_upsample_local[:, 1]),
             lagr1(v_upsample_local[:, 0], v_upsample_local[:, 1]),
@@ -239,11 +243,11 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     # L_w_sti = igl.cotmatrix(v_smoothed[1], f_ct)
     # M_sti = igl.massmatrix(v_smoothed[1], f_ct)
 
-    # TODO: this is changed for test
-    # L_w_sti = igl.cotmatrix(A_lsq_sti @ linear_points, f_ct)
-    # M_sti = igl.massmatrix(A_lsq_sti @ linear_points, f_ct)
+    # TODO: this is changed for test, change this back if not working. seems nothing different because mass matrix is not used
     L_w_sti = igl.cotmatrix(A_lsq_sti @ linear_points, f_ct)
     M_sti = igl.massmatrix(A_lsq_sti @ linear_points, f_ct)
+    # L_w_sti = igl.cotmatrix(A_lsq_sti @ ryan_mesh.points, f_ct)
+    # M_sti = igl.massmatrix(A_lsq_sti @ ryan_mesh.points, f_ct)
 
     M_inv_rows_sti = np.array([i for i in range(M_sti.shape[0])])
     M_inv_cols_sti = np.array([i for i in range(M_sti.shape[1])])
@@ -265,15 +269,16 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     b_sti = M_inv_sti @ L_w_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
     # M_inv_sti @ L_w_sti @ v_ct - A_sti @ linear_points
 
+    # TODO: uncomment this back
     A_sti = L_w_sti @ A_lsq_sti
     b_sti = L_w_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
 
     # print(A_lsq_sti.shape)
     # print(v_smoothed[1].shape)
 
-    eps = 1
-    A_sti_2 = M_inv_sti_sqrt @ A_lsq_sti
-    b_sti_2 = M_inv_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
+    # eps = 1
+    # A_sti_2 = M_inv_sti_sqrt @ A_lsq_sti
+    # b_sti_2 = M_inv_sti @ (v_smoothed[1] - A_lsq_sti @ linear_points)
 
     # exit()
 
@@ -339,10 +344,32 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
     m_fit = mio.Mesh(fit_points, [('triangle10', fit_cells)])
     m_fit.write("fit_p3.msh", file_format='gmsh')
 
+    # uniform laplacian smoothing
+    print("compute uniform laplacian")
+    adj_mat = igl.adjacency_matrix(f_ct)
+    adj_mat_sum = np.asarray(np.sum(adj_mat, axis=1)).flatten()
+
+    adj_diag = np.diag(adj_mat_sum)
+    adj_mat_sp = adj_mat
+    adj_diag_sp = scipy.sparse.csr_matrix(adj_diag, shape=adj_diag.shape)
+    L_uniform = adj_mat_sp - adj_diag_sp
+
+    A_sti_2 = L_uniform @ A_lsq_sti
+
+    v_sti_2 = A_lsq_sti @ linear_points
+
+    # L_uniform_sp = scipy.sparse.csr_matrix(L_uniform, shape=L_uniform.shape)
+    L_uniform_sp = L_uniform
+
+    b_sti_2 = -L_uniform_sp @ v_sti_2
+
+    print(A_sti_2.shape)
+    print(b_sti_2.shape)
+
     return A_sti, b_sti, A_sti_2, b_sti_2
 
 
-def soft_constraint_fit_normal(workspace_path, tri_to_tet_index_mapping_file, linear_tet_file_name, A_sti, b_sti, b2l_mat_file="CT_bezier_to_lag_convertion_matrix.txt", lap_conn_file="CT_bilaplacian_nodes.obj"):
+def soft_constraint_fit_normal(workspace_path, tri_to_tet_index_mapping_file, linear_tet_file_name, A_sti, b_sti, A_sti_2, b_sti_2, b2l_mat_file="CT_bezier_to_lag_convertion_matrix.txt", lap_conn_file="CT_bilaplacian_nodes.obj"):
     local2global = np.loadtxt(
         workspace_path + tri_to_tet_index_mapping_file
     ).astype(np.int32)
@@ -395,6 +422,18 @@ def soft_constraint_fit_normal(workspace_path, tri_to_tet_index_mapping_file, li
         file.create_dataset("A_triplets/cols", data=A_3.col.astype(np.int32))
         file.create_dataset("A_triplets/rows", data=A_3.row.astype(np.int32))
         file.create_dataset("A_triplets/shape", data=A_3.shape)
+
+        file.create_dataset("local2global", data=local2global.astype(np.int32))
+
+    # uniform laplacian
+    A_uni = A_sti_2.tocoo(True)
+    b_uni = b_sti_2
+    with h5py.File("soft_uni.hdf5", "w") as file:
+        file.create_dataset("b", data=b_uni)
+        file.create_dataset("A_triplets/values", data=A_uni.data)
+        file.create_dataset("A_triplets/cols", data=A_uni.col.astype(np.int32))
+        file.create_dataset("A_triplets/rows", data=A_uni.row.astype(np.int32))
+        file.create_dataset("A_triplets/shape", data=A_uni.shape)
 
         file.create_dataset("local2global", data=local2global.astype(np.int32))
 
