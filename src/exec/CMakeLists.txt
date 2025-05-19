@@ -36,3 +36,13 @@ target_link_libraries(optimize_cubic_surface PRIVATE
 target_compile_options(optimize_cubic_surface PRIVATE
   -Wall -Wpedantic -Wextra -Werror
 )
+
+add_executable(test_optimization test_optimization.cpp)
+target_link_libraries(test_optimization PRIVATE
+  QuadraticContoursLib
+  CloughTocherPatchLib
+  CLI11::CLI11
+)
+target_compile_options(test_optimization PRIVATE
+  -Wall -Wpedantic -Wextra -Werror
+)

@@ -983,7 +983,6 @@ void compute_UV_2_bary_subtri (double *u, double *v, double UV_2_bary_subtri[3][
   UV_2_bary_subtri[2][1][1] = 0.3e1 * t21;
 }
 void compute_AT(double M[3][3], double BM[3][3][10][10], double AT[10][10]) {
-   int i,j,l,m; 
    for(int i =0; i < 10; i++) 
      for(int j = 0; j < 10; j++) {
        AT[i][j] = 0.0; 
