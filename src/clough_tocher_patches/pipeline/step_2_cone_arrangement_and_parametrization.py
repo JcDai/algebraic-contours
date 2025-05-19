@@ -207,7 +207,7 @@ def parametrization_split(workspace_path, tets_vertices_regular, tets_regular, s
 
     with open(workspace_path + "toolkit_para_edges.txt", "w") as f:
         for e in edges_to_split:
-            f.write("{} {}\n".format(e[0], e[1], e[2]))
+            f.write("{} {} {}\n".format(e[0], e[1], e[2]))
 
     # prepare toolkit json
     toolkit_tet_points = tets_vertices_regular
