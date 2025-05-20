@@ -84,7 +84,7 @@ if __name__ == "__main__":
     # exit()
     if not proceed:
         print("has vertices adjacent to two cones")
-        exit()
+        # exit()
 
     parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
                     conefile="embedded_surface_Th_hat", fieldfile="embedded_surface_kappa_hat")
