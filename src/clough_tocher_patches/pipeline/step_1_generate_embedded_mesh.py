@@ -73,7 +73,17 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
             vertices_unsliced, tets)
 
         # print(winding_numbers_data.shape)
+        # print(winding_numbers_data)
         # print(tets.shape)
+
+        # fix  winding number shape
+        if len(winding_numbers_data.shape) == 1:
+            winding_numbers_data = winding_numbers_data[:, None]
+        # print(winding_numbers_data.shape)
+        # print(winding_numbers_data)
+
+        # exit()
+
         m_sliced = mio.Mesh(vertices, [('tetra', tets)], cell_data={
                             "winding_number": winding_numbers_data.T})
         m_sliced.write("test_slice.vtu")
