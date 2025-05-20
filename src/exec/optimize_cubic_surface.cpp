@@ -7,6 +7,79 @@
  * 
  */
 
+
+// TODO: Obtained from affine_manifold.cpp. Make standalone function
+const std::array<PlanarPoint, 19> CT_nodes = {{
+    PlanarPoint(1., 0.),           // b0    0
+    PlanarPoint(0., 1.),           // b1    1
+    PlanarPoint(0., 0.),           // b2    2
+    PlanarPoint(2. / 3., 1. / 3.), // b01   3
+    PlanarPoint(1. / 3., 2. / 3.), // b10   4
+    PlanarPoint(0., 2. / 3.),      // b12   5
+    PlanarPoint(0., 1. / 3.),      // b21   6
+    PlanarPoint(1. / 3., 0.),      // b20   7
+    PlanarPoint(2. / 3., 0.),      // b02   8
+    PlanarPoint(4. / 9., 4. / 9.), // b01^c 9
+    PlanarPoint(1. / 9., 4. / 9.), // b12^c 10
+    PlanarPoint(4. / 9., 1. / 9.), // b20^c 11
+    PlanarPoint(7. / 9., 1. / 9.), // b0c   12
+    PlanarPoint(5. / 9., 2. / 9.), // bc0   13
+    PlanarPoint(1. / 9., 7. / 9.), // b1c   14
+    PlanarPoint(2. / 9., 5. / 9.), // bc1   15
+    PlanarPoint(1. / 9., 1. / 9.), // b2c   16
+    PlanarPoint(2. / 9., 2. / 9.), // bc2   17
+    PlanarPoint(1. / 3., 1. / 3.), // bc    18
+}};
+
+std::vector<Eigen::Vector3d> generate_linear_clough_tocher_surface(
+  CloughTocherSurface& ct_surface,
+  const Eigen::MatrixXd& V)
+{
+  int num_nodes = ct_surface.m_lagrange_node_values.size();
+  std::vector<Eigen::Vector3d> lagrange_control_points(num_nodes);
+	const auto &affine_manifold = ct_surface.m_affine_manifold;
+  const auto& F = affine_manifold.get_faces();
+  int num_faces = affine_manifold.num_faces();
+  for (int fijk = 0; fijk < num_faces; ++fijk)
+  {
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    const auto &l_nodes = face_chart.lagrange_nodes;
+    int vi = F(fijk, 0);
+    int vj = F(fijk, 1);
+    int vk = F(fijk, 2);
+    Eigen::Vector3d Vi = V.row(vi);
+    Eigen::Vector3d Vj = V.row(vj);
+    Eigen::Vector3d Vk = V.row(vk);
+    for (int i = 0; i < 19; ++i)
+    {
+      double u = CT_nodes[i][0];
+      double v = CT_nodes[i][1];
+      double w = 1 - u - v;
+      lagrange_control_points[l_nodes[i]] = u * Vi + v * Vj + w * Vk;
+    }
+  }
+
+  Eigen::SparseMatrix<double, 1> l2b_mat;
+  ct_surface.lag2bezier_full_mat(l2b_mat);
+
+  Eigen::MatrixXd lagrange_matrix(num_nodes, 3);
+  for (int64_t i = 0; i < num_nodes; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      lagrange_matrix(i, j) = lagrange_control_points[i][j];
+    }
+  }
+  Eigen::MatrixXd bezier_matrix= l2b_mat * lagrange_matrix;
+  std::vector<Eigen::Vector3d> bezier_control_points(num_nodes);
+  for (int64_t i = 0; i < num_nodes; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      bezier_control_points[i][j] = bezier_matrix(i, j);
+    }
+  }
+
+  return bezier_control_points;
+}
+
+
 // Helper function to write a curface with external bezier nodes to file
 void write_mesh(
   CloughTocherSurface& ct_surface,
@@ -50,6 +123,7 @@ int main(int argc, char *argv[])
   OptimizationParameters optimization_params;
   double weight = 1e3;
   double interpolation = 0.;
+  int iterations=1;
   app.add_option("-i,--input", input_filename, "Mesh filepath")
       ->check(CLI::ExistingFile)
       ->required();
@@ -58,6 +132,8 @@ int main(int argc, char *argv[])
   app.add_option("-w,--weight", weight,
                  "Fitting weight for the quadratic surface approximation")
       ->check(CLI::PositiveNumber);
+  app.add_option("-n,--iterations", iterations,
+                 "Number of iterations of optimization");
   app.add_option("-t,--interpolation", interpolation,
                  "Interpolation between original and final");
   app.add_option("-o, --output", output_name, "Output file prefix");
@@ -117,21 +193,30 @@ int main(int argc, char *argv[])
     bezier_control_points[nodes[2]] = V.row(F(fijk, 2));
   }
 
-  // optimize the bezier nodes
+  bezier_control_points =  generate_linear_clough_tocher_surface(ct_surface, V);
+  write_mesh(ct_surface, bezier_control_points, "linear_mesh");
+
+  // initialize optimizer
   CloughTocherOptimizer optimizer(V, F, affine_manifold);
   optimizer.fitting_weight = weight;
-  std::vector<Eigen::Vector3d> optimized_control_points = optimizer.optimize_energy(bezier_control_points);
-  write_mesh(ct_surface, optimized_control_points, "optimized_mesh");
+
+  // optimize the bezier nodes with laplacian energy
+  std::vector<Eigen::Vector3d> laplacian_control_points = optimizer.optimize_laplacian_energy(bezier_control_points);
+  write_mesh(ct_surface, laplacian_control_points, "laplacian_mesh");
+
+  // optimize the bezier nodes with laplace beltrami energy
+  std::vector<Eigen::Vector3d> laplace_beltrami_control_points = optimizer.optimize_laplace_beltrami_energy(bezier_control_points, iterations);
+  write_mesh(ct_surface, laplace_beltrami_control_points, "laplace_beltrami_mesh");
 
   // optional interpolation (useful for debugging)
 	std::vector<Eigen::Vector3d> interpolated_control_points(bezier_control_points.size());
   int node_cnt = bezier_control_points.size();
   for (int64_t i = 0; i < node_cnt; ++i) {
     for (int j = 0; j < 3; ++j) {
-      interpolated_control_points[i][j] = t * bezier_control_points[i][j] + (1 - t) * optimized_control_points[i][j];
+      interpolated_control_points[i][j] = t * bezier_control_points[i][j] + (1 - t) * laplace_beltrami_control_points[i][j];
     }
   }
-  write_mesh(ct_surface, optimized_control_points, "interpolated_mesh");
+  write_mesh(ct_surface, interpolated_control_points, "interpolated_mesh");
 
   return 0;
 }
