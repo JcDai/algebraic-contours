@@ -18,7 +18,7 @@ std::array<std::array<int64_t, 10>, 3> get_micro_triangle_nodes(
 }
 
 double evaluate_energy(double u[3],double v[3], double test_cp[3][10]) {
-  // Get input mesh
+  // Build input mesh
   Eigen::MatrixXd V(3, 3);
   Eigen::MatrixXd uv(3, 2);
   Eigen::MatrixXi F(1, 3);
@@ -62,12 +62,8 @@ double evaluate_energy(double u[3],double v[3], double test_cp[3][10]) {
   {
     for (int i = 0; i < 10; ++i)
     {
-      //int ni = micro_nodes[n][perm[i]];
-      //bezier_control_points[ni][0] = test_cp[n][i];
-
       int ni = micro_nodes[n][i];
       bezier_control_points[ni][0] = test_cp[n][perm[i]];
-
       bezier_control_points[ni][1] = 0;
       bezier_control_points[ni][2] = 0;
     }
@@ -77,7 +73,7 @@ double evaluate_energy(double u[3],double v[3], double test_cp[3][10]) {
 
   CloughTocherOptimizer optimizer(V, F, affine_manifold);
   optimizer.fitting_weight = 0.;
-  return optimizer.evaluate_full(bezier_control_points);
+  return optimizer.evaluate_energy(bezier_control_points);
 }
 
 int main(int argc, char *argv[])
@@ -110,6 +106,7 @@ int main(int argc, char *argv[])
   // Set logger level
   spdlog::set_level(log_level);
 
+  // first test
   double u1[3] = {0.0, 1.0, 0.0};
   double v1[3] = {0.0, 0.0, 1.0};
   double test_cp1[3][10] = { 
@@ -119,12 +116,14 @@ int main(int argc, char *argv[])
   };
   printf("E = %g, value should be 0\n", evaluate_energy(u1,v1, test_cp1));
 
+  // second test
   double u2[3] = {-1.0, 1.0, 0.0};
   double v2[3] = {0.0, 0.0, 1.0};
   double test_cp2[3][10] = {{-3., -2., -1.296296296, 0., -1., -0.6666666667, 1.296296296, -0.3333333333, 3.333333333, 7.}, {7., 3.333333333, 1.296296296, 0., 3.333333333, 1.222222222, 0., 1., 0., 0.}, {0., 0., 0., 0., -1., -1.222222222, -1.296296296, -2., -2., -3.}};
 
   printf("E = %g, value from Maple 24\n", evaluate_energy(u2,v2,test_cp2));
 
+  // third test
   double u3[3] = {-1,2.,1/2.}; 
   double v3[3] = {1/2.,-1/2.,3};
   double test_cp3[3][10] = {{-2.750000000, -1.208333333, -0.5833333333, 2.125000000, -0.3333333333, -0.4583333333, 5.500000000, 0.4166666667, 12.62500000, 23.50000000}, {23.50000000, 12.62500000, 5.500000000, 2.125000000, 13.95833333, 4.333333333, 1.458333333, 0.5000000000, 0.1250000000, -1.875000000}, {-1.875000000, 0.1250000000, 1.458333333, 2.125000000, 1.750000000, -0.08333333333, -0.5833333333, -0.5416666667, -1.208333333, -2.750000000}};

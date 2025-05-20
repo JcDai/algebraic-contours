@@ -2,6 +2,12 @@
 #include <CLI/CLI.hpp>
 #include <igl/readOBJ.h>
 
+/**
+ * @brief Executable to take a triangle mesh file (stored as OBJ) and produce an optimized C1 cubic spline.
+ * 
+ */
+
+// Helper function to write a curface with external bezier nodes to file
 void write_mesh(
   CloughTocherSurface& ct_surface,
   const std::vector<Eigen::Vector3d>& bezier_control_points,
@@ -71,7 +77,6 @@ int main(int argc, char *argv[])
   AffineManifold affine_manifold(F, uv, FT);
   affine_manifold.generate_lagrange_nodes();
   affine_manifold.compute_edge_global_uv_mappings();
-  //affine_manifold.view(V);
 
   // build initial surface
   spdlog::info("Computing spline surface");
@@ -82,6 +87,9 @@ int main(int argc, char *argv[])
   CloughTocherSurface ct_surface(V, affine_manifold, optimization_params,
                                  fit_matrix, energy_hessian,
                                  energy_hessian_inverse);
+
+  // WARNING: surface writing needed to generate points
+  // TODO: make part of initialization
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes("temp", true);
 
   std::cout << "#F: " << ct_surface.m_affine_manifold.m_face_charts.size()
@@ -93,10 +101,12 @@ int main(int argc, char *argv[])
   std::cout << "#nodes: " << ct_surface.m_lagrange_node_values.size()
             << std::endl;
 
+  // get initial bezier points
 	std::vector<Eigen::Vector3d> bezier_control_points = ct_surface.m_bezier_control_points;
   write_mesh(ct_surface, bezier_control_points, "initial_mesh");
 
   // map bezier points to original positions
+  // TODO: move this into internal optimizer function
   int num_faces = affine_manifold.num_faces();
   for (int fijk = 0; fijk < num_faces; ++fijk)
   {
@@ -107,12 +117,13 @@ int main(int argc, char *argv[])
     bezier_control_points[nodes[2]] = V.row(F(fijk, 2));
   }
 
-
+  // optimize the bezier nodes
   CloughTocherOptimizer optimizer(V, F, affine_manifold);
   optimizer.fitting_weight = weight;
   std::vector<Eigen::Vector3d> optimized_control_points = optimizer.optimize_energy(bezier_control_points);
   write_mesh(ct_surface, optimized_control_points, "optimized_mesh");
 
+  // optional interpolation (useful for debugging)
 	std::vector<Eigen::Vector3d> interpolated_control_points(bezier_control_points.size());
   int node_cnt = bezier_control_points.size();
   for (int64_t i = 0; i < node_cnt; ++i) {
@@ -120,6 +131,7 @@ int main(int argc, char *argv[])
       interpolated_control_points[i][j] = t * bezier_control_points[i][j] + (1 - t) * optimized_control_points[i][j];
     }
   }
+  write_mesh(ct_surface, optimized_control_points, "interpolated_mesh");
 
   return 0;
 }
