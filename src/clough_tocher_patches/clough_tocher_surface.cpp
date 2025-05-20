@@ -2768,7 +2768,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
     std::map<int64_t, bool> processed_vid; // record vid (edge chart) in one
                                            // ring that has been processed
     for (size_t i = 0; i < vids_one_ring.size(); ++i) {
-      processed_vid[i] = false;
+      processed_vid[vids_one_ring[i]] = false;
     }
     processed_vid[vid] = true;
 
