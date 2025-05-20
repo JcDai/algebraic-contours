@@ -86,62 +86,13 @@ if __name__ == "__main__":
         print("has vertices adjacent to two cones")
         exit()
 
-    # parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
-    #                 conefile="embedded_surface_Th_hat", fieldfile="embedded_surface_kappa_hat")
     parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
-                    conefile="embedded_surface_Th_hat_new", fieldfile="embedded_surface_kappa_hat")
+                    conefile="embedded_surface_Th_hat", fieldfile="embedded_surface_kappa_hat")
+    # parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
+    #                 conefile="embedded_surface_Th_hat_new", fieldfile="embedded_surface_kappa_hat")
 
     parametrization_split(workspace_path, tets_vertices_regular, tets_regular, surface_adj_tet, para_in_v_to_tet_v_map,
                           path_to_toolkit_exe, meshfile_before_para="embedded_surface.obj", meshfile_after_para="parameterized_mesh.obj")
-
-    # step 3 face split
-    tet_points_after_face_split, tet_cells_after_face_split, new_winding_numbers, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map = face_split(workspace_path, "toolkit_tetmesh_tets.vtu", "surface_uv_after_cone_split.obj",
-                                                                                                                                                  "surface_v_to_tet_v_after_cone_split.txt", "surface_adj_tet_after_cone_split.txt")
-
-    call_gmsh(workspace_path)
-
-    # step 4 generate CT constraints
-    call_CT_code(workspace_path, path_to_ct_exe,
-                 "surface_uv_after_cone_split.obj")
-
-    # step 5 map tri to tet
-    tet_edge_to_vertices, tet_face_to_vertices = map_tri_nodes_to_tet_nodes(
-        workspace_path, output_name, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map)
-
-    # step 6 build soft constraints
-    A_sti, b_sti = upsample_and_smooth_cones("CT_bilaplacian_nodes_values_cone_area_vertices.txt",
-                                             "CT_bilaplacian_nodes_values_cone_area_faces.txt", "CT_from_lagrange_nodes.msh", sample_factor, k_ring_factor)
-
-    soft_constraint_fit_normal(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                               output_name + "_initial_tetmesh.msh", A_sti, b_sti)
-
-    call_CT_code_with_normals(workspace_path, path_to_ct_exe,
-                              "surface_uv_after_cone_split.obj", "CT_smoothed_normals.txt")
-
-    # step 7 build hard constraints
-    # build_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-    #                                     "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh")
-
-    # build_bezier_reduce2full_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-    #                                 "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
-
-    # build_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-    #                                              "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
-
-    build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                                                      "CT_bezier_constraints_expanded.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
-
-    cons_time = time.time()
-    print("constraints built: ", cons_time)
-    print("cons took: ", cons_time - start_time)
-
-    # step 8 polyfem
-    create_polyfem_json(enable_offset, output_name, "soft.hdf5",
-                        "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
-
-    call_polyfem(workspace_path, path_to_polyfem_exe, "constraints.json")
-
-    resurrect_winding_number(output_name, new_winding_numbers, enable_offset)
 
     end_time = time.time()
     print("end time: ", end_time)
