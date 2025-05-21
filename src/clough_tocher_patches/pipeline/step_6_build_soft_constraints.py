@@ -160,8 +160,7 @@ def upsample_and_smooth_cones(cone_area_vertices_file, cone_area_faces_file, smo
 
     # print("v_sample_local size: ", v_upsample_local.shape)
     for i, tt in enumerate(tris):
-        v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]
-            :(i+1) * v_upsample_local.shape[0], :]
+        v_s_local = v_smoothed_in_patch[i * v_upsample_local.shape[0]                                        :(i+1) * v_upsample_local.shape[0], :]
         A_fit_local = np.array([
             lagr0(v_upsample_local[:, 0], v_upsample_local[:, 1]),
             lagr1(v_upsample_local[:, 0], v_upsample_local[:, 1]),
@@ -439,7 +438,7 @@ def soft_constraint_fit_normal(workspace_path, tri_to_tet_index_mapping_file, li
     #     file.create_dataset("local2global", data=local2global.astype(np.int32))
 
 
-def soft_constraint_cubic_optimization(workspace_path, tri_to_tet_index_mapping_file, linear_tet_file_name, lapbel_mesh_file, l2b_matrix_file):
+def soft_constraint_cubic_optimization(workspace_path, tri_to_tet_index_mapping_file, linear_tet_file_name, lapbel_mesh_file, lap_mesh_file, l2b_matrix_file):
     local2global = np.loadtxt(
         workspace_path + tri_to_tet_index_mapping_file
     ).astype(np.int32)
@@ -464,6 +463,22 @@ def soft_constraint_cubic_optimization(workspace_path, tri_to_tet_index_mapping_
         file.create_dataset("A_triplets/cols", data=A.col.astype(np.int32))
         file.create_dataset("A_triplets/rows", data=A.row.astype(np.int32))
         file.create_dataset("A_triplets/shape", data=A.shape)
+
+        file.create_dataset("local2global", data=local2global.astype(np.int32))
+
+    # lap
+    lap_mesh = mio.read(lap_mesh_file)
+    lap_v = lap_mesh.points
+
+    A_2 = scipy.sparse.identity(lapbel_v.shape[0]).tocoo(True)
+    b_2 = l2b_mat @ lap_v - v[local2global]
+
+    with h5py.File("soft_lap.hdf5", "w") as file:
+        file.create_dataset("b", data=b_2)
+        file.create_dataset("A_triplets/values", data=A_2.data)
+        file.create_dataset("A_triplets/cols", data=A_2.col.astype(np.int32))
+        file.create_dataset("A_triplets/rows", data=A_2.row.astype(np.int32))
+        file.create_dataset("A_triplets/shape", data=A_2.shape)
 
         file.create_dataset("local2global", data=local2global.astype(np.int32))
 

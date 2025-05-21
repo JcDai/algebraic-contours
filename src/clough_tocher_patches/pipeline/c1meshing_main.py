@@ -134,7 +134,7 @@ if __name__ == "__main__":
     #                           "surface_uv_after_cone_split.obj", "CT_smoothed_normals.txt")
 
     soft_constraint_cubic_optimization(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                                       output_name + "_initial_tetmesh.msh", "laplace_beltrami_mesh.msh", "CT_lag2bezier_matrix.txt")
+                                       output_name + "_initial_tetmesh.msh", "laplace_beltrami_mesh.msh", "laplacian_mesh.msh", "CT_lag2bezier_matrix.txt")
 
     # step 7 build hard constraints
     # build_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
