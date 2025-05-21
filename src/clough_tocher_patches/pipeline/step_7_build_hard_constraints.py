@@ -381,6 +381,17 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
     m = mio.read(workspace_path + linear_tetmesh_file)
     v = m.points
 
+    # check mesh orientation
+    # tt = m.cells_dict['tetra20']
+    # oris = []
+    # for tet in tt:
+    #     ori = orient3d(v[tet[0]], v[tet[1]], v[tet[2]], v[tet[3]])
+    #     oris.append(ori)
+    #     # print(ori)
+    # for ori in oris:
+    #     if ori:
+    #         print("has positive one")
+
     # compute nodes on boundaries
     cells_high_order = m.cells_dict["tetra20"]
     cells = cells_high_order[:, :4]
