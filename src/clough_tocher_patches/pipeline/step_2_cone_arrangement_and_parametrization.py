@@ -30,6 +30,26 @@ def generate_frame_field(workspace_path, path_to_generate_cone_exe, meshfile="em
     subprocess.run(para_command, shell=True, check=True)
 
 
+def compute_cone_vids(workspace_path, cone_file="embedded_surface_Th_hat"):
+    cone_angles = np.loadtxt(cone_file)
+
+    is_cone = []
+    cone_cnt = 0
+    for angle in cone_angles:
+        if abs(angle - 2 * math.pi) < 1e-5:
+            is_cone.append(False)
+        else:
+            is_cone.append(True)
+            cone_cnt += 1
+
+    print("mesh has {} cones".format(cone_cnt))
+
+    with open("para_input_cone_vids.txt", "w") as f:
+        for i in range(len(is_cone)):
+            if is_cone[i]:
+                f.write("{}\n".format(i))
+
+
 def detect_two_separate_problem(workspace_path, meshfile="embedded_surface.obj", cone_file="embedded_surface_Th_hat"):
     v, _, _, f, _, _ = igl.read_obj(meshfile)
     cone_angles = np.loadtxt(cone_file)
@@ -344,7 +364,7 @@ def compute_edges_to_split(v_before, f_before, v_after, f_after):
     return edges_to_split
 
 
-def parametrization_split(workspace_path, tets_vertices_regular, tets_regular, surface_adj_tet, para_in_v_to_tet_v_map, path_to_toolkit_exe, meshfile_before_para="embedded_surface.obj", meshfile_after_para="parameterized_mesh.obj"):
+def parametrization_split(workspace_path, tets_vertices_regular, tets_regular, surface_adj_tet, para_in_v_to_tet_v_map, path_to_toolkit_para_exe, meshfile_before_para="embedded_surface.obj", meshfile_after_para="parameterized_mesh.obj"):
     # parametrization split assuming new vertices can be only added on the old edges
     v_before, _, _, f_before, _, _ = igl.read_obj(
         workspace_path + meshfile_before_para)
@@ -410,17 +430,101 @@ def parametrization_split(workspace_path, tets_vertices_regular, tets_regular, s
         "uv_mesh": workspace_path + meshfile_after_para,
         "tet_surface_map": "toolkit_map.txt",
         "parametrization_edges": "toolkit_para_edges.txt",
-        "output": "toolkit",
+        "output": "toolkit_para_split",
+        "cone_vertices": "para_input_cone_vids.txt"
     }
 
     with open("para_split_json.json", "w") as f:
         json.dump(toolkit_json, f)
 
     print("[{}] ".format(datetime.datetime.now()),
-          "Calling toolkit c1 cone splitting")
+          "Calling toolkit c1 para splitting")
     toolkit_command = (
-        path_to_toolkit_exe + " -j " + workspace_path + "para_split_json.json"
+        path_to_toolkit_para_exe + " -j " + workspace_path + "para_split_json.json"
     )
     subprocess.run(toolkit_command, shell=True, check=True)
 
     print("here")
+
+
+def cone_split(workspace_path, path_to_toolkit_cone_exe,  para_split_tet_file, para_split_obj_file, para_split_cone_file, para_split_sf_tet_map_file, para_split_surface_adj_tet_file, para_split_sf_v_to_tet_v_file):
+    tm = mio.read(para_split_tet_file)  # assuming vtu
+    tm.write("cone_split_input_tetmesh.msh", file_format="gmsh")
+
+    v, uv, _, f, fuv, _ = igl.read_obj(para_split_obj_file)
+    cone_vids = np.loadtxt(para_split_cone_file).astype(np.int32)
+
+    sm = mio.Mesh(v, [("triangle", f)])
+    sm.write("cone_split_input_surface_mesh.msh", file_format="gmsh")
+
+    uvm = mio.Mesh(uv, [("triangle", fuv)])
+    uvm.write("cone_split_input_uv_mesh.msh", file_format="gmsh")
+
+    adj_list = igl.adjacency_list(f)
+
+    cone_edges_to_split = []
+    for cid in cone_vids:
+        for vid in adj_list[cid]:
+            cone_edges_to_split.append([cid, vid])
+
+    print("cone edges to split: ", cone_edges_to_split)
+
+    with open("cone_edges_to_split.txt", "w") as file:
+        for pair in cone_edges_to_split:
+            file.write("{} {}\n".format(pair[0], pair[1]))
+
+    # compute multlmesh mapping here
+    surface_adj_tet_mat = np.loadtxt(
+        para_split_surface_adj_tet_file).astype(np.int32)  # fid tid0 tid1
+    assert surface_adj_tet_mat.shape[0] == f.shape[0]
+    surface_adj_tet = [[-1, -1] for i in range(surface_adj_tet_mat.shape[0])]
+    for i in range(surface_adj_tet_mat.shape[0]):
+        surface_adj_tet[surface_adj_tet_mat[i][0]] = [
+            surface_adj_tet_mat[i][1], surface_adj_tet_mat[i][2]]
+
+    tets_regular = tm.cells_dict['tetra']
+    para_in_v_to_tet_v_map = np.loadtxt(
+        para_split_sf_v_to_tet_v_file).astype(np.int32)
+
+    with open("toolkit_cone_split_map.txt", "w") as file:
+        # {{1, 2, 3}, {0, 2, 3}, {0, 1, 3}, {0, 1, 2}}
+        for i in range(f.shape[0]):
+            tid = surface_adj_tet[i][0]
+            tet = tets_regular[tid]
+            f_sf_base = f[i]
+            f_tet_base = np.array([para_in_v_to_tet_v_map[f_sf_base[i]]
+                                  for i in range(3)])
+            tfs = np.array(
+                [
+                    [tet[1], tet[2], tet[3]],
+                    [tet[0], tet[2], tet[3]],
+                    [tet[0], tet[1], tet[3]],
+                    [tet[0], tet[1], tet[2]],
+                ]
+            )
+            found = False
+            for k in range(4):
+                if face_equal(f_tet_base, tfs[k]):
+                    file.write("{} {}\n".format(tid, k))
+                    found = True
+            assert found
+
+    toolkit_json = {
+        "tetmesh": "cone_split_input_tetmesh.msh",
+        "surface_mesh": "cone_split_input_surface_mesh.msh",
+        "uv_mesh": "cone_split_input_uv_mesh.msh",
+        # "tet_surface_map": para_split_sf_tet_map_file,
+        "tet_surface_map": "toolkit_cone_split_map.txt",
+        "cone_edges": "cone_edges_to_split.txt",
+        "output": "toolkit_cone_split"
+    }
+
+    with open("cone_split_json.json", "w") as file:
+        json.dump(toolkit_json, file)
+
+    print("[{}] ".format(datetime.datetime.now()),
+          "Calling toolkit c1 cone splitting")
+    toolkit_command = (
+        path_to_toolkit_cone_exe + " -j " + workspace_path + "cone_split_json.json"
+    )
+    subprocess.run(toolkit_command, shell=True, check=True)

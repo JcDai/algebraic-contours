@@ -60,7 +60,8 @@ if __name__ == "__main__":
     path_to_polyfem_exe = args.bins["polyfem_binary"]  # path to polyfem bin
     path_to_matlab_exe = args.bins["matlab_binary"]  # path to matlab exe
     # path to toolkit app
-    path_to_toolkit_exe = args.bins["wmtk_c1_cone_split_binary"]
+    path_to_toolkit_para_exe = args.bins["wmtk_c1_para_split_binary"]
+    path_to_toolkit_cone_exe = args.bins["wmtk_c1_cone_split_binary"]
     path_to_generate_cone_exe = args.bins["seamless_con_gen_binary"]
 
     workspace_path = "./"
@@ -86,16 +87,23 @@ if __name__ == "__main__":
         print("has vertices adjacent to two cones")
         exit()
 
-    # parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
-    #                 conefile="embedded_surface_Th_hat", fieldfile="embedded_surface_kappa_hat")
+    compute_cone_vids(workspace_path)
+
     parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
-                    conefile="embedded_surface_Th_hat_new", fieldfile="embedded_surface_kappa_hat")
+                    conefile="embedded_surface_Th_hat", fieldfile="embedded_surface_kappa_hat")
+    # parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
+    #                 conefile="embedded_surface_Th_hat_new", fieldfile="embedded_surface_kappa_hat")
 
     parametrization_split(workspace_path, tets_vertices_regular, tets_regular, surface_adj_tet, para_in_v_to_tet_v_map,
-                          path_to_toolkit_exe, meshfile_before_para="embedded_surface.obj", meshfile_after_para="parameterized_mesh.obj")
+                          path_to_toolkit_para_exe, meshfile_before_para="embedded_surface.obj", meshfile_after_para="parameterized_mesh.obj")
+
+    cone_split(workspace_path, path_to_toolkit_cone_exe, "toolkit_para_split_tetmesh_tets.vtu",
+               "surface_uv_after_para_split.obj", "cone_vids_after_para_split.txt", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
+
+    # exit()
 
     # step 3 face split
-    tet_points_after_face_split, tet_cells_after_face_split, new_winding_numbers, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map = face_split(workspace_path, "toolkit_tetmesh_tets.vtu", "surface_uv_after_cone_split.obj",
+    tet_points_after_face_split, tet_cells_after_face_split, new_winding_numbers, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map = face_split(workspace_path, "toolkit_cone_split_tetmesh_tets.vtu", "surface_uv_after_cone_split.obj",
                                                                                                                                                   "surface_v_to_tet_v_after_cone_split.txt", "surface_adj_tet_after_cone_split.txt")
 
     call_gmsh(workspace_path)

@@ -44,10 +44,10 @@ def create_polyfem_json(enable_offset, output_name, soft_file, hard_file, weight
             #     "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]
             # },
             "materials": [
-                # {"id": 1, "type": elasticity_mode, "E": 200000000000.0, "nu": 0.3}
-                {"id": 1,
-                 "type": elasticity_mode,
-                 "use_rest_pose": elasticity_mode == "AMIPS", "E": 200000000000.0, "nu": 0.3}
+                {"id": 1, "type": elasticity_mode, "E": 200000000000.0, "nu": 0.3}
+                # {"id": 1,
+                #  "type": elasticity_mode,
+                #  "use_rest_pose": elasticity_mode == "AMIPS", "E": 200000000000.0, "nu": 0.3}
             ],
             "solver": {
                 "contact": {"barrier_stiffness": 1e8},
