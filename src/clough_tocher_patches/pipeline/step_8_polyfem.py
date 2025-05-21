@@ -39,6 +39,7 @@ def create_polyfem_json(enable_offset, output_name, soft_file, hard_file, weight
                 "soft": [
                     {"weight": weight_soft, "data": soft_file},
                 ],
+                # "hard": [soft_file]
             },
             # "boundary_conditions": {
             #     "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]

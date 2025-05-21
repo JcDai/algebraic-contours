@@ -1,13 +1,13 @@
 #include "optimize_clough_tocher.hpp"
+#include "polyscope/surface_mesh.h"
 #include <CLI/CLI.hpp>
 #include <igl/readOBJ.h>
-#include "polyscope/surface_mesh.h"
 
 /**
- * @brief Executable to take a triangle mesh file (stored as OBJ) and produce an optimized C1 cubic spline.
- * 
+ * @brief Executable to take a triangle mesh file (stored as OBJ) and produce an
+ * optimized C1 cubic spline.
+ *
  */
-
 
 // TODO: Obtained from affine_manifold.cpp. Make standalone function
 const std::array<PlanarPoint, 19> CT_nodes = {{
@@ -32,17 +32,15 @@ const std::array<PlanarPoint, 19> CT_nodes = {{
     PlanarPoint(1. / 3., 1. / 3.), // bc    18
 }};
 
-std::vector<Eigen::Vector3d> generate_linear_clough_tocher_surface(
-  CloughTocherSurface& ct_surface,
-  const Eigen::MatrixXd& V)
-{
+std::vector<Eigen::Vector3d>
+generate_linear_clough_tocher_surface(CloughTocherSurface &ct_surface,
+                                      const Eigen::MatrixXd &V) {
   int num_nodes = ct_surface.m_lagrange_node_values.size();
   std::vector<Eigen::Vector3d> lagrange_control_points(num_nodes);
-	const auto &affine_manifold = ct_surface.m_affine_manifold;
-  const auto& F = affine_manifold.get_faces();
+  const auto &affine_manifold = ct_surface.m_affine_manifold;
+  const auto &F = affine_manifold.get_faces();
   int num_faces = affine_manifold.num_faces();
-  for (int fijk = 0; fijk < num_faces; ++fijk)
-  {
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
     FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
     const auto &l_nodes = face_chart.lagrange_nodes;
     int vi = F(fijk, 0);
@@ -51,8 +49,7 @@ std::vector<Eigen::Vector3d> generate_linear_clough_tocher_surface(
     Eigen::Vector3d Vi = V.row(vi);
     Eigen::Vector3d Vj = V.row(vj);
     Eigen::Vector3d Vk = V.row(vk);
-    for (int i = 0; i < 19; ++i)
-    {
+    for (int i = 0; i < 19; ++i) {
       double u = CT_nodes[i][0];
       double v = CT_nodes[i][1];
       double w = 1 - u - v;
@@ -69,7 +66,7 @@ std::vector<Eigen::Vector3d> generate_linear_clough_tocher_surface(
       lagrange_matrix(i, j) = lagrange_control_points[i][j];
     }
   }
-  Eigen::MatrixXd bezier_matrix= l2b_mat * lagrange_matrix;
+  Eigen::MatrixXd bezier_matrix = l2b_mat * lagrange_matrix;
   std::vector<Eigen::Vector3d> bezier_control_points(num_nodes);
   for (int64_t i = 0; i < num_nodes; ++i) {
     for (int j = 0; j < 3; ++j) {
@@ -80,13 +77,10 @@ std::vector<Eigen::Vector3d> generate_linear_clough_tocher_surface(
   return bezier_control_points;
 }
 
-
 // Helper function to write a curface with external bezier nodes to file
-void write_mesh(
-  CloughTocherSurface& ct_surface,
-  const std::vector<Eigen::Vector3d>& bezier_control_points,
-  const std::string& filename)
-{
+void write_mesh(CloughTocherSurface &ct_surface,
+                const std::vector<Eigen::Vector3d> &bezier_control_points,
+                const std::string &filename) {
   Eigen::SparseMatrix<double, 1> b2l_mat;
   ct_surface.bezier2lag_full_mat(b2l_mat);
 
@@ -102,16 +96,12 @@ void write_mesh(
   ct_surface.write_external_point_values_with_conn(filename, lagrange_matrix);
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
   // Build maps from strings to enums
   std::map<std::string, spdlog::level::level_enum> log_level_map{
-      {"trace", spdlog::level::trace},
-      {"debug", spdlog::level::debug},
-      {"info", spdlog::level::info},
-      {"warn", spdlog::level::warn},
-      {"critical", spdlog::level::critical},
-      {"off", spdlog::level::off},
+      {"trace", spdlog::level::trace},       {"debug", spdlog::level::debug},
+      {"info", spdlog::level::info},         {"warn", spdlog::level::warn},
+      {"critical", spdlog::level::critical}, {"off", spdlog::level::off},
   };
 
   // Get command line arguments
@@ -124,7 +114,8 @@ int main(int argc, char *argv[])
   OptimizationParameters optimization_params;
   double weight = 1e3;
   double interpolation = 0.;
-  int iterations=1;
+  int iterations = 1;
+  int visualize = 0;
   app.add_option("-i,--input", input_filename, "Mesh filepath")
       ->check(CLI::ExistingFile)
       ->required();
@@ -138,6 +129,7 @@ int main(int argc, char *argv[])
   app.add_option("-t,--interpolation", interpolation,
                  "Interpolation between original and final");
   app.add_option("-o, --output", output_name, "Output file prefix");
+  app.add_option("-v, --visualize", visualize, "Visualize with polyscope");
   CLI11_PARSE(app, argc, argv);
   double t = interpolation;
 
@@ -167,7 +159,8 @@ int main(int argc, char *argv[])
 
   // WARNING: surface writing needed to generate points
   // TODO: make part of initialization
-  ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes("temp", true);
+  ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes("temp",
+                                                                      true);
 
   std::cout << "#F: " << ct_surface.m_affine_manifold.m_face_charts.size()
             << std::endl;
@@ -179,14 +172,14 @@ int main(int argc, char *argv[])
             << std::endl;
 
   // get initial bezier points
-	std::vector<Eigen::Vector3d> bezier_control_points = ct_surface.m_bezier_control_points;
+  std::vector<Eigen::Vector3d> bezier_control_points =
+      ct_surface.m_bezier_control_points;
   write_mesh(ct_surface, bezier_control_points, "initial_mesh");
 
   // map bezier points to original positions
   // TODO: move this into internal optimizer function
   int num_faces = affine_manifold.num_faces();
-  for (int fijk = 0; fijk < num_faces; ++fijk)
-  {
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
     FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
     const auto &nodes = face_chart.lagrange_nodes;
     bezier_control_points[nodes[0]] = V.row(F(fijk, 0));
@@ -194,53 +187,71 @@ int main(int argc, char *argv[])
     bezier_control_points[nodes[2]] = V.row(F(fijk, 2));
   }
 
-  bezier_control_points =  generate_linear_clough_tocher_surface(ct_surface, V);
+  bezier_control_points = generate_linear_clough_tocher_surface(ct_surface, V);
   write_mesh(ct_surface, bezier_control_points, "linear_mesh");
 
   // initialize optimizer
   CloughTocherOptimizer optimizer(V, F, affine_manifold);
-  bezier_control_points = optimizer.optimize_laplacian_energy(bezier_control_points);
+  bezier_control_points =
+      optimizer.optimize_laplacian_energy(bezier_control_points);
   optimizer.fitting_weight = weight;
 
   // optimize the bezier nodes with laplacian energy
-  std::vector<Eigen::Vector3d> laplacian_control_points = optimizer.optimize_laplacian_energy(bezier_control_points);
+  std::vector<Eigen::Vector3d> laplacian_control_points =
+      optimizer.optimize_laplacian_energy(bezier_control_points);
   write_mesh(ct_surface, laplacian_control_points, "laplacian_mesh");
-  std::vector<double> laplacian_energies = optimizer.compute_face_energies(bezier_control_points, optimizer.generate_laplacian_stiffness_matrix());
+  std::vector<double> laplacian_energies = optimizer.compute_face_energies(
+      bezier_control_points, optimizer.generate_laplacian_stiffness_matrix());
 
   // optimize the bezier nodes with laplace beltrami energy
-  std::vector<Eigen::Vector3d> laplace_beltrami_control_points = optimizer.optimize_laplace_beltrami_energy(bezier_control_points, iterations);
-  write_mesh(ct_surface, laplace_beltrami_control_points, "laplace_beltrami_mesh");
-  std::vector<double> lb_energies = optimizer.compute_face_energies(bezier_control_points, optimizer.generate_laplace_beltrami_stiffness_matrix());
+  std::vector<Eigen::Vector3d> laplace_beltrami_control_points =
+      optimizer.optimize_laplace_beltrami_energy(bezier_control_points,
+                                                 iterations);
+  write_mesh(ct_surface, laplace_beltrami_control_points,
+             "laplace_beltrami_mesh");
+  std::vector<double> lb_energies = optimizer.compute_face_energies(
+      bezier_control_points,
+      optimizer.generate_laplace_beltrami_stiffness_matrix());
 
   double laplacian_energy = 0.;
   double lb_energy = 0.;
   std::vector<double> energy_ratio(num_faces);
-  for (int fijk = 0; fijk < num_faces; ++fijk)
-  {
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
     energy_ratio[fijk] = lb_energies[fijk] / laplacian_energies[fijk];
     laplacian_energy += laplacian_energies[fijk];
     lb_energy += lb_energies[fijk];
-    //spdlog::info("face energies are {} and {}", laplacian_energies[fijk], lb_energies[fijk]);
+    // spdlog::info("face energies are {} and {}", laplacian_energies[fijk],
+    // lb_energies[fijk]);
   }
   spdlog::info("total laplacian energy is {}", laplacian_energy);
   spdlog::info("total laplace beltrami energy is {}", lb_energy);
 
-  polyscope::init();
-  polyscope::registerSurfaceMesh("mesh", V, F);
-  polyscope::getSurfaceMesh("mesh")
-    ->addFaceScalarQuantity("laplacian energy", laplacian_energies);
-  polyscope::getSurfaceMesh("mesh")
-    ->addFaceScalarQuantity("laplace beltrami energy", lb_energies);
-  polyscope::getSurfaceMesh("mesh")
-    ->addFaceScalarQuantity("energy ratio", energy_ratio);
-  polyscope::show();
+  // write lag2bezier mat for c1meshing soft constraint
+  Eigen::SparseMatrix<double, 1> l2b_mat;
+  ct_surface.lag2bezier_full_mat(l2b_mat);
+  Eigen::saveMarket(l2b_mat, "CT_lag2bezier_matrix.txt");
+
+  if (visualize != 0) {
+    polyscope::init();
+    polyscope::registerSurfaceMesh("mesh", V, F);
+    polyscope::getSurfaceMesh("mesh")->addFaceScalarQuantity(
+        "laplacian energy", laplacian_energies);
+    polyscope::getSurfaceMesh("mesh")->addFaceScalarQuantity(
+        "laplace beltrami energy", lb_energies);
+    polyscope::getSurfaceMesh("mesh")->addFaceScalarQuantity("energy ratio",
+                                                             energy_ratio);
+    polyscope::show();
+  }
 
   // optional interpolation (useful for debugging)
-	std::vector<Eigen::Vector3d> interpolated_control_points(bezier_control_points.size());
+  std::vector<Eigen::Vector3d> interpolated_control_points(
+      bezier_control_points.size());
   int node_cnt = bezier_control_points.size();
   for (int64_t i = 0; i < node_cnt; ++i) {
     for (int j = 0; j < 3; ++j) {
-      interpolated_control_points[i][j] = t * bezier_control_points[i][j] + (1 - t) * laplace_beltrami_control_points[i][j];
+      interpolated_control_points[i][j] =
+          t * bezier_control_points[i][j] +
+          (1 - t) * laplace_beltrami_control_points[i][j];
     }
   }
   write_mesh(ct_surface, interpolated_control_points, "interpolated_mesh");

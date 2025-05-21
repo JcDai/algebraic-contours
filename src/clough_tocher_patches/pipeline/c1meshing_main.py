@@ -51,6 +51,9 @@ if __name__ == "__main__":
     enable_offset = args.spec["enable_offset"]
     drop_unrelated_tet = args.spec["drop_unrelated_tet"]
 
+    ct_weight = args.spec["cubic_optimization_weight"]
+    ct_iteration = args.spec["cubic_optimization_iterations"]
+
     path_to_para_exe = args.bins[
         "seamless_parametrization_binary"
     ]  # path to parametrization bin
@@ -63,6 +66,7 @@ if __name__ == "__main__":
     path_to_toolkit_para_exe = args.bins["wmtk_c1_para_split_binary"]
     path_to_toolkit_cone_exe = args.bins["wmtk_c1_cone_split_binary"]
     path_to_generate_cone_exe = args.bins["seamless_con_gen_binary"]
+    path_to_ct_optimize_exe = args.bins["cubic_optimization_binary"]
 
     workspace_path = "./"
 
@@ -85,7 +89,7 @@ if __name__ == "__main__":
     # exit()
     if not proceed:
         print("has vertices adjacent to two cones")
-        exit()
+        # exit()
 
     compute_cone_vids(workspace_path)
 
@@ -112,19 +116,25 @@ if __name__ == "__main__":
     call_CT_code(workspace_path, path_to_ct_exe,
                  "surface_uv_after_cone_split.obj")
 
+    call_CT_optimize_code(workspace_path, path_to_ct_optimize_exe,
+                          "surface_uv_after_cone_split.obj", ct_weight, ct_iteration)
+
     # step 5 map tri to tet
     tet_edge_to_vertices, tet_face_to_vertices = map_tri_nodes_to_tet_nodes(
         workspace_path, output_name, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map)
 
     # step 6 build soft constraints
-    A_sti, b_sti = upsample_and_smooth_cones("CT_bilaplacian_nodes_values_cone_area_vertices.txt",
-                                             "CT_bilaplacian_nodes_values_cone_area_faces.txt", "CT_from_lagrange_nodes.msh", sample_factor, k_ring_factor)
+    # A_sti, b_sti = upsample_and_smooth_cones("CT_bilaplacian_nodes_values_cone_area_vertices.txt",
+    #                                          "CT_bilaplacian_nodes_values_cone_area_faces.txt", "CT_from_lagrange_nodes.msh", sample_factor, k_ring_factor)
 
-    soft_constraint_fit_normal(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                               output_name + "_initial_tetmesh.msh", A_sti, b_sti)
+    # soft_constraint_fit_normal(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+    #                            output_name + "_initial_tetmesh.msh", A_sti, b_sti)
 
-    call_CT_code_with_normals(workspace_path, path_to_ct_exe,
-                              "surface_uv_after_cone_split.obj", "CT_smoothed_normals.txt")
+    # call_CT_code_with_normals(workspace_path, path_to_ct_exe,
+    #                           "surface_uv_after_cone_split.obj", "CT_smoothed_normals.txt")
+
+    soft_constraint_cubic_optimization(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+                                       output_name + "_initial_tetmesh.msh", "laplace_beltrami_mesh.msh", "CT_lag2bezier_matrix.txt")
 
     # step 7 build hard constraints
     # build_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
@@ -146,6 +156,10 @@ if __name__ == "__main__":
     # step 8 polyfem
     create_polyfem_json(enable_offset, output_name, "soft.hdf5",
                         "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
+
+    before_poly_time = time.time()
+    print("before poly: ", before_poly_time)
+    print("before poly took: ", before_poly_time - start_time)
 
     call_polyfem(workspace_path, path_to_polyfem_exe, "constraints.json")
 

@@ -467,6 +467,17 @@ def cone_split(workspace_path, path_to_toolkit_cone_exe,  para_split_tet_file, p
         for vid in adj_list[cid]:
             cone_edges_to_split.append([cid, vid])
 
+    # if cone adj to cone need second split
+    cone_vids_for_2nd_split = []
+    for cid in cone_vids:
+        for vid in adj_list[cid]:
+            if vid in cone_vids:
+                cone_vids_for_2nd_split.append(cid)
+
+    with open("cone_vids_for_second_split.txt", "w") as file:
+        for id in cone_vids_for_2nd_split:
+            file.write("{}\n".format(id))
+
     print("cone edges to split: ", cone_edges_to_split)
 
     with open("cone_edges_to_split.txt", "w") as file:
@@ -516,7 +527,8 @@ def cone_split(workspace_path, path_to_toolkit_cone_exe,  para_split_tet_file, p
         # "tet_surface_map": para_split_sf_tet_map_file,
         "tet_surface_map": "toolkit_cone_split_map.txt",
         "cone_edges": "cone_edges_to_split.txt",
-        "output": "toolkit_cone_split"
+        "output": "toolkit_cone_split",
+        "cone_vertices": "cone_vids_for_second_split.txt"
     }
 
     with open("cone_split_json.json", "w") as file:
