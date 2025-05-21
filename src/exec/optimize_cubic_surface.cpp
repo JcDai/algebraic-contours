@@ -1,6 +1,7 @@
 #include "optimize_clough_tocher.hpp"
 #include <CLI/CLI.hpp>
 #include <igl/readOBJ.h>
+#include "polyscope/surface_mesh.h"
 
 /**
  * @brief Executable to take a triangle mesh file (stored as OBJ) and produce an optimized C1 cubic spline.
@@ -198,15 +199,41 @@ int main(int argc, char *argv[])
 
   // initialize optimizer
   CloughTocherOptimizer optimizer(V, F, affine_manifold);
+  bezier_control_points = optimizer.optimize_laplacian_energy(bezier_control_points);
   optimizer.fitting_weight = weight;
 
   // optimize the bezier nodes with laplacian energy
   std::vector<Eigen::Vector3d> laplacian_control_points = optimizer.optimize_laplacian_energy(bezier_control_points);
   write_mesh(ct_surface, laplacian_control_points, "laplacian_mesh");
+  std::vector<double> laplacian_energies = optimizer.compute_face_energies(bezier_control_points, optimizer.generate_laplacian_stiffness_matrix());
 
   // optimize the bezier nodes with laplace beltrami energy
   std::vector<Eigen::Vector3d> laplace_beltrami_control_points = optimizer.optimize_laplace_beltrami_energy(bezier_control_points, iterations);
   write_mesh(ct_surface, laplace_beltrami_control_points, "laplace_beltrami_mesh");
+  std::vector<double> lb_energies = optimizer.compute_face_energies(bezier_control_points, optimizer.generate_laplace_beltrami_stiffness_matrix());
+
+  double laplacian_energy = 0.;
+  double lb_energy = 0.;
+  std::vector<double> energy_ratio(num_faces);
+  for (int fijk = 0; fijk < num_faces; ++fijk)
+  {
+    energy_ratio[fijk] = lb_energies[fijk] / laplacian_energies[fijk];
+    laplacian_energy += laplacian_energies[fijk];
+    lb_energy += lb_energies[fijk];
+    //spdlog::info("face energies are {} and {}", laplacian_energies[fijk], lb_energies[fijk]);
+  }
+  spdlog::info("total laplacian energy is {}", laplacian_energy);
+  spdlog::info("total laplace beltrami energy is {}", lb_energy);
+
+  polyscope::init();
+  polyscope::registerSurfaceMesh("mesh", V, F);
+  polyscope::getSurfaceMesh("mesh")
+    ->addFaceScalarQuantity("laplacian energy", laplacian_energies);
+  polyscope::getSurfaceMesh("mesh")
+    ->addFaceScalarQuantity("laplace beltrami energy", lb_energies);
+  polyscope::getSurfaceMesh("mesh")
+    ->addFaceScalarQuantity("energy ratio", energy_ratio);
+  polyscope::show();
 
   // optional interpolation (useful for debugging)
 	std::vector<Eigen::Vector3d> interpolated_control_points(bezier_control_points.size());

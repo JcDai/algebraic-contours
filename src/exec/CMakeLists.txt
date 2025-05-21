@@ -46,3 +46,10 @@ target_link_libraries(test_optimization PRIVATE
 target_compile_options(test_optimization PRIVATE
   -Wall -Wpedantic -Wextra -Werror
 )
+
+add_executable(test_CT_Laplacian test_CT_Laplacian.c)
+target_link_libraries(test_CT_Laplacian PRIVATE
+  QuadraticContoursLib
+  CloughTocherPatchLib
+  CLI11::CLI11
+)

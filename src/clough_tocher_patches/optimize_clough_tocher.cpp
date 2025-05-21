@@ -1,6 +1,7 @@
 #include "optimize_clough_tocher.hpp"
 #include "Clough_Tocher_Laplacian.c"
 #include "Clough_Tocher_Laplace_Beltrami.c"
+#include "clough_tocher_constraint_matrices.hpp"
 
 CloughTocherOptimizer::CloughTocherOptimizer(
 		const Eigen::MatrixXd V, const Eigen::MatrixXi F,
@@ -70,6 +71,40 @@ std::vector<Eigen::Vector3d> CloughTocherOptimizer::optimize_laplacian_energy(
 	return build_control_points(p);
 }
 
+std::vector<double> CloughTocherOptimizer::compute_face_energies(
+	const std::vector<Eigen::Vector3d> &bezier_control_points,
+	const Eigen::SparseMatrix<double> &A
+) {
+	const std::vector<Eigen::Vector3d>& p = bezier_control_points;
+
+	// assemble IJV matrix entries
+	const auto &affine_manifold = get_affine_manifold();
+	int num_faces = affine_manifold.num_faces();
+	std::vector<double> face_energies(num_faces);
+	for (int fijk = 0; fijk < num_faces; ++fijk)
+	{
+		FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+		std::array<std::array<int64_t, 10>, 3> nodes =
+				get_micro_triangle_nodes(fijk);
+		for (int n = 0; n < 3; ++n)
+		{
+			for (int i = 0; i < 10; ++i)
+			{
+				for (int j = 0; j < 10; ++j)
+				{
+					for (int d = 0; d < 3; ++d)
+					{
+						int I = nodes[n][i];
+						int J = nodes[n][j];
+						face_energies[fijk] += 0.5 * p[I][d] * p[J][d] * A.coeff(I, J);
+					}
+				}
+			}
+		}
+	}
+
+	return face_energies;
+}
 
 std::vector<Eigen::Vector3d> CloughTocherOptimizer::optimize_laplace_beltrami_energy(const std::vector<Eigen::Vector3d> &bezier_control_points, int iterations)
 {
@@ -93,7 +128,9 @@ std::vector<Eigen::Vector3d> CloughTocherOptimizer::optimize_laplace_beltrami_en
 	{
 		// compute hessian
 		timer.start();
-		const Eigen::SparseMatrix<double> &A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+		Eigen::SparseMatrix<double> A;
+		if (i == 0) A = generate_laplace_beltrami_stiffness_matrix();
+		else A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
 		Eigen::SparseMatrix<double> hessian = C.transpose() * ((A + k * P) * C);
 		spdlog::info("matrix construction took {} s", timer.getElapsedTime());
 
@@ -348,6 +385,107 @@ CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix(const std::vec
 
 	return triple_matrix(stiffness_matrix);
 }
+
+// TODO: Obtained from affine_manifold.cpp. Make standalone function
+const std::array<PlanarPoint, 19> CT_nodes = {{
+    PlanarPoint(1., 0.),           // b0    0
+    PlanarPoint(0., 1.),           // b1    1
+    PlanarPoint(0., 0.),           // b2    2
+    PlanarPoint(2. / 3., 1. / 3.), // b01   3
+    PlanarPoint(1. / 3., 2. / 3.), // b10   4
+    PlanarPoint(0., 2. / 3.),      // b12   5
+    PlanarPoint(0., 1. / 3.),      // b21   6
+    PlanarPoint(1. / 3., 0.),      // b20   7
+    PlanarPoint(2. / 3., 0.),      // b02   8
+    PlanarPoint(4. / 9., 4. / 9.), // b01^c 9
+    PlanarPoint(1. / 9., 4. / 9.), // b12^c 10
+    PlanarPoint(4. / 9., 1. / 9.), // b20^c 11
+    PlanarPoint(7. / 9., 1. / 9.), // b0c   12
+    PlanarPoint(5. / 9., 2. / 9.), // bc0   13
+    PlanarPoint(1. / 9., 7. / 9.), // b1c   14
+    PlanarPoint(2. / 9., 5. / 9.), // bc1   15
+    PlanarPoint(1. / 9., 1. / 9.), // b2c   16
+    PlanarPoint(2. / 9., 2. / 9.), // bc2   17
+    PlanarPoint(1. / 3., 1. / 3.), // bc    18
+}};
+
+Eigen::SparseMatrix<double>
+CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const
+{
+	// assemble IJV matrix entries
+	const auto &affine_manifold = get_affine_manifold();
+	std::vector<Triplet> stiffness_matrix_trips;
+	int num_faces = affine_manifold.num_faces();
+	std::vector<Eigen::Vector3d> bezier_control_points(19);
+	Eigen::Matrix<double, 10, 10> p3_lag2bezier_matrix = p3_lag2bezier_m();
+	std::array<int64_t, 10> perm = {0, 9, 3, 4, 7, 8, 6, 2, 1, 5};
+	double cp_3d[10][3];
+	double A[10][10];
+	std::array<std::array<int64_t, 10>, 3> nodes =
+	{{{{0, 1, 18, 3, 4, 14, 15, 13, 12, 9}},
+		{{1, 2, 18, 5, 6, 16, 17, 15, 14, 10}},
+		{{2, 0, 18, 7, 8, 12, 13, 17, 16, 11}}}};
+	for (int fijk = 0; fijk < num_faces; ++fijk)
+	{
+		FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+		const auto& P = face_chart.face_uv_positions;
+		Eigen::Vector3d Vi = {P[0][0], P[0][1], 0.};
+		Eigen::Vector3d Vj = {P[1][0], P[1][1], 0.};
+		Eigen::Vector3d Vk = {P[2][0], P[2][1], 0.};
+		std::array<std::array<int64_t, 10>, 3> patch_indices =
+				get_micro_triangle_nodes(fijk);
+
+		for (int n = 0; n < 3; ++n) {
+			// subtri i
+			Eigen::Matrix<double, 10, 3> lag_values_sub, bezier_points_sub;
+
+			for (int k = 0; k < 10; ++k) {
+				PlanarPoint uv = CT_nodes[nodes[n][k]];
+				double u = uv[0];
+				double v = uv[1];
+				double w = 1. - u - v;
+				lag_values_sub.row(k) = u * Vi + v * Vj + w * Vk;
+			}
+
+			// convert local 10 lag to bezier
+			bezier_points_sub = p3_lag2bezier_matrix * lag_values_sub;
+
+			// get 3D points
+			for (int i = 0; i < 10; i++)
+			{
+				for (int d = 0; d < 3; d++)
+				{
+					cp_3d[perm[i]][d] = bezier_points_sub(i, d);
+				}
+			}
+
+			// compute 10x10 local stiffness matrix (same for all dimensions)
+			compute_elem_matrix_C(cp_3d, QUAD_DIM, quad_pts, weights, A);
+
+			// build single dimension copy of the stiffness matrix
+			for (int i = 0; i < 10; i++)
+			{
+				for (int j = 0; j < 10; j++)
+				{
+					int64_t I = patch_indices[n][i];
+					int64_t J = patch_indices[n][j];
+					double V = A[perm[i]][perm[j]];
+					stiffness_matrix_trips.push_back(Triplet(I, J, V));
+				}
+			}
+		}
+  }
+
+	// build matrix
+	int node_cnt = affine_manifold.m_lagrange_nodes.size(); // TODO Replace
+	Eigen::SparseMatrix<double> stiffness_matrix;
+	stiffness_matrix.resize(node_cnt, node_cnt);
+	stiffness_matrix.setFromTriplets(stiffness_matrix_trips.begin(),
+																	 stiffness_matrix_trips.end());
+
+	return triple_matrix(stiffness_matrix);
+}
+
 
 void CloughTocherOptimizer::assemble_local_laplace_beltrami_siffness_matrix(
 		const std::vector<Eigen::Vector3d> &bezier_control_points,

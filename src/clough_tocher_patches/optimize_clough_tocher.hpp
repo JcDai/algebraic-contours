@@ -53,6 +53,12 @@ public:
 	 */
 	double evaluate_energy(const std::vector<Eigen::Vector3d> &bezier_control_points);
 
+	Eigen::SparseMatrix<double> generate_laplace_beltrami_stiffness_matrix() const;
+
+	std::vector<double> compute_face_energies(
+		const std::vector<Eigen::Vector3d> &bezier_control_points,
+		const Eigen::SparseMatrix<double> &A);
+
 	std::vector<Eigen::Vector3d> &get_bezier_control_points() { return m_bezier_control_points; }
 	const std::vector<Eigen::Vector3d> &get_bezier_control_points() const { return m_bezier_control_points; }
 
@@ -65,6 +71,23 @@ public:
 	const AffineManifold &get_affine_manifold() const { return m_affine_manifold; }
 
 	double fitting_weight;
+
+	/**
+	 * @brief Assemble the stiffness matrix for the parameterization metric Laplacian energy
+	 * in terms of Bezier coordinates.
+	 *
+	 * @return Laplacian energy stiffness matrix
+	 */
+	Eigen::SparseMatrix<double> generate_laplacian_stiffness_matrix() const;
+
+	/**
+	 * @brief Assemble the stiffness matrix for the surface metric Laplace Beltrami energy
+	 * in terms of Bezier coordinates.
+	 *
+	 * @param bezier_control_points: list of 3D Bezier nodes
+	 * @return Laplace Beltrami energy stiffness matrix
+	 */
+	Eigen::SparseMatrix<double> generate_laplace_beltrami_stiffness_matrix(const std::vector<Eigen::Vector3d> &bezier_control_points) const;
 
 private:
 	igl::Timer timer;
@@ -98,23 +121,6 @@ private:
 	 * @return array of 3 patch Bezier nodes (10 node indices per patch)
 	 */
 	std::array<std::array<int64_t, 10>, 3> get_micro_triangle_nodes(int64_t face_index) const;
-
-	/**
-	 * @brief Assemble the stiffness matrix for the parameterization metric Laplacian energy
-	 * in terms of Bezier coordinates.
-	 *
-	 * @return Laplacian energy stiffness matrix
-	 */
-	Eigen::SparseMatrix<double> generate_laplacian_stiffness_matrix() const;
-
-	/**
-	 * @brief Assemble the stiffness matrix for the surface metric Laplace Beltrami energy
-	 * in terms of Bezier coordinates.
-	 *
-	 * @param bezier_control_points: list of 3D Bezier nodes
-	 * @return Laplace Beltrami energy stiffness matrix
-	 */
-	Eigen::SparseMatrix<double> generate_laplace_beltrami_stiffness_matrix(const std::vector<Eigen::Vector3d> &bezier_control_points) const;
 
 	/**
 	 * @brief Assemble the matrix to extract the vertex position nodes from the Bezier node vector.
