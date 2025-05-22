@@ -603,7 +603,7 @@ def cone_split(workspace_path, path_to_toolkit_cone_exe,  para_split_tet_file, p
     subprocess.run(toolkit_command, shell=True, check=True)
 
 
-def cone_split_once_only(workspace_path, path_to_toolkit_cone_exe,  para_split_tet_file, para_split_obj_file, para_cone_angle_file, para_split_sf_tet_map_file, para_split_surface_adj_tet_file, para_split_sf_v_to_tet_v_file):
+def cone_split_once_only(workspace_path, path_to_toolkit_cone_exe,  para_split_tet_file, para_split_obj_file, para_split_cone_file, para_split_sf_tet_map_file, para_split_surface_adj_tet_file, para_split_sf_v_to_tet_v_file):
     tm = mio.read(para_split_tet_file)  # assuming vtu
     tm.write("cone_split_input_tetmesh.msh", file_format="gmsh")
 
@@ -617,17 +617,13 @@ def cone_split_once_only(workspace_path, path_to_toolkit_cone_exe,  para_split_t
 
     adj_list = igl.adjacency_list(f)
 
-    cone_angles = np.loadtxt(para_cone_angle_file)
-    is_cone = []
+    cone_vids = np.loadtxt(para_split_cone_file).astype(np.int32)
+
+    # cone_angles = np.loadtxt(para_cone_angle_file)
+    is_cone = [False for i in range(v.shape[0])]
     cone_cnt = 0
-    cone_vids = []
-    for i, angle in enumerate(cone_angles):
-        if abs(angle - 2 * math.pi) < 1e-5:
-            is_cone.append(False)
-        else:
-            is_cone.append(True)
-            cone_cnt += 1
-            cone_vids.append(i)
+    for i in cone_vids:
+        is_cone[i] = True
 
     cone_vids_to_split = []
     for vid in range(v.shape[0]):

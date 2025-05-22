@@ -113,7 +113,7 @@ if __name__ == "__main__":
     #            "surface_uv_after_para_split.obj", "cone_vids_after_para_split.txt", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
 
     cone_split_once_only(workspace_path, path_to_toolkit_cone_exe, "toolkit_para_split_tetmesh_tets.vtu",
-                         "surface_uv_after_para_split.obj", "embedded_surface_Th_hat_new", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
+                         "surface_uv_after_para_split.obj", "cone_vids_after_para_split.txt", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
 
     # exit()
 
