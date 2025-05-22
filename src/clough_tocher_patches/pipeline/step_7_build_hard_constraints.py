@@ -372,7 +372,7 @@ def build_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet_inde
         f.create_dataset("b", data=b[:, None])
 
 
-def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet_index_mapping_file, bezier_cons_mat_file, linear_tetmesh_file, tet_edge_to_vertices, tet_face_to_vertices, bezier_reduced2full_file, bezier_r2f_col_idx_map_file):
+def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet_index_mapping_file, bezier_cons_mat_file, linear_tetmesh_file, tet_edge_to_vertices, tet_face_to_vertices, bezier_reduced2full_file, bezier_r2f_col_idx_map_file, initial_interp_mesh):
     print(
         "[{}] ".format(datetime.datetime.now()),
         "constructing expanded full (including cone) bezier hard constraint matrix ...",
@@ -605,7 +605,15 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
     print(v_expanded_reduce.shape)
     print(r2f_full_expanded.shape)
 
-    proj = r2f_full_expanded @ v_expanded_reduce - v_expanded
+    # use arbi initial guess
+    # proj = r2f_full_expanded @ v_expanded_reduce - v_expanded
+
+    # use interp mesh
+    interp_mesh = mio.read(initial_interp_mesh)
+    interp_v = interp_mesh.points
+    interp_v_expanded = np.reshape(interp_v, (interp_v.shape[0]*3, 1)).T[0]
+    proj = interp_v_expanded - v_expanded
+
     for id in other_dep_ids:
         proj[id] = 0
     for id in other_ind_ids:

@@ -638,6 +638,181 @@ void CloughTocherSurface::
   }
 }
 
+void CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
+    std::string filename, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
+  std::ofstream file(filename + ".msh");
+
+  /*
+    $MeshFormat
+      4.1 0 8     MSH4.1, ASCII
+      $EndMeshFormat
+    */
+
+  file << "$MeshFormat\n"
+       << "4.1 0 8\n"
+       << "$EndMeshFormat\n";
+
+  /*
+  subtri0: 0 1 18 3 4 14 15 13 12 9
+  b0 b1 bc b01 b10 b1c bc1 bc0 b0c b01^c
+  subtri1: 1 2 18 5 6 16 17 15 14 10
+  b1 b2 bc b12 b21 b2c bc2 bc1 b1c b12^c
+  subtri2: 2 0 18 7 8 12 13 17 16 11
+  b2 b0 bc b20 b02 b0c bc0 bc2 b2c b20^c
+  */
+
+  // m_affine_manifold.generate_lagrange_nodes();
+
+  // build faces
+  std::vector<std::array<int64_t, 10>> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    faces.push_back(
+        {{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+          l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}});
+    faces.push_back(
+        {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+          l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}});
+    faces.push_back(
+        {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+          l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}});
+  }
+
+  // compute degenerated bezier control points
+  std::vector<Eigen::Vector3d> degenerated_bezier_control_points(
+      m_affine_manifold.m_lagrange_nodes.size());
+
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+
+    // std::array<std::array<int64_t, 10>, 3> indices_sub = {
+    //     {{{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+    //        l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}},
+    //      {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+    //        l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}},
+    //      {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+    //        l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16],
+    //        l_nodes[11]}}}};
+
+    // fid in input
+    // int64_t patch_id = m_affine_manifold.m_lagrange_nodes[l_nodes[18]].first;
+    int64_t patch_id = f_chart.face_index;
+    const auto &global_F = F.row(patch_id);
+
+    // endpoints
+    degenerated_bezier_control_points[l_nodes[0]] = V.row(global_F[0]);
+    degenerated_bezier_control_points[l_nodes[1]] = V.row(global_F[1]);
+    degenerated_bezier_control_points[l_nodes[2]] = V.row(global_F[2]);
+
+    // edges
+    degenerated_bezier_control_points[l_nodes[3]] =
+        degenerated_bezier_control_points[l_nodes[0]];
+    degenerated_bezier_control_points[l_nodes[4]] =
+        degenerated_bezier_control_points[l_nodes[1]];
+    degenerated_bezier_control_points[l_nodes[5]] =
+        degenerated_bezier_control_points[l_nodes[1]];
+    degenerated_bezier_control_points[l_nodes[6]] =
+        degenerated_bezier_control_points[l_nodes[2]];
+    degenerated_bezier_control_points[l_nodes[7]] =
+        degenerated_bezier_control_points[l_nodes[2]];
+    degenerated_bezier_control_points[l_nodes[8]] =
+        degenerated_bezier_control_points[l_nodes[0]];
+
+    // midpoint
+    degenerated_bezier_control_points[l_nodes[9]] =
+        (degenerated_bezier_control_points[l_nodes[0]] +
+         degenerated_bezier_control_points[l_nodes[1]]) /
+        2.;
+    degenerated_bezier_control_points[l_nodes[10]] =
+        (degenerated_bezier_control_points[l_nodes[1]] +
+         degenerated_bezier_control_points[l_nodes[2]]) /
+        2.;
+    degenerated_bezier_control_points[l_nodes[11]] =
+        (degenerated_bezier_control_points[l_nodes[2]] +
+         degenerated_bezier_control_points[l_nodes[0]]) /
+        2.;
+    // interior 1
+    degenerated_bezier_control_points[l_nodes[12]] =
+        (degenerated_bezier_control_points[l_nodes[0]] +
+         degenerated_bezier_control_points[l_nodes[3]] +
+         degenerated_bezier_control_points[l_nodes[8]]) /
+        3.;
+
+    degenerated_bezier_control_points[l_nodes[14]] =
+        (degenerated_bezier_control_points[l_nodes[1]] +
+         degenerated_bezier_control_points[l_nodes[5]] +
+         degenerated_bezier_control_points[l_nodes[4]]) /
+        3.;
+
+    degenerated_bezier_control_points[l_nodes[16]] =
+        (degenerated_bezier_control_points[l_nodes[2]] +
+         degenerated_bezier_control_points[l_nodes[7]] +
+         degenerated_bezier_control_points[l_nodes[6]]) /
+        3.;
+
+    // interior 2
+    degenerated_bezier_control_points[l_nodes[13]] =
+        (degenerated_bezier_control_points[l_nodes[9]] +
+         degenerated_bezier_control_points[l_nodes[11]] +
+         degenerated_bezier_control_points[l_nodes[12]]) /
+        3.;
+
+    degenerated_bezier_control_points[l_nodes[15]] =
+        (degenerated_bezier_control_points[l_nodes[10]] +
+         degenerated_bezier_control_points[l_nodes[9]] +
+         degenerated_bezier_control_points[l_nodes[14]]) /
+        3.;
+
+    degenerated_bezier_control_points[l_nodes[17]] =
+        (degenerated_bezier_control_points[l_nodes[11]] +
+         degenerated_bezier_control_points[l_nodes[10]] +
+         degenerated_bezier_control_points[l_nodes[16]]) /
+        3.;
+    // center
+    degenerated_bezier_control_points[l_nodes[18]] =
+        (degenerated_bezier_control_points[l_nodes[13]] +
+         degenerated_bezier_control_points[l_nodes[15]] +
+         degenerated_bezier_control_points[l_nodes[17]]) /
+        3.;
+  }
+
+  const auto &vertices = degenerated_bezier_control_points;
+
+  file << "$Nodes\n";
+
+  const size_t node_size = vertices.size();
+  file << "1 " << node_size << " 1 " << node_size << "\n";
+  file << "2 1 0 " << node_size << "\n";
+
+  for (size_t i = 1; i <= node_size; ++i) {
+    file << i << "\n";
+  }
+
+  for (size_t i = 0; i < node_size; ++i) {
+    file << std::setprecision(16) << vertices[i][0] << " " << vertices[i][1]
+         << " " << vertices[i][2] << "\n";
+  }
+
+  file << "$EndNodes\n";
+
+  // write elements
+  // assert(m_patches.size() * 3 == faces.size());
+  const size_t element_size = faces.size();
+
+  file << "$Elements\n";
+  file << "1 " << element_size << " 1 " << element_size << "\n";
+  file << "2 1 21 " << element_size << "\n";
+  for (size_t i = 0; i < element_size; ++i) {
+    file << i + 1 << " ";
+    for (int j = 0; j < 10; ++j) {
+      file << faces[i][j] + 1 << " ";
+    }
+    file << "\n";
+  }
+
+  file << "$EndElements\n";
+}
+
 void CloughTocherSurface::write_external_point_values_with_conn(
     const std::string &filename, const Eigen::MatrixXd &vertices) {
   std::ofstream file(filename + ".msh");

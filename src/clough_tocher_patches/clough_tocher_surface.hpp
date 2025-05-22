@@ -28,6 +28,8 @@ public:
   void write_cubic_surface_to_msh_with_conn(std::string filename);
   void write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
       std::string filename, bool write_bezier = false);
+  void write_degenerate_cubic_surface_to_msh_with_conn(
+      std::string filename, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
   void write_external_bd_interpolated_function_values_from_lagrange_nodes(
       std::string filename,
       std::vector<Eigen::Matrix<double, 12, 1>> &external_boundary_data);

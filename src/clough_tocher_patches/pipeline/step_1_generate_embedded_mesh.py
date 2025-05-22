@@ -63,8 +63,15 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
         for i in range(tets.shape[0]):
             winding_numbers[i] = winding_numbers_data[i]
     else:
+        # one ring
         tet_indices_touching_surface = np.unique(np.argwhere(
             np.isin(tets_unsliced, surface_vertices))[:, 0])
+
+        # # two ring
+        # tets_one_ring = tets_unsliced[tet_indices_touching_surface]
+        # vertices_one_ring = np.unique(tets_one_ring.flatten())
+        # tet_indices_touching_surface = np.unique(np.argwhere(
+        #     np.isin(tets_unsliced, vertices_one_ring))[:, 0])
 
         tets = tets_unsliced[tet_indices_touching_surface]
         winding_numbers_data = winding_numbers_data_unsliced[tet_indices_touching_surface]

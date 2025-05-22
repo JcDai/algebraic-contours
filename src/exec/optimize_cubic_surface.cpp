@@ -161,6 +161,8 @@ int main(int argc, char *argv[]) {
   // TODO: make part of initialization
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes("temp",
                                                                       true);
+  ct_surface.write_degenerate_cubic_surface_to_msh_with_conn(
+      "CT_degenerate_cubic_bezier_points", V, F);
 
   std::cout << "#F: " << ct_surface.m_affine_manifold.m_face_charts.size()
             << std::endl;
