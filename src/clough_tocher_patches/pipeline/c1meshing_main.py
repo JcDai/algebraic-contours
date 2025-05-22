@@ -84,25 +84,36 @@ if __name__ == "__main__":
     generate_frame_field(
         workspace_path, path_to_generate_cone_exe, meshfile="embedded_surface.obj")
 
-    proceed = detect_two_separate_problem(workspace_path)
-    # rearrange_cones(workspace_path)
-    # exit()
-    if not proceed:
-        print("has vertices adjacent to two cones")
-        # exit()
+    remove_adj_cones(workspace_path)
 
-    compute_cone_vids(workspace_path)
+    # proceed = detect_two_separate_problem(workspace_path)
+    # # rearrange_cones(workspace_path)
+    # # exit()
+    # if not proceed:
+    #     print("has vertices adjacent to two cones")
+    #     # exit()
 
-    parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
-                    conefile="embedded_surface_Th_hat", fieldfile="embedded_surface_kappa_hat")
+    # compute_cone_vids(workspace_path)
+
+    # parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
+    #                 conefile="embedded_surface_Th_hat", fieldfile="embedded_surface_kappa_hat")
     # parametrization(workspace_path, path_to_para_exe, meshfile="embedded_surface.obj",
     #                 conefile="embedded_surface_Th_hat_new", fieldfile="embedded_surface_kappa_hat")
+
+    parametrization_free_cones(
+        workspace_path, path_to_para_exe, cone_file="embedded_surface_Th_hat_new", field_file="embedded_surface_kappa_hat", meshfile="embedded_surface.obj")
+
+    # compute_cone_vids(workspace_path)
+    compute_cone_vids(workspace_path, cone_file="embedded_surface_Th_hat_new")
 
     parametrization_split(workspace_path, tets_vertices_regular, tets_regular, surface_adj_tet, para_in_v_to_tet_v_map,
                           path_to_toolkit_para_exe, meshfile_before_para="embedded_surface.obj", meshfile_after_para="parameterized_mesh.obj")
 
-    cone_split(workspace_path, path_to_toolkit_cone_exe, "toolkit_para_split_tetmesh_tets.vtu",
-               "surface_uv_after_para_split.obj", "cone_vids_after_para_split.txt", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
+    # cone_split(workspace_path, path_to_toolkit_cone_exe, "toolkit_para_split_tetmesh_tets.vtu",
+    #            "surface_uv_after_para_split.obj", "cone_vids_after_para_split.txt", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
+
+    cone_split_once_only(workspace_path, path_to_toolkit_cone_exe, "toolkit_para_split_tetmesh_tets.vtu",
+                         "surface_uv_after_para_split.obj", "embedded_surface_Th_hat_new", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
 
     # exit()
 
@@ -157,11 +168,15 @@ if __name__ == "__main__":
     create_polyfem_json(enable_offset, output_name, "soft.hdf5",
                         "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
 
+    create_polyfem_json_amips(enable_offset, output_name, "soft.hdf5",
+                              "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
+
     before_poly_time = time.time()
     print("before poly: ", before_poly_time)
     print("before poly took: ", before_poly_time - start_time)
 
-    call_polyfem(workspace_path, path_to_polyfem_exe, "constraints.json")
+    call_polyfem(workspace_path, path_to_polyfem_exe, "constraints_amips.json")
+    # call_polyfem(workspace_path, path_to_polyfem_exe, "constraints.json")
 
     resurrect_winding_number(output_name, new_winding_numbers, enable_offset)
 

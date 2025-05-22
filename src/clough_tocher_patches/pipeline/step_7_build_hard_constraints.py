@@ -508,14 +508,21 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
     ).astype(np.int32)  # already expanded
 
     col2global_expanded = local2global_expanded[col2local_expanded]
+    print("here1")
 
     # compute independent node ids
     sf_ind_ids = col2global_expanded.astype(int)  # expanded
     sf_dep_ids = []  # expanded
+
+    sf_ind_ids_dict = {}
+    for id in sf_ind_ids:
+        sf_ind_ids_dict[id] = True
+
     for id in local2global_expanded:
-        if id not in sf_ind_ids:
+        if id not in sf_ind_ids_dict:
             sf_dep_ids.append(id)
     sf_dep_ids = np.array(sf_dep_ids)
+    print("here2")
 
     other_dep_ids_unexpanded = bd_v  # not expanded
     other_dep_ids = []  # expanded
@@ -525,17 +532,29 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
         other_dep_ids.append(other_dep_ids_unexpanded[i] * 3 + 2)
     other_dep_ids = np.array(other_dep_ids)
 
+    other_dep_ids_dict = {}
+    for id in other_dep_ids:
+        other_dep_ids_dict[id] = True
+
+    local2global_expanded_dict = {}
+    for id in local2global_expanded:
+        local2global_expanded_dict[id] = True
+
     other_ind_ids = []  # expanded/ vertex xyz not on surface or boundary
     for id in range(v.shape[0]*3):
-        if id not in local2global_expanded and id not in other_dep_ids:
+        if id not in local2global_expanded_dict and id not in other_dep_ids_dict:
             other_ind_ids.append(id)
     other_ind_ids = np.array(other_ind_ids)
 
     assert sf_ind_ids.shape[0] + sf_dep_ids.shape[0] + \
         other_dep_ids.shape[0] + other_ind_ids.shape[0] == v.shape[0] * 3
 
+    print("here3")
+
     # compute full to reduce id mapping
     all_ind_ids = np.sort(np.concatenate((sf_ind_ids, other_ind_ids)))
+
+    print("here4")
 
     global2ind = {}  # expanded
     for i in range(all_ind_ids.shape[0]):
@@ -570,6 +589,8 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
 
     r2f_full_expanded = scipy.sparse.coo_array((r2f_full_data, (r2f_full_row, r2f_full_col)), shape=(
         v.shape[0]*3, all_ind_ids.shape[0]))
+
+    print("here5")
 
     with h5py.File(workspace_path + "CT_bezier_r2f_with_dirichlet_expanded.hdf5", "w") as f:
         f.create_dataset("A_triplets/values", data=r2f_full_expanded.data)

@@ -61,19 +61,15 @@ generate_linear_clough_tocher_surface(CloughTocherSurface &ct_surface,
   ct_surface.lag2bezier_full_mat(l2b_mat);
 
   Eigen::MatrixXd lagrange_matrix(num_nodes, 3);
-  for (int64_t i = 0; i < num_nodes; ++i)
-  {
-    for (int j = 0; j < 3; ++j)
-    {
+  for (int64_t i = 0; i < num_nodes; ++i) {
+    for (int j = 0; j < 3; ++j) {
       lagrange_matrix(i, j) = lagrange_control_points[i][j];
     }
   }
   Eigen::MatrixXd bezier_matrix = l2b_mat * lagrange_matrix;
   std::vector<Eigen::Vector3d> bezier_control_points(num_nodes);
-  for (int64_t i = 0; i < num_nodes; ++i)
-  {
-    for (int j = 0; j < 3; ++j)
-    {
+  for (int64_t i = 0; i < num_nodes; ++i) {
+    for (int j = 0; j < 3; ++j) {
       bezier_control_points[i][j] = bezier_matrix(i, j);
     }
   }
@@ -90,10 +86,8 @@ void write_mesh(CloughTocherSurface &ct_surface,
 
   int node_cnt = bezier_control_points.size();
   Eigen::MatrixXd bezier_matrix(node_cnt, 3);
-  for (int64_t i = 0; i < node_cnt; ++i)
-  {
-    for (int j = 0; j < 3; ++j)
-    {
+  for (int64_t i = 0; i < node_cnt; ++i) {
+    for (int j = 0; j < 3; ++j) {
       bezier_matrix(i, j) = bezier_control_points[i][j];
     }
   }
@@ -152,7 +146,6 @@ int main(int argc, char *argv[]) {
   AffineManifold affine_manifold(F, uv, FT);
   affine_manifold.generate_lagrange_nodes();
   affine_manifold.compute_edge_global_uv_mappings();
-  affine_manifold.view(V);
 
   // build initial surface
   spdlog::info("Computing spline surface");
@@ -179,7 +172,8 @@ int main(int argc, char *argv[]) {
             << std::endl;
 
   // get initial bezier points
-  std::vector<Eigen::Vector3d> bezier_control_points = ct_surface.m_bezier_control_points;
+  std::vector<Eigen::Vector3d> bezier_control_points =
+      ct_surface.m_bezier_control_points;
   write_mesh(ct_surface, bezier_control_points, "initial_mesh");
 
   // map bezier points to original positions
@@ -206,11 +200,16 @@ int main(int argc, char *argv[]) {
   write_mesh(ct_surface, laplacian_control_points, "laplacian_mesh");
 
   // optimize the bezier nodes with laplace beltrami energy
-  std::vector<Eigen::Vector3d> laplace_beltrami_control_points = optimizer.optimize_laplace_beltrami_energy(bezier_control_points, iterations);
-  write_mesh(ct_surface, laplace_beltrami_control_points, "laplace_beltrami_mesh");
+  std::vector<Eigen::Vector3d> laplace_beltrami_control_points =
+      optimizer.optimize_laplace_beltrami_energy(bezier_control_points,
+                                                 iterations);
+  write_mesh(ct_surface, laplace_beltrami_control_points,
+             "laplace_beltrami_mesh");
 
-  std::vector<double> laplacian_energies = optimizer.compute_face_energies(laplace_beltrami_control_points, false);
-  std::vector<double> lb_energies = optimizer.compute_face_energies(laplace_beltrami_control_points, true);
+  std::vector<double> laplacian_energies =
+      optimizer.compute_face_energies(laplace_beltrami_control_points, false);
+  std::vector<double> lb_energies =
+      optimizer.compute_face_energies(laplace_beltrami_control_points, true);
 
   double laplacian_energy = 0.;
   double lb_energy = 0.;
@@ -219,7 +218,8 @@ int main(int argc, char *argv[]) {
     energy_ratio[fijk] = lb_energies[fijk] / laplacian_energies[fijk];
     laplacian_energy += laplacian_energies[fijk];
     lb_energy += lb_energies[fijk];
-    // spdlog::info("face energies are {} and {}", laplacian_energies[fijk], lb_energies[fijk]);
+    // spdlog::info("face energies are {} and {}", laplacian_energies[fijk],
+    // lb_energies[fijk]);
   }
   spdlog::info("total laplacian energy is {}", laplacian_energy);
   spdlog::info("total laplace beltrami energy is {}", lb_energy);
@@ -230,6 +230,7 @@ int main(int argc, char *argv[]) {
   Eigen::saveMarket(l2b_mat, "CT_lag2bezier_matrix.txt");
 
   if (visualize != 0) {
+    affine_manifold.view(V);
     polyscope::init();
     polyscope::registerSurfaceMesh("mesh", V, F);
     polyscope::getSurfaceMesh("mesh")->addFaceScalarQuantity(
