@@ -68,7 +68,7 @@ if __name__ == "__main__":
     path_to_generate_cone_exe = args.bins["seamless_con_gen_binary"]
     path_to_ct_optimize_exe = args.bins["cubic_optimization_binary"]
 
-    workspace_path = "./"
+    workspace_path = ""
 
     start_time = time.time()
     print("start time: ", start_time)
