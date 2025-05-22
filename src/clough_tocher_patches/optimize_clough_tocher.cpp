@@ -2,6 +2,7 @@
 #include "Clough_Tocher_Laplace_Beltrami.c"
 #include "Clough_Tocher_Laplacian.c"
 #include "clough_tocher_constraint_matrices.hpp"
+#include "igl/doublearea.h"
 
 CloughTocherOptimizer::CloughTocherOptimizer(
     const Eigen::MatrixXd V, const Eigen::MatrixXi F,
@@ -28,7 +29,7 @@ std::vector<Eigen::Vector3d> CloughTocherOptimizer::optimize_laplacian_energy(
 
   // compute hessian
   timer.start();
-  double k = fitting_weight;
+  double k = compute_normalized_fitting_weight();
   const Eigen::SparseMatrix<double> &C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double> &F = get_full_to_ind_matrix();
   const Eigen::SparseMatrix<double> &A = get_stiffness_matrix();
@@ -70,32 +71,67 @@ std::vector<Eigen::Vector3d> CloughTocherOptimizer::optimize_laplacian_energy(
 }
 
 std::vector<double> CloughTocherOptimizer::compute_face_energies(
-    const std::vector<Eigen::Vector3d> &bezier_control_points,
-    const Eigen::SparseMatrix<double> &A) {
-  const std::vector<Eigen::Vector3d> &p = bezier_control_points;
+	const std::vector<Eigen::Vector3d> &bezier_control_points,
+	bool use_laplace_beltrami
+) {
+	const std::vector<Eigen::Vector3d>& p = bezier_control_points;
 
-  // assemble IJV matrix entries
-  const auto &affine_manifold = get_affine_manifold();
-  int num_faces = affine_manifold.num_faces();
-  std::vector<double> face_energies(num_faces);
-  for (int fijk = 0; fijk < num_faces; ++fijk) {
-    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
-    std::array<std::array<int64_t, 10>, 3> nodes =
-        get_micro_triangle_nodes(fijk);
-    for (int n = 0; n < 3; ++n) {
-      for (int i = 0; i < 10; ++i) {
-        for (int j = 0; j < 10; ++j) {
-          for (int d = 0; d < 3; ++d) {
-            int I = nodes[n][i];
-            int J = nodes[n][j];
-            face_energies[fijk] += 0.5 * p[I][d] * p[J][d] * A.coeff(I, J);
-          }
-        }
-      }
-    }
-  }
+	// assemble IJV matrix entries
+	const auto &affine_manifold = get_affine_manifold();
+	int num_faces = affine_manifold.num_faces();
+	std::vector<double> face_energies(num_faces);
+	Eigen::SparseMatrix<double> stiffness_matrix;
+	stiffness_matrix.resize(19, 19);
+	std::vector<Eigen::Vector3d> local_control_points(19);
+	for (int fijk = 0; fijk < num_faces; ++fijk)
+	{
+		std::vector<Triplet> stiffness_matrix_trips;
+		FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+		const auto &l_nodes = face_chart.lagrange_nodes;
+		std::array<std::array<int64_t, 10>, 3> local_nodes = get_local_micro_triangle_nodes();
+		if (use_laplace_beltrami)
+		{
+			for (int i = 0; i < 19; ++i)
+			{
+				local_control_points[i] = bezier_control_points[l_nodes[i]];
+			}
+
+			assemble_local_laplace_beltrami_siffness_matrix(local_control_points, local_nodes,
+																							stiffness_matrix_trips);
+		} else {
+			assemble_local_laplacian_siffness_matrix(face_chart.face_uv_positions, local_nodes,
+																							stiffness_matrix_trips);
+		}
+
+		// build matrix
+		stiffness_matrix.setFromTriplets(stiffness_matrix_trips.begin(),
+																		stiffness_matrix_trips.end());
+
+		for (int i = 0; i < 19; ++i)
+		{
+			for (int j = 0; j < 19; ++j)
+			{
+				for (int d = 0; d < 3; ++d)
+				{
+					int I = l_nodes[i];
+					int J = l_nodes[j];
+					face_energies[fijk] += 0.5 * p[I][d] * p[J][d] * stiffness_matrix.coeff(i, j);
+				}
+			}
+		}
+	}
 
   return face_energies;
+}
+
+double CloughTocherOptimizer::compute_normalized_fitting_weight() const {
+  const auto &V = get_vertices();
+  const auto &faces = get_faces();
+	Eigen::VectorXd double_area;
+	igl::doublearea(V, faces, double_area);
+	double area = double_area.sum() / 2.;
+	int num_vertices = V.rows();
+  return (area / num_vertices) * fitting_weight;
 }
 
 std::vector<Eigen::Vector3d>
@@ -105,7 +141,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   Eigen::VectorXd p0 = build_node_vector(bezier_control_points);
 
   // get fixed matrices
-  double k = fitting_weight;
+  double k = compute_normalized_fitting_weight();
+	spdlog::info("Using normalized fitting weight {}", k);
   const Eigen::SparseMatrix<double> &C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double> &F = get_full_to_ind_matrix();
   const Eigen::SparseMatrix<double> &P = get_position_matrix();
@@ -116,46 +153,74 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   // get derivative
   Eigen::VectorXd derivative = -k * C.transpose() * (P * p0);
 
-  std::vector<Eigen::Vector3d> optimized_control_points = bezier_control_points;
-  for (int i = 0; i < iterations; ++i) {
-    // compute hessian
-    timer.start();
-    Eigen::SparseMatrix<double> A;
-    if (i == 0)
-      A = generate_laplace_beltrami_stiffness_matrix();
-    else
-      A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
-    Eigen::SparseMatrix<double> hessian = C.transpose() * ((A + k * P) * C);
-    spdlog::info("matrix construction took {} s", timer.getElapsedTime());
+	Eigen::SparseMatrix<double> A, hessian;
+	std::vector<Eigen::Vector3d> optimized_control_points = bezier_control_points;
+	Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> hessian_inverse;
+	//Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> hessian_inverse;
 
-    // invert hessian
-    timer.start();
-    Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> hessian_inverse;
-    hessian_inverse.compute(hessian);
-    spdlog::info("matrix solve took {} s", timer.getElapsedTime());
+	timer.start();
+	bool use_parametric_metric = true;
+	if (use_parametric_metric) A = generate_laplace_beltrami_stiffness_matrix();
+	else A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+	hessian = C.transpose() * ((A + k * P) * C);
+	hessian_inverse.compute(hessian);
 
+	for (int i = 0; i < iterations; ++i)
+	{
     // print initial energy
     Eigen::VectorXd N0 = F * p0;
     spdlog::info("initial energy is {}",
                  evaluate_quadratic_energy(hessian, derivative, E0, N0));
 
-    // solve for optimal solution
-    Eigen::VectorXd N = -hessian_inverse.solve(derivative);
-    Eigen::VectorXd p = C * N;
-    Eigen::VectorXd res = (hessian * N) + derivative;
-    spdlog::info("optimized energy is {}",
-                 evaluate_quadratic_energy(hessian, derivative, E0, N));
-    spdlog::info("residual error is {}", res.cwiseAbs().maxCoeff());
+		// solve for optimal solution
+		Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
+		Eigen::VectorXd p1 = C * N1;
+		Eigen::VectorXd res = (hessian * N1) + derivative;
+		double res_error = res.cwiseAbs().maxCoeff();
+		spdlog::info("residual error is {}", res_error);
 
-    // check that solution satisfies constraints
-    Eigen::VectorXd pr = C * (F * p);
-    spdlog::info("constraint reconstruction error is {}",
-                 (pr - p).cwiseAbs().maxCoeff());
+		double t = 0.5;
+		double E = E0 + 1;
+		Eigen::VectorXd N, p;
+		double max_res_error = 10;
+		while ((E > E0) || (res_error > max_res_error))
+		{
+			N = t * N1 + (1 - t) * N0;
+			p = t * p1 + (1 - t) * p0;
+			optimized_control_points = build_control_points(p);
 
-    optimized_control_points = build_control_points(p);
-  }
+			// compute hessian
+			timer.start();
+			A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+			hessian = C.transpose() * ((A + k * P) * C);
+			spdlog::info("matrix construction took {} s", timer.getElapsedTime());
 
-  return optimized_control_points;
+			// invert hessian
+			timer.start();
+			hessian_inverse.compute(hessian);
+			spdlog::info("matrix solve took {} s", timer.getElapsedTime());
+
+			E = evaluate_quadratic_energy(hessian, derivative, E0, N);
+			spdlog::info("optimized energy for step {} is {}", t, E);
+
+			Eigen::VectorXd N_next = -hessian_inverse.solve(derivative);
+			Eigen::VectorXd res = (hessian * N_next) + derivative;
+			res_error = res.cwiseAbs().maxCoeff();
+			spdlog::info("residual error is {}", res_error);
+
+			t = t / 2.;
+			if (t < 1e-10) break;
+		}
+
+		// check that solution satisfies constraints
+		Eigen::VectorXd pr = C * (F * p);
+		spdlog::info("constraint reconstruction error is {}",
+								(pr - p).cwiseAbs().maxCoeff());
+
+		p0 = p;
+	}
+	
+	return optimized_control_points;
 }
 
 double CloughTocherOptimizer::evaluate_energy(
@@ -164,7 +229,7 @@ double CloughTocherOptimizer::evaluate_energy(
   Eigen::VectorXd p0 = build_node_vector(bezier_control_points);
 
   // compute hessian
-  double k = fitting_weight;
+  double k = compute_normalized_fitting_weight();
   const Eigen::SparseMatrix<double> &A = get_stiffness_matrix();
   const Eigen::SparseMatrix<double> &P = get_position_matrix();
   Eigen::SparseMatrix<double> hessian = (A + k * P);
@@ -424,28 +489,27 @@ const std::array<PlanarPoint, 19> CT_nodes = {{
 }};
 
 Eigen::SparseMatrix<double>
-CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const {
-  // assemble IJV matrix entries
-  const auto &affine_manifold = get_affine_manifold();
-  std::vector<Triplet> stiffness_matrix_trips;
-  int num_faces = affine_manifold.num_faces();
-  std::vector<Eigen::Vector3d> bezier_control_points(19);
-  Eigen::Matrix<double, 10, 10> p3_lag2bezier_matrix = p3_lag2bezier_m();
-  std::array<int64_t, 10> perm = {0, 9, 3, 4, 7, 8, 6, 2, 1, 5};
-  double cp_3d[10][3];
-  double A[10][10];
-  std::array<std::array<int64_t, 10>, 3> nodes = {
-      {{{0, 1, 18, 3, 4, 14, 15, 13, 12, 9}},
-       {{1, 2, 18, 5, 6, 16, 17, 15, 14, 10}},
-       {{2, 0, 18, 7, 8, 12, 13, 17, 16, 11}}}};
-  for (int fijk = 0; fijk < num_faces; ++fijk) {
-    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
-    const auto &P = face_chart.face_uv_positions;
-    Eigen::Vector3d Vi = {P[0][0], P[0][1], 0.};
-    Eigen::Vector3d Vj = {P[1][0], P[1][1], 0.};
-    Eigen::Vector3d Vk = {P[2][0], P[2][1], 0.};
-    std::array<std::array<int64_t, 10>, 3> patch_indices =
-        get_micro_triangle_nodes(fijk);
+CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const
+{
+	// assemble IJV matrix entries
+	const auto &affine_manifold = get_affine_manifold();
+	std::vector<Triplet> stiffness_matrix_trips;
+	int num_faces = affine_manifold.num_faces();
+	std::vector<Eigen::Vector3d> bezier_control_points(19);
+	Eigen::Matrix<double, 10, 10> p3_lag2bezier_matrix = p3_lag2bezier_m();
+	std::array<int64_t, 10> perm = {0, 9, 3, 4, 7, 8, 6, 2, 1, 5};
+	double cp_3d[10][3];
+	double A[10][10];
+	std::array<std::array<int64_t, 10>, 3> nodes = get_local_micro_triangle_nodes();
+	for (int fijk = 0; fijk < num_faces; ++fijk)
+	{
+		FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+		const auto& P = face_chart.face_uv_positions;
+		Eigen::Vector3d Vi = {P[0][0], P[0][1], 0.};
+		Eigen::Vector3d Vj = {P[1][0], P[1][1], 0.};
+		Eigen::Vector3d Vk = {P[2][0], P[2][1], 0.};
+		std::array<std::array<int64_t, 10>, 3> patch_indices =
+				get_micro_triangle_nodes(fijk);
 
     for (int n = 0; n < 3; ++n) {
       // subtri i

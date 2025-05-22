@@ -55,9 +55,7 @@ public:
 
 	Eigen::SparseMatrix<double> generate_laplace_beltrami_stiffness_matrix() const;
 
-	std::vector<double> compute_face_energies(
-		const std::vector<Eigen::Vector3d> &bezier_control_points,
-		const Eigen::SparseMatrix<double> &A);
+	std::vector<double> compute_face_energies(const std::vector<Eigen::Vector3d> &bezier_control_points, bool use_laplace_beltrami);
 
 	std::vector<Eigen::Vector3d> &get_bezier_control_points() { return m_bezier_control_points; }
 	const std::vector<Eigen::Vector3d> &get_bezier_control_points() const { return m_bezier_control_points; }
@@ -88,6 +86,8 @@ public:
 	 * @return Laplace Beltrami energy stiffness matrix
 	 */
 	Eigen::SparseMatrix<double> generate_laplace_beltrami_stiffness_matrix(const std::vector<Eigen::Vector3d> &bezier_control_points) const;
+
+	double compute_normalized_fitting_weight() const;
 
 private:
 	igl::Timer timer;
@@ -121,6 +121,13 @@ private:
 	 * @return array of 3 patch Bezier nodes (10 node indices per patch)
 	 */
 	std::array<std::array<int64_t, 10>, 3> get_micro_triangle_nodes(int64_t face_index) const;
+
+	std::array<std::array<int64_t, 10>, 3> get_local_micro_triangle_nodes() const
+	{
+	  return {{{{0, 1, 18, 3, 4, 14, 15, 13, 12, 9}},
+			{{1, 2, 18, 5, 6, 16, 17, 15, 14, 10}},
+			{{2, 0, 18, 7, 8, 12, 13, 17, 16, 11}}}};
+	}
 
 	/**
 	 * @brief Assemble the matrix to extract the vertex position nodes from the Bezier node vector.
