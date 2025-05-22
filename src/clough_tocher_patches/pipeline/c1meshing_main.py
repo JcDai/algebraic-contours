@@ -54,6 +54,8 @@ if __name__ == "__main__":
     ct_weight = args.spec["cubic_optimization_weight"]
     ct_iteration = args.spec["cubic_optimization_iterations"]
 
+    initial_guess_weight = args.spec["interp_alpha"]
+
     path_to_para_exe = args.bins[
         "seamless_parametrization_binary"
     ]  # path to parametrization bin
@@ -135,7 +137,7 @@ if __name__ == "__main__":
         workspace_path, output_name, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map)
 
     interpolate_initial_solution(output_name, "laplace_beltrami_mesh.msh", "CT_degenerate_cubic_bezier_points.msh",
-                                 output_name+"_initial_tetmesh.msh", 0.4, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
+                                 output_name+"_initial_tetmesh.msh", initial_guess_weight, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
 
     # step 6 build soft constraints
     # A_sti, b_sti = upsample_and_smooth_cones("CT_bilaplacian_nodes_values_cone_area_vertices.txt",
