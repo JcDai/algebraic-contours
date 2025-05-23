@@ -129,8 +129,12 @@ double CloughTocherOptimizer::compute_normalized_fitting_weight() const {
   const auto &faces = get_faces();
 	Eigen::VectorXd double_area;
 	igl::doublearea(V, faces, double_area);
+  //return fitting_weight;
 	double area = double_area.sum() / 2.;
+  //return fitting_weight / area;
 	int num_vertices = V.rows();
+  //return (1. / num_vertices) * fitting_weight;
+  // TODO: This is probably wrong; want to use 1/area.
   return (area / num_vertices) * fitting_weight;
 }
 
@@ -222,7 +226,7 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
 		p0 = p;
     E_prev = E;
-    max_res_error = res_error * 10; // allow order of magnitude growth
+    max_res_error = std::max(1e-4, res_error * 10); // allow order of magnitude growth
 
     // exit if done
     if (t < 1e-10) break;

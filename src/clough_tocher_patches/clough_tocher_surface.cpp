@@ -346,8 +346,11 @@ void CloughTocherSurface::discretize_patch_boundaries(
     std::array<std::array<LineSegment, 3>, 3> patch_boundaries;
     auto &spline_surface_patch = get_patch(patch_index);
     spline_surface_patch.parametrize_patch_boundaries(patch_boundaries);
-    for (int n = 0; n < 3; ++n) {
-      for (size_t k = 0; k < patch_boundaries[n].size(); ++k) {
+    for (int n = 0; n < 3; ++n)
+    {
+      std::vector<int> boundaries = {0, 1, 2};
+      if (only_exterior) boundaries = {1};
+      for (int k : boundaries) {
         // Get points on the boundary curve
         std::vector<PlanarPoint> parameter_points_k;
         patch_boundaries[n][k].sample_points(1 << num_subdivision,
@@ -367,9 +370,6 @@ void CloughTocherSurface::discretize_patch_boundaries(
 
         append(points, points_k);
         polylines.push_back(polyline);
-
-        if (only_exterior)
-          break;
       }
     }
   }
