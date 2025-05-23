@@ -16,7 +16,7 @@ import datetime
 from utils import *
 
 
-def create_polyfem_json(enable_offset, output_name, soft_file, hard_file, weight_soft, elasticity_mode, offset_file):
+def create_polyfem_json(enable_offset, output_name, initial_mesh, soft_file, hard_file, weight_soft, elasticity_mode, offset_file):
     print("[{}] ".format(datetime.datetime.now()), "create json for polyfem")
 
     c_json = {}
@@ -28,7 +28,7 @@ def create_polyfem_json(enable_offset, output_name, soft_file, hard_file, weight
             },
             "geometry": [
                 {
-                    "mesh": output_name + "_initial_tetmesh.msh",
+                    "mesh": initial_mesh,
                     "volume_selection": 1,
                     "surface_selection": 1,
                 },
@@ -64,8 +64,15 @@ def create_polyfem_json(enable_offset, output_name, soft_file, hard_file, weight
                     "file_name": output_name + "_final.vtu",
                     "options": {"material": True, "force_high_order": True},
                     "vismesh_rel_area": 1e-05,
-                }
+                },
+                "advanced": {"save_solve_sequence_debug": True}
             },
+            "input": {
+                "data": {
+                    "state": "initial_solution.hdf5",
+                    "reorder": True
+                }
+            }
         }
     else:
         c_json = {
@@ -124,7 +131,7 @@ def create_polyfem_json(enable_offset, output_name, soft_file, hard_file, weight
         json.dump(c_json, f)
 
 
-def create_polyfem_json_amips(enable_offset, output_name, soft_file, hard_file, weight_soft, elasticity_mode, offset_file):
+def create_polyfem_json_amips(enable_offset, output_name, initial_mesh, soft_file, hard_file, weight_soft, elasticity_mode, offset_file):
     print("[{}] ".format(datetime.datetime.now()),
           "create amips json for polyfem")
 
@@ -137,7 +144,7 @@ def create_polyfem_json_amips(enable_offset, output_name, soft_file, hard_file, 
             },
             "geometry": [
                 {
-                    "mesh": output_name + "_initial_tetmesh.msh",
+                    "mesh": initial_mesh,
                     "volume_selection": 1,
                     "surface_selection": 1,
                 },
@@ -172,8 +179,15 @@ def create_polyfem_json_amips(enable_offset, output_name, soft_file, hard_file, 
                     "file_name": output_name + "_final_amips.vtu",
                     "options": {"material": True, "force_high_order": True},
                     "vismesh_rel_area": 1e-05,
-                }
+                },
+                "advanced": {"save_solve_sequence_debug": True}
             },
+            "input": {
+                "data": {
+                    "state": "initial_solution.hdf5",
+                    "reorder": True
+                }
+            }
         }
     else:
         c_json = {

@@ -139,6 +139,9 @@ if __name__ == "__main__":
     interpolate_initial_solution(output_name, "laplace_beltrami_mesh.msh", "CT_degenerate_cubic_bezier_points.msh",
                                  output_name+"_initial_tetmesh.msh", initial_guess_weight, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
 
+    # interpolate_initial_solution_test(output_name, "CT_degenerate_cubic_bezier_points.msh",
+    #                                   output_name+"_initial_tetmesh.msh", initial_guess_weight, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
+
     # step 6 build soft constraints
     # A_sti, b_sti = upsample_and_smooth_cones("CT_bilaplacian_nodes_values_cone_area_vertices.txt",
     #                                          "CT_bilaplacian_nodes_values_cone_area_faces.txt", "CT_from_lagrange_nodes.msh", sample_factor, k_ring_factor)
@@ -152,29 +155,32 @@ if __name__ == "__main__":
     soft_constraint_cubic_optimization(workspace_path, output_name + "_tri_to_tet_v_map.txt",
                                        output_name + "_initial_tetmesh.msh", "laplace_beltrami_mesh.msh", "laplacian_mesh.msh", "CT_lag2bezier_matrix.txt")
 
+    # soft_constraint_cubic_optimization(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+    #                                    output_name + "_interp_initial_mesh.msh", "laplace_beltrami_mesh.msh", "laplacian_mesh.msh", "CT_lag2bezier_matrix.txt")
+
     # step 7 build hard constraints
-    # build_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-    #                                     "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh")
-
-    # build_bezier_reduce2full_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-    #                                 "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
-
-    # build_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-    #                                              "CT_bezier_constraints_no_cone.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_no_cone.txt", "CT_bezier_r2f_mat_col_idx_map.txt")
 
     build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
                                                       "CT_bezier_constraints_expanded.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt", output_name + "_interp_initial_mesh.msh")
+    # build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+    #                                                   "CT_bezier_constraints_expanded.txt", output_name + "_interp_initial_mesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt", output_name + "_interp_initial_mesh.msh")
 
     cons_time = time.time()
     print("constraints built: ", cons_time)
     print("cons took: ", cons_time - start_time)
 
     # step 8 polyfem
-    create_polyfem_json(enable_offset, output_name, "soft.hdf5",
+    create_polyfem_json(enable_offset, output_name, output_name + "_initial_tetmesh.msh", "soft.hdf5",
                         "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
 
-    create_polyfem_json_amips(enable_offset, output_name, "soft.hdf5",
+    create_polyfem_json_amips(enable_offset, output_name, output_name + "_initial_tetmesh.msh", "soft.hdf5",
                               "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
+
+    # create_polyfem_json(enable_offset, output_name, output_name + "_interp_initial_mesh.msh", "soft.hdf5",
+    #                     "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
+
+    # create_polyfem_json_amips(enable_offset, output_name, output_name + "_interp_initial_mesh.msh", "soft.hdf5",
+    #                           "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
 
     before_poly_time = time.time()
     print("before poly: ", before_poly_time)

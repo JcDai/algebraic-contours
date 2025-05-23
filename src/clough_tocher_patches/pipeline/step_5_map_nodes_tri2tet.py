@@ -342,7 +342,7 @@ def interpolate_initial_solution(output_name, target_surface_mesh, degenerate_su
 
     interpolated_sf_v = alpha * tar_sf_v + (1-alpha) * de_sf_v
 
-    interpolated_tet_v = tet_v
+    interpolated_tet_v = copy.deepcopy(tet_v)
     for i in range(local2global.shape[0]):
         interpolated_tet_v[local2global[i]] = interpolated_sf_v[i]
 
@@ -351,5 +351,37 @@ def interpolate_initial_solution(output_name, target_surface_mesh, degenerate_su
         output_name + "_interp_initial_mesh.msh", file_format="gmsh")
 
     interpolated_sf_mesh = mio.Mesh(interpolated_sf_v, target_sf_mesh.cells)
+    interpolated_sf_mesh.write(
+        output_name + "_interp_initial_sf_mesh.msh", file_format="gmsh")
+
+
+def interpolate_initial_solution_test(output_name, degenerate_surface_mesh, initial_tetmesh_file, alpha, local2global_file, lag2bezier_mat_file):
+    # test try push initial mesh to degenerate
+    # 0 should be the same
+
+    degenerated_sf_mesh = mio.read(degenerate_surface_mesh)
+    de_sf_v = degenerated_sf_mesh.points
+    de_sf_f = degenerated_sf_mesh.cells_dict["triangle10"]
+
+    tet_mesh = mio.read(initial_tetmesh_file)
+    tet_v = tet_mesh.points
+    tet_t = tet_mesh.cells_dict["tetra20"]
+
+    local2global = np.loadtxt(local2global_file).astype(np.int32)
+
+    tet_sf_v = tet_v[local2global]
+
+    interpolated_sf_v = alpha * de_sf_v + (1-alpha) * tet_sf_v
+
+    interpolated_tet_v = tet_v
+    for i in range(local2global.shape[0]):
+        interpolated_tet_v[local2global[i]] = interpolated_sf_v[i]
+
+    interpolated_tet_mesh = mio.Mesh(interpolated_tet_v, tet_mesh.cells)
+    interpolated_tet_mesh.write(
+        output_name + "_interp_initial_mesh.msh", file_format="gmsh")
+
+    interpolated_sf_mesh = mio.Mesh(
+        interpolated_sf_v, degenerated_sf_mesh.cells)
     interpolated_sf_mesh.write(
         output_name + "_interp_initial_sf_mesh.msh", file_format="gmsh")

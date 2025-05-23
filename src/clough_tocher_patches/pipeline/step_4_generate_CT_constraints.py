@@ -24,6 +24,7 @@ def call_CT_code(workspace_path, path_to_ct_exe, meshfile):
         + " --input "
         + workspace_path
         + meshfile + " -o CT --skip_constraint true"
+        # + meshfile + " -o CT"
     )
 
     subprocess.run(ct_command, shell=True, check=True)

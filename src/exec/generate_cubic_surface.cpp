@@ -513,7 +513,7 @@ int main(int argc, char *argv[]) {
   }
 
   Eigen::saveMarket(bezier_constraint_matrix,
-                    output_name + "_bezier_constraints_expanded.txt");
+                    output_name + "_bezier_constraints_expanded_old.txt");
 
   // exit(0);
 
@@ -540,7 +540,7 @@ int main(int argc, char *argv[]) {
   }
   r2f_idx_map_file.close();
 
-  Eigen::saveMarket(r2f_expanded, output_name + "_bezier_r2f_expanded.txt");
+  Eigen::saveMarket(r2f_expanded, output_name + "_bezier_r2f_expanded_old.txt");
 
   exit(0);
 
