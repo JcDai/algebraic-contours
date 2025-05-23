@@ -185,6 +185,9 @@ int main(int argc, char *argv[]) {
   Eigen::saveMarket(b2l_mat,
                     output_name + "_bezier_to_lag_convertion_matrix.txt");
 
+  // ct_surface.compute_degenerate_bezier_control_points_special_midpoint(V, F);
+  // ct_surface.write_special_bc_to_msh("degenerate_special");
+
   if (skip_constraint) {
     // skip constraint computation
     exit(0);
@@ -527,6 +530,18 @@ int main(int argc, char *argv[]) {
       bezier_constraint_matrix *
       ct_surface.m_degenerated_bezier_control_points_expanded;
   std::cout << "error degen mesh: " << error_degen.norm() << std::endl;
+
+  // error special degen
+  Eigen::MatrixXd sp_deg(ct_surface.m_degenerated_bc_special.size() * 3, 1);
+  for (size_t i = 0; i < ct_surface.m_degenerated_bc_special.size(); ++i) {
+    sp_deg(i * 3 + 0, 0) = ct_surface.m_degenerated_bc_special[i][0];
+    sp_deg(i * 3 + 1, 0) = ct_surface.m_degenerated_bc_special[i][1];
+    sp_deg(i * 3 + 2, 0) = ct_surface.m_degenerated_bc_special[i][2];
+  }
+
+  const auto error_degen_sp = bezier_constraint_matrix * sp_deg;
+  std::cout << "error special degen mesh: " << error_degen_sp.norm()
+            << std::endl;
 
   // Eigen::MatrixXd degenrated_bc(
   //     ct_surface.m_degenerated_bezier_control_points.size(), 3);

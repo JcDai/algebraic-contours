@@ -757,6 +757,230 @@ void CloughTocherSurface::
   }
 }
 
+double midpoint_degenerate_helper(const EdgeManifoldChart &e_chart,
+                                  const int64_t fid) {
+  double a;
+  if (e_chart.is_boundary) {
+    return 0.5;
+  }
+
+  const auto &left_pos = e_chart.left_vertex_uv_position;
+  const auto &right_pos = e_chart.right_vertex_uv_position;
+  const auto &top_pos = e_chart.top_vertex_uv_position;
+  const auto &bot_pos = e_chart.bottom_vertex_uv_position;
+
+  // r1: pijm r2: pij r3: pji r4: pijm'  r is uv pos
+  if (e_chart.top_face_index == fid) {
+    const Eigen::Vector2d r1 = 4. / 9. * right_pos + 1. / 9. * top_pos +
+                               4. / 9. * left_pos; // (4/9, 1/9)
+    const Eigen::Vector2d r2 =
+        1. / 3. * right_pos + 0 * top_pos + 2. / 3. * left_pos; // (1/3, 0)
+    const Eigen::Vector2d r3 =
+        2. / 3. * right_pos + 0 * top_pos + 1. / 3. * left_pos; // (2/3, 0)
+    const Eigen::Vector2d r4 = 4. / 9. * left_pos + 1. / 9. * bot_pos +
+                               4. / 9. * right_pos; // (4/9, 1/9) in other tri
+    Eigen::Matrix3d r2r1r4, r1r3r4;
+    r2r1r4 << r2[0], r2[1], 1, r1[0], r1[1], 1, r4[0], r4[1], 1;
+    r1r3r4 << r1[0], r1[1], 1, r3[0], r3[1], 1, r4[0], r4[1], 1;
+
+    double r2r1r4_det = r2r1r4.determinant();
+    double r1r3r4_det = r1r3r4.determinant();
+
+    a = r2r1r4_det / (r2r1r4_det + r1r3r4_det);
+
+  } else {
+    const Eigen::Vector2d r1 = 4. / 9. * left_pos + 1. / 9. * bot_pos +
+                               4. / 9. * right_pos; // (4/9, 1/9)
+    const Eigen::Vector2d r2 =
+        1. / 3. * left_pos + 0 * bot_pos + 2. / 3. * right_pos; // (1/3, 0)
+    const Eigen::Vector2d r3 =
+        2. / 3. * left_pos + 0 * bot_pos + 1. / 3. * right_pos; // (2/3, 0)
+    const Eigen::Vector2d r4 = 4. / 9. * right_pos + 1. / 9. * top_pos +
+                               4. / 9. * left_pos; // (4/9, 1/9) in other tri
+    Eigen::Matrix3d r2r1r4, r1r3r4;
+    r2r1r4 << r2[0], r2[1], 1, r1[0], r1[1], 1, r4[0], r4[1], 1;
+    r1r3r4 << r1[0], r1[1], 1, r3[0], r3[1], 1, r4[0], r4[1], 1;
+
+    double r2r1r4_det = r2r1r4.determinant();
+    double r1r3r4_det = r1r3r4.determinant();
+
+    a = r2r1r4_det / (r2r1r4_det + r1r3r4_det);
+  }
+
+  assert(a > -1e-12 && a < 1 + 1e-12);
+  if (!(a > -1e-12 && a < 1 + 1e-12)) {
+    spdlog::warn("a is {}, not in [0,1]", a);
+  }
+
+  return a;
+}
+
+void CloughTocherSurface::
+    compute_degenerate_bezier_control_points_special_midpoint(
+        const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
+  m_degenerated_bc_special.resize(m_affine_manifold.m_lagrange_nodes.size());
+  std::cout << m_degenerated_bc_special.size() << std::endl;
+
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    int64_t patch_id = f_chart.face_index;
+
+    const auto &global_F = F.row(patch_id);
+
+    // endpoints
+    m_degenerated_bc_special[l_nodes[0]] = V.row(global_F[0]);
+    m_degenerated_bc_special[l_nodes[1]] = V.row(global_F[1]);
+    m_degenerated_bc_special[l_nodes[2]] = V.row(global_F[2]);
+
+    // edge points
+    m_degenerated_bc_special[l_nodes[3]] = m_degenerated_bc_special[l_nodes[0]];
+    m_degenerated_bc_special[l_nodes[4]] = m_degenerated_bc_special[l_nodes[1]];
+    m_degenerated_bc_special[l_nodes[5]] = m_degenerated_bc_special[l_nodes[1]];
+    m_degenerated_bc_special[l_nodes[6]] = m_degenerated_bc_special[l_nodes[2]];
+    m_degenerated_bc_special[l_nodes[7]] = m_degenerated_bc_special[l_nodes[2]];
+    m_degenerated_bc_special[l_nodes[8]] = m_degenerated_bc_special[l_nodes[0]];
+
+    // mid points
+    // p01m
+    const auto &e01 = m_affine_manifold.get_edge_chart(patch_id, 2);
+    double a01m = midpoint_degenerate_helper(e01, patch_id);
+    m_degenerated_bc_special[l_nodes[9]] =
+        (1 - a01m) * m_degenerated_bc_special[l_nodes[0]] +
+        a01m * m_degenerated_bc_special[l_nodes[1]];
+
+    const auto &e12 = m_affine_manifold.get_edge_chart(patch_id, 0);
+    double a12m = midpoint_degenerate_helper(e12, patch_id);
+    m_degenerated_bc_special[l_nodes[10]] =
+        (1 - a12m) * m_degenerated_bc_special[l_nodes[1]] +
+        a12m * m_degenerated_bc_special[l_nodes[2]];
+
+    const auto &e20 = m_affine_manifold.get_edge_chart(patch_id, 1);
+    double a20m = midpoint_degenerate_helper(e20, patch_id);
+    m_degenerated_bc_special[l_nodes[11]] =
+        (1 - a20m) * m_degenerated_bc_special[l_nodes[2]] +
+        a20m * m_degenerated_bc_special[l_nodes[0]];
+
+    // interior 1
+    m_degenerated_bc_special[l_nodes[12]] =
+        (m_degenerated_bc_special[l_nodes[0]] +
+         m_degenerated_bc_special[l_nodes[3]] +
+         m_degenerated_bc_special[l_nodes[8]]) /
+        3.;
+
+    m_degenerated_bc_special[l_nodes[14]] =
+        (m_degenerated_bc_special[l_nodes[1]] +
+         m_degenerated_bc_special[l_nodes[5]] +
+         m_degenerated_bc_special[l_nodes[4]]) /
+        3.;
+
+    m_degenerated_bc_special[l_nodes[16]] =
+        (m_degenerated_bc_special[l_nodes[2]] +
+         m_degenerated_bc_special[l_nodes[7]] +
+         m_degenerated_bc_special[l_nodes[6]]) /
+        3.;
+
+    // interior 2
+    m_degenerated_bc_special[l_nodes[13]] =
+        (m_degenerated_bc_special[l_nodes[9]] +
+         m_degenerated_bc_special[l_nodes[11]] +
+         m_degenerated_bc_special[l_nodes[12]]) /
+        3.;
+
+    m_degenerated_bc_special[l_nodes[15]] =
+        (m_degenerated_bc_special[l_nodes[10]] +
+         m_degenerated_bc_special[l_nodes[9]] +
+         m_degenerated_bc_special[l_nodes[14]]) /
+        3.;
+
+    m_degenerated_bc_special[l_nodes[17]] =
+        (m_degenerated_bc_special[l_nodes[11]] +
+         m_degenerated_bc_special[l_nodes[10]] +
+         m_degenerated_bc_special[l_nodes[16]]) /
+        3.;
+    // center
+    m_degenerated_bc_special[l_nodes[18]] =
+        (m_degenerated_bc_special[l_nodes[13]] +
+         m_degenerated_bc_special[l_nodes[15]] +
+         m_degenerated_bc_special[l_nodes[17]]) /
+        3.;
+  }
+}
+
+void CloughTocherSurface::write_special_bc_to_msh(const std::string &filename) {
+  std::ofstream file(filename + ".msh");
+
+  /*
+ $MeshFormat
+   4.1 0 8     MSH4.1, ASCII
+   $EndMeshFormat
+ */
+
+  file << "$MeshFormat\n"
+       << "4.1 0 8\n"
+       << "$EndMeshFormat\n";
+
+  /*
+  subtri0: 0 1 18 3 4 14 15 13 12 9
+  b0 b1 bc b01 b10 b1c bc1 bc0 b0c b01^c
+  subtri1: 1 2 18 5 6 16 17 15 14 10
+  b1 b2 bc b12 b21 b2c bc2 bc1 b1c b12^c
+  subtri2: 2 0 18 7 8 12 13 17 16 11
+  b2 b0 bc b20 b02 b0c bc0 bc2 b2c b20^c
+  */
+
+  // m_affine_manifold.generate_lagrange_nodes();
+
+  // build faces
+  std::vector<std::array<int64_t, 10>> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    faces.push_back(
+        {{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+          l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}});
+    faces.push_back(
+        {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+          l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}});
+    faces.push_back(
+        {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+          l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}});
+  }
+  const auto &vertices = m_degenerated_bc_special;
+
+  file << "$Nodes\n";
+
+  const size_t node_size = vertices.size();
+  file << "1 " << node_size << " 1 " << node_size << "\n";
+  file << "2 1 0 " << node_size << "\n";
+
+  for (size_t i = 1; i <= node_size; ++i) {
+    file << i << "\n";
+  }
+
+  for (size_t i = 0; i < node_size; ++i) {
+    file << std::setprecision(16) << vertices[i][0] << " " << vertices[i][1]
+         << " " << vertices[i][2] << "\n";
+  }
+
+  file << "$EndNodes\n";
+
+  // write elements
+  // assert(m_patches.size() * 3 == faces.size());
+  const size_t element_size = faces.size();
+
+  file << "$Elements\n";
+  file << "1 " << element_size << " 1 " << element_size << "\n";
+  file << "2 1 21 " << element_size << "\n";
+  for (size_t i = 0; i < element_size; ++i) {
+    file << i + 1 << " ";
+    for (int j = 0; j < 10; ++j) {
+      file << faces[i][j] + 1 << " ";
+    }
+    file << "\n";
+  }
+
+  file << "$EndElements\n";
+}
+
 void CloughTocherSurface::compute_degenerate_bezier_control_points(
     const Eigen::SparseMatrix<double> &f2f_matrix,
     const std::vector<int> &independent_node_map, const Eigen::MatrixXd &V,

@@ -124,6 +124,12 @@ public:
       const std::vector<int> &independent_node_map, const Eigen::MatrixXd &V,
       const Eigen::MatrixXi &F);
 
+  std::vector<Eigen::Vector3d> m_degenerated_bc_special;
+
+  void compute_degenerate_bezier_control_points_special_midpoint(
+      const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
+  void write_special_bc_to_msh(const std::string &filename);
+
 public:
   // constraint matrices
 

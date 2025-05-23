@@ -79,6 +79,31 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
         vertices, tets, _, sliced_to_unsliced_v_map = igl.remove_unreferenced(
             vertices_unsliced, tets)
 
+        # save the remaining part
+        remaining_indices = list(
+            set(range(tets_unsliced.shape[0])) - set(tet_indices_touching_surface))
+
+        tets_unused_inside = []
+        winding_numbers_unused_inside = []
+        tets_unused_outside = []
+        winding_numbers_unused_outside = []
+        for tid in remaining_indices:
+            if abs(winding_numbers_data_unsliced) >= 0.5:
+                tets_unused_inside.append(tets_unsliced[tid])
+                winding_numbers_unused_inside.append(
+                    winding_numbers_data_unsliced[tid])
+            else:
+                tets_unused_outside.append(tets_unsliced[tid])
+                winding_numbers_unused_outside.append(
+                    winding_numbers_data_unsliced[tid])
+
+        unused_inside = mio.Mesh(
+            vertices_unsliced, [('tetra', np.array(tets_unused_inside))])
+        unused_inside.write("tets_unused_inside.msh")
+        unused_outside = mio.Mesh(
+            vertices_unsliced, [('tetra', np.array(tets_unused_outside))])
+        unused_outside.write("tets_unused_outside.msh")
+
         # print(winding_numbers_data.shape)
         # print(winding_numbers_data)
         # print(tets.shape)
