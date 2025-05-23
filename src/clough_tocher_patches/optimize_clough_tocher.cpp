@@ -169,8 +169,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 	{
     // print initial energy
     Eigen::VectorXd N0 = F * p0;
-    spdlog::info("initial energy is {}",
-                 evaluate_quadratic_energy(hessian, derivative, E0, N0));
+    double E_prev = evaluate_quadratic_energy(hessian, derivative, E0, N0);
+    spdlog::info("initial energy is {}", E_prev);
 
 		// solve for optimal solution
 		Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
@@ -180,10 +180,10 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 		spdlog::info("residual error is {}", res_error);
 
 		double t = 0.5;
-		double E = E0 + 1;
+		double E = E_prev + 1;
 		Eigen::VectorXd N, p;
 		double max_res_error = 10;
-		while ((E > E0) || (res_error > max_res_error))
+		while ((E > E_prev) || (res_error > max_res_error))
 		{
 			N = t * N1 + (1 - t) * N0;
 			p = C * N;
@@ -221,6 +221,9 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 								(pr - p).cwiseAbs().maxCoeff());
 
 		p0 = p;
+
+    // exit if done
+    if (t < 1e-10) break;
 	}
 	
 	return optimized_control_points;
