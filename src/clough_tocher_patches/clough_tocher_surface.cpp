@@ -704,6 +704,8 @@ void CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
     degenerated_bezier_control_points[l_nodes[1]] = V.row(global_F[1]);
     degenerated_bezier_control_points[l_nodes[2]] = V.row(global_F[2]);
 
+    const auto &v_charts = m_affine_manifold.m_vertex_charts;
+
     // edges
     degenerated_bezier_control_points[l_nodes[3]] =
         degenerated_bezier_control_points[l_nodes[0]];
@@ -718,6 +720,23 @@ void CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
     degenerated_bezier_control_points[l_nodes[8]] =
         degenerated_bezier_control_points[l_nodes[0]];
 
+    if (v_charts[l_nodes[0]].is_cone) {
+      degenerated_bezier_control_points[l_nodes[4]] =
+          degenerated_bezier_control_points[l_nodes[0]];
+      degenerated_bezier_control_points[l_nodes[7]] =
+          degenerated_bezier_control_points[l_nodes[0]];
+    } else if (v_charts[l_nodes[1]].is_cone) {
+      degenerated_bezier_control_points[l_nodes[3]] =
+          degenerated_bezier_control_points[l_nodes[1]];
+      degenerated_bezier_control_points[l_nodes[6]] =
+          degenerated_bezier_control_points[l_nodes[1]];
+    } else if (v_charts[l_nodes[2]].is_cone) {
+      degenerated_bezier_control_points[l_nodes[8]] =
+          degenerated_bezier_control_points[l_nodes[2]];
+      degenerated_bezier_control_points[l_nodes[5]] =
+          degenerated_bezier_control_points[l_nodes[2]];
+    }
+
     // midpoint
     degenerated_bezier_control_points[l_nodes[9]] =
         (degenerated_bezier_control_points[l_nodes[0]] +
@@ -731,6 +750,23 @@ void CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
         (degenerated_bezier_control_points[l_nodes[2]] +
          degenerated_bezier_control_points[l_nodes[0]]) /
         2.;
+
+    if (v_charts[l_nodes[0]].is_cone) {
+      degenerated_bezier_control_points[l_nodes[11]] =
+          degenerated_bezier_control_points[l_nodes[0]];
+      degenerated_bezier_control_points[l_nodes[9]] =
+          degenerated_bezier_control_points[l_nodes[0]];
+    } else if (v_charts[l_nodes[1]].is_cone) {
+      degenerated_bezier_control_points[l_nodes[9]] =
+          degenerated_bezier_control_points[l_nodes[1]];
+      degenerated_bezier_control_points[l_nodes[10]] =
+          degenerated_bezier_control_points[l_nodes[1]];
+    } else if (v_charts[l_nodes[2]].is_cone) {
+      degenerated_bezier_control_points[l_nodes[10]] =
+          degenerated_bezier_control_points[l_nodes[2]];
+      degenerated_bezier_control_points[l_nodes[11]] =
+          degenerated_bezier_control_points[l_nodes[2]];
+    }
     // interior 1
     degenerated_bezier_control_points[l_nodes[12]] =
         (degenerated_bezier_control_points[l_nodes[0]] +
