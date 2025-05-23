@@ -176,7 +176,7 @@ def create_polyfem_json_amips(enable_offset, output_name, initial_mesh, soft_fil
             },
             "output": {
                 "paraview": {
-                    "file_name": output_name + "_final_amips.vtu",
+                    "file_name": output_name + "_final.vtu",
                     "options": {"material": True, "force_high_order": True},
                     "vismesh_rel_area": 1e-05,
                 },
