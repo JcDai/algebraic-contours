@@ -94,7 +94,7 @@ def create_polyfem_json(enable_offset, output_name, initial_mesh, soft_file, har
                 {"mesh": offset_file, "is_obstacle": True},
             ],
             "constraints": {
-                "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
+                # "hard": ["CT_constraint_with_cone_tet_ids.hdf5"],
                 # "hard": ["soft_2.hdf5"],
                 "soft": [
                     # {"weight": 10000000.0, "data": "CT_constraint_with_cone_tet_ids.hdf5"},
@@ -106,9 +106,9 @@ def create_polyfem_json(enable_offset, output_name, initial_mesh, soft_file, har
             "materials": [
                 {"id": 1, "type": elasticity_mode, "E": 200000000000.0, "nu": 0.3}
             ],
-            # "boundary_conditions": {
-            #     "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]
-            # },
+            "boundary_conditions": {
+                "dirichlet_boundary": [{"id": 1, "value": [0.0, 0.0, 0.0]}]
+            },
             "solver": {
                 "contact": {"barrier_stiffness": 1e8},
                 "nonlinear": {

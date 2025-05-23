@@ -10,8 +10,6 @@
  *
  */
 
-
-
 int main(int argc, char *argv[]) {
   // Build maps from strings to enums
   std::map<std::string, spdlog::level::level_enum> log_level_map{
@@ -72,7 +70,10 @@ int main(int argc, char *argv[]) {
   // TODO: make part of initialization
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes("initial",
                                                                       true);
-  std::vector<Eigen::Vector3d> bezier_control_points = generate_linear_clough_tocher_surface(ct_surface, V);
+  ct_surface.write_degenerate_cubic_surface_to_msh_with_conn(
+      "CT_degenerate_cubic_bezier_points", V, F);
+  std::vector<Eigen::Vector3d> bezier_control_points =
+      generate_linear_clough_tocher_surface(ct_surface, V);
   write_mesh(ct_surface, bezier_control_points, "linear");
 
   // initialize optimizer
@@ -85,8 +86,11 @@ int main(int argc, char *argv[]) {
   write_mesh(ct_surface, laplacian_control_points, "laplacian_mesh");
 
   // optimize the bezier nodes with laplace beltrami energy
-  std::vector<Eigen::Vector3d> laplace_beltrami_control_points = optimizer.optimize_laplace_beltrami_energy(bezier_control_points, iterations);
-  write_mesh(ct_surface, laplace_beltrami_control_points, "laplace_beltrami_mesh");
+  std::vector<Eigen::Vector3d> laplace_beltrami_control_points =
+      optimizer.optimize_laplace_beltrami_energy(bezier_control_points,
+                                                 iterations);
+  write_mesh(ct_surface, laplace_beltrami_control_points,
+             "laplace_beltrami_mesh");
 
   set_bezier_control_points(ct_surface, laplace_beltrami_control_points);
   Eigen::MatrixXd V_out;
@@ -104,7 +108,7 @@ int main(int argc, char *argv[]) {
   ct_surface.lag2bezier_full_mat(l2b_mat);
   Eigen::saveMarket(l2b_mat, "CT_lag2bezier_matrix.txt");
 
-  //ct_surface.add_surface_to_viewer({1, 0.4, 0.3}, 3);
+  // ct_surface.add_surface_to_viewer({1, 0.4, 0.3}, 3);
 
   return 0;
 }

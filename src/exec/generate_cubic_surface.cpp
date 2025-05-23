@@ -432,13 +432,15 @@ int main(int argc, char *argv[]) {
 
   std::vector<bool> node_assigned(node_cnt, false);
 
-  std::cout << "compute cone constraints ..." << std::endl;
-  ct_surface.bezier_cone_constraints_expanded(
-      f2f_expanded, independent_node_map, node_assigned, v_normals);
+  // std::cout << "compute cone constraints ..." << std::endl;
+  // ct_surface.bezier_cone_constraints_expanded(
+  //     f2f_expanded, independent_node_map, node_assigned, v_normals);
 
   std::cout << "compute endpoint constraints ..." << std::endl;
+  // ct_surface.bezier_endpoint_ind2dep_expanded(f2f_expanded,
+  //                                             independent_node_map, false);
   ct_surface.bezier_endpoint_ind2dep_expanded(f2f_expanded,
-                                              independent_node_map, false);
+                                              independent_node_map, true);
 
   std::cout << "compute interior 1 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_1_expanded(f2f_expanded,
@@ -534,7 +536,7 @@ int main(int argc, char *argv[]) {
   }
 
   std::ofstream r2f_idx_map_file(output_name +
-                                 "_bezier_r2f_mat_col_idx_map.txt");
+                                 "_bezier_r2f_mat_col_idx_map_old.txt");
   for (size_t i = 0; i < col2nid_map.size(); ++i) {
     r2f_idx_map_file << col2nid_map[i] << std::endl;
   }
