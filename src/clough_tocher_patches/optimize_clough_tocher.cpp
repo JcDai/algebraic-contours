@@ -186,7 +186,10 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 		while ((E > E0) || (res_error > max_res_error))
 		{
 			N = t * N1 + (1 - t) * N0;
-			p = t * p1 + (1 - t) * p0;
+			p = C * N;
+			double interp_error = (p - (t * p1 + (1 - t) * p0)).cwiseAbs().maxCoeff();
+			spdlog::info("control points in range [{}, {}]", p.minCoeff(), p.maxCoeff());
+			spdlog::info("interpolation error is {}", interp_error);
 			optimized_control_points = build_control_points(p);
 
 			// compute hessian
@@ -923,3 +926,170 @@ col2nid_map[i]; full2ind_trips.push_back(Triplet(i, j, 1.));
 full2ind_trips.end());
 }
 */
+
+std::vector<Eigen::Vector3d>
+generate_linear_clough_tocher_surface(CloughTocherSurface &ct_surface,
+                                      const Eigen::MatrixXd &V) {
+
+	// TODO: Obtained from affine_manifold.cpp. Make standalone function
+	const std::array<PlanarPoint, 19> CT_nodes = {{
+			PlanarPoint(1., 0.),           // b0    0
+			PlanarPoint(0., 1.),           // b1    1
+			PlanarPoint(0., 0.),           // b2    2
+			PlanarPoint(2. / 3., 1. / 3.), // b01   3
+			PlanarPoint(1. / 3., 2. / 3.), // b10   4
+			PlanarPoint(0., 2. / 3.),      // b12   5
+			PlanarPoint(0., 1. / 3.),      // b21   6
+			PlanarPoint(1. / 3., 0.),      // b20   7
+			PlanarPoint(2. / 3., 0.),      // b02   8
+			PlanarPoint(4. / 9., 4. / 9.), // b01^c 9
+			PlanarPoint(1. / 9., 4. / 9.), // b12^c 10
+			PlanarPoint(4. / 9., 1. / 9.), // b20^c 11
+			PlanarPoint(7. / 9., 1. / 9.), // b0c   12
+			PlanarPoint(5. / 9., 2. / 9.), // bc0   13
+			PlanarPoint(1. / 9., 7. / 9.), // b1c   14
+			PlanarPoint(2. / 9., 5. / 9.), // bc1   15
+			PlanarPoint(1. / 9., 1. / 9.), // b2c   16
+			PlanarPoint(2. / 9., 2. / 9.), // bc2   17
+			PlanarPoint(1. / 3., 1. / 3.), // bc    18
+	}};
+
+  int num_nodes = ct_surface.m_lagrange_node_values.size();
+  std::vector<Eigen::Vector3d> lagrange_control_points(num_nodes);
+  const auto &affine_manifold = ct_surface.m_affine_manifold;
+  const auto &F = affine_manifold.get_faces();
+  int num_faces = affine_manifold.num_faces();
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    const auto &l_nodes = face_chart.lagrange_nodes;
+    int vi = F(fijk, 0);
+    int vj = F(fijk, 1);
+    int vk = F(fijk, 2);
+    Eigen::Vector3d Vi = V.row(vi);
+    Eigen::Vector3d Vj = V.row(vj);
+    Eigen::Vector3d Vk = V.row(vk);
+    for (int i = 0; i < 19; ++i) {
+      double u = CT_nodes[i][0];
+      double v = CT_nodes[i][1];
+      double w = 1 - u - v;
+      lagrange_control_points[l_nodes[i]] = u * Vi + v * Vj + w * Vk;
+    }
+  }
+
+  Eigen::SparseMatrix<double, 1> l2b_mat;
+  ct_surface.lag2bezier_full_mat(l2b_mat);
+
+  Eigen::MatrixXd lagrange_matrix(num_nodes, 3);
+  for (int64_t i = 0; i < num_nodes; ++i)
+  {
+    for (int j = 0; j < 3; ++j)
+    {
+      lagrange_matrix(i, j) = lagrange_control_points[i][j];
+    }
+  }
+  Eigen::MatrixXd bezier_matrix = l2b_mat * lagrange_matrix;
+  std::vector<Eigen::Vector3d> bezier_control_points(num_nodes);
+  for (int64_t i = 0; i < num_nodes; ++i)
+  {
+    for (int j = 0; j < 3; ++j)
+    {
+      bezier_control_points[i][j] = bezier_matrix(i, j);
+    }
+  }
+
+  return bezier_control_points;
+}
+
+void set_bezier_control_points(CloughTocherSurface &ct_surface,
+                const std::vector<Eigen::Vector3d> &bezier_control_points)
+{
+  Eigen::SparseMatrix<double, 1> b2l_mat;
+  ct_surface.bezier2lag_full_mat(b2l_mat);
+
+  int node_cnt = bezier_control_points.size();
+  Eigen::MatrixXd bezier_matrix(node_cnt, 3);
+  for (int64_t i = 0; i < node_cnt; ++i)
+  {
+    for (int j = 0; j < 3; ++j)
+    {
+      bezier_matrix(i, j) = bezier_control_points[i][j];
+    }
+  }
+
+  Eigen::MatrixXd lagrange_matrix = b2l_mat * bezier_matrix;
+  std::vector<Eigen::Vector3d> lagrange_control_points(node_cnt);
+  for (int64_t i = 0; i < node_cnt; ++i)
+  {
+    for (int j = 0; j < 3; ++j)
+    {
+      lagrange_control_points[i][j] = lagrange_matrix(i, j);
+    }
+  }
+
+  const auto& affine_manifold = ct_surface.m_affine_manifold;
+  for (int fijk = 0; fijk < affine_manifold.num_faces(); ++fijk)
+  {
+    std::array<Eigen::Vector2d, 19> planar_control_points;
+    std::array<Eigen::Vector3d, 19> local_control_points;
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    const auto &l_nodes = face_chart.lagrange_nodes;
+    for (int i = 0; i < 19; ++i)
+    {
+      planar_control_points[i] = affine_manifold.m_lagrange_nodes[l_nodes[i]].second;
+      local_control_points[i] = lagrange_control_points[l_nodes[i]];
+    }
+    ct_surface.m_patches[fijk].set_lagrange_nodes(planar_control_points, local_control_points);
+  }
+}
+
+// Helper function to write a curface with external bezier nodes to file
+void write_mesh(CloughTocherSurface &ct_surface,
+                const std::vector<Eigen::Vector3d> &bezier_control_points,
+                const std::string &filename) {
+  Eigen::SparseMatrix<double, 1> b2l_mat;
+  ct_surface.bezier2lag_full_mat(b2l_mat);
+
+  int node_cnt = bezier_control_points.size();
+  Eigen::MatrixXd bezier_matrix(node_cnt, 3);
+  for (int64_t i = 0; i < node_cnt; ++i)
+  {
+    for (int j = 0; j < 3; ++j)
+    {
+      bezier_matrix(i, j) = bezier_control_points[i][j];
+    }
+  }
+
+  Eigen::MatrixXd lagrange_matrix = b2l_mat * bezier_matrix;
+  ct_surface.write_external_point_values_with_conn(filename, lagrange_matrix);
+}
+
+// write edge geometry to file
+void write_polylines_to_obj(
+    const std::string& filename,
+    const std::vector<SpatialVector>& points,
+    const std::vector<std::vector<int>>& polylines
+) {
+    // write all feature edge vertices
+    std::ofstream output_file(filename, std::ios::out | std::ios::trunc);
+    int num_points = points.size();
+    for (int vi = 0; vi < num_points; ++vi)
+    {
+        output_file << "v ";
+        for (int i = 0; i < 3; ++i)
+        {
+            output_file << std::fixed << std::setprecision(17) << points[vi][i] << " ";
+        }
+        output_file << std::endl;
+    }
+    for (const auto& polyline : polylines)
+    {
+        int length = polyline.size();
+        for (int i = 0; i < length-1; ++i)
+        {
+          int j = (i + 1) % length;
+          output_file << "l " << polyline[i] + 1 << " " << polyline[j] + 1 << std::endl;
+
+        }
+    }
+    output_file.close();
+}

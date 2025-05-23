@@ -221,3 +221,22 @@ private:
 			const CubicHessian &local_hessian,
 			std::vector<Triplet> &global_hessian_trips);
 };
+
+std::vector<Eigen::Vector3d>
+generate_linear_clough_tocher_surface(CloughTocherSurface &ct_surface,
+                                      const Eigen::MatrixXd &V);
+
+void set_bezier_control_points(CloughTocherSurface &ct_surface,
+                const std::vector<Eigen::Vector3d> &bezier_control_points);
+
+// Helper function to write a curface with external bezier nodes to file
+void write_mesh(CloughTocherSurface &ct_surface,
+                const std::vector<Eigen::Vector3d> &bezier_control_points,
+                const std::string &filename);
+
+// write edge geometry to file
+void write_polylines_to_obj(
+    const std::string& filename,
+    const std::vector<SpatialVector>& points,
+    const std::vector<std::vector<int>>& polylines
+);

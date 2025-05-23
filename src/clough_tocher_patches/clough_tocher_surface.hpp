@@ -43,6 +43,68 @@ public:
                              const AffineManifold &affine_manifold,
                              Eigen::MatrixXd &N);
 
+  /**
+   * @brief Get the total nunber of cubic patches.
+   * 
+   * @return number of patches
+   */
+  PatchIndex num_patches() const { return m_patches.size(); }
+
+  /**
+   * @brief Get the patch with a given id.
+   * 
+   * @param patch_index: index of patch in list of all patches
+   * @return reference to patch
+   */
+  const CloughTocherPatch& get_patch(int patch_index) const { return m_patches[patch_index]; }
+
+  /**
+   * @brief Triangulate a given patch, split into three sub patches.
+   * 
+   * @param patch_index: index of the patch to triangulate
+   * @param num_refinements: number of refinements for the patch
+   * @param V: list of subpatch vertices
+   * @param F: list of subpatch faces
+   */
+  void triangulate_patch(const PatchIndex& patch_index,
+                        int num_refinements,
+                        std::array<Eigen::MatrixXd, 3>& V,
+                        std::array<Eigen::MatrixXi, 3>& F) const;
+
+  /**
+   * @brief Triangulate the surface into a union of disconnected patches.
+   * 
+   * @param num_subdivisions: number of subdivisions for the mesh
+   * @param V: surface vertices
+   * @param F: surface faces
+   */
+  void discretize(
+    int num_subdivisions,
+    Eigen::MatrixXd& V,
+    Eigen::MatrixXi& F) const;
+
+  /**
+   * @brief Discretize the patch boundaries into polylines.
+   * 
+   * @param num_subdivisions: number of subdivisions for the curves
+   * @param points: vertices of the boundary curve network
+   * @param polylines: edges of the boundary curve network
+   */
+  void discretize_patch_boundaries(
+    int num_subdivisions,
+    std::vector<SpatialVector>& points,
+    std::vector<std::vector<int>>& polylines) const;
+
+  /**
+   * @brief Add the Clough Tocher surface to the Polyscope viewer.
+   * 
+   * @param color: color of the mesh
+   * @param num_subdivisions: number of subdivisions for the mesh
+   */
+  void
+  add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color={1., 0., 0.},
+                                                int num_subdivisions=3) const;
+
 public:
   std::vector<CloughTocherPatch> m_patches;
 

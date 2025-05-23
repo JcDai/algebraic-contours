@@ -10,6 +10,14 @@
 
 CloughTocherSurface::CloughTocherSurface() {}
 
+/*
+CloughTocherSurface::CloughTocherSurface(const Eigen::MatrixXd &V, const AffineManifold &affine_manifold)
+{
+  std::vector<Eigen::Vector3d> bezier_control_points = generate_linear_clough_tocher_surface(ct_surface, V);
+  m_patches.push_back(CloughTocherPatch(boundary_data));
+}
+*/
+
 CloughTocherSurface::CloughTocherSurface(
     const Eigen::MatrixXd &V, const AffineManifold &affine_manifold,
     const OptimizationParameters &optimization_params,
@@ -288,6 +296,125 @@ void CloughTocherSurface::sample_to_obj(std::string filename, int sample_size) {
 
   file << "f 1 1 1\n";
 }
+
+
+void
+ CloughTocherSurface::triangulate_patch(const PatchIndex& patch_index,
+                                          int num_refinements,
+                                          std::array<Eigen::MatrixXd, 3>& V,
+                                          std::array<Eigen::MatrixXi, 3>& F) const
+{
+  get_patch(patch_index).triangulate(num_refinements, V, F);
+}
+
+void
+ CloughTocherSurface::discretize(
+  int num_subdivisions,
+  Eigen::MatrixXd& V,
+  Eigen::MatrixXi& F) const
+{
+  V.resize(0, 0);
+  F.resize(0, 0);
+  std::array<Eigen::MatrixXd, 3> V_patch;
+  std::array<Eigen::MatrixXi, 3> F_patch;
+
+  // Build triangulated surface in place
+  triangulate_patch(0, num_subdivisions, V_patch, F_patch);
+  int num_patch_vertices = V_patch[0].rows();
+  int num_patch_faces = F_patch[0].rows();
+  V.conservativeResize(3 * num_patch_vertices * num_patches(), 3);
+  F.conservativeResize(3 * num_patch_faces * num_patches(), 3);
+
+  for (PatchIndex patch_index = 0; patch_index < num_patches(); ++patch_index) {
+    triangulate_patch(patch_index, num_subdivisions, V_patch, F_patch);
+    for (int n = 0; n < 3; ++n)
+    {
+      int V_start_index = num_patch_vertices * (3 * patch_index + n);
+      int F_start_index = num_patch_faces * (3 * patch_index + n);
+      V.block(V_start_index, 0, num_patch_vertices, V.cols()) =
+        V_patch[n];
+      F.block(F_start_index, 0, num_patch_faces, F.cols()) =
+        F_patch[n] + Eigen::MatrixXi::Constant(num_patch_faces, F.cols(), V_start_index);
+    }
+  }
+
+  spdlog::info("{} surface vertices", V.rows());
+  spdlog::info("{} surface faces", F.rows());
+}
+
+void
+ CloughTocherSurface::discretize_patch_boundaries(
+  int num_subdivision,
+  std::vector<SpatialVector>& points,
+  std::vector<std::vector<int>>& polylines) const
+{
+  points.clear();
+  polylines.clear();
+
+  for (PatchIndex patch_index = 0; patch_index < num_patches(); ++patch_index) {
+    std::array<std::array<LineSegment, 3>, 3> patch_boundaries;
+    auto& spline_surface_patch = get_patch(patch_index);
+    spline_surface_patch.parametrize_patch_boundaries(patch_boundaries);
+    for (int n = 0; n < 3; ++n)
+    {
+      for (size_t k = 0; k < patch_boundaries[n].size(); ++k) {
+        // Get points on the boundary curve
+        std::vector<PlanarPoint> parameter_points_k;
+        patch_boundaries[n][k].sample_points(1 << num_subdivision, parameter_points_k);
+        std::vector<SpatialVector> points_k(parameter_points_k.size());
+        for (size_t i = 0; i < parameter_points_k.size(); ++i) {
+          points_k[i] = spline_surface_patch.CT_eval(parameter_points_k[i][0], parameter_points_k[i][1]);
+        }
+
+        // Build polyline for the given curve
+        std::vector<int> polyline;
+        polyline.resize(points_k.size());
+        for (size_t l = 0; l < points_k.size(); ++l) {
+          polyline[l] = points.size() + l;
+        }
+
+        append(points, points_k);
+        polylines.push_back(polyline);
+      }
+    }
+  }
+}
+
+void
+ CloughTocherSurface::add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color,
+                                              int num_subdivisions) const
+{
+  // Generate mesh discretization
+  Eigen::MatrixXd V;
+  Eigen::MatrixXi F;
+  discretize(num_subdivisions, V, F);
+
+  // Add surface mesh
+  polyscope::init();
+  polyscope::registerSurfaceMesh("surface", V, F)
+    ->setEdgeWidth(0);
+  polyscope::getSurfaceMesh("surface")->setSurfaceColor(
+    glm::vec3(color[0], color[1], color[2]));
+
+  // Discretize patch boundaries
+  std::vector<SpatialVector> boundary_points;
+  std::vector<std::vector<int>> boundary_polylines;
+  discretize_patch_boundaries(num_subdivisions, boundary_points, boundary_polylines);
+
+  // View contour curve network
+  MatrixXr boundary_points_mat =
+    convert_nested_vector_to_matrix(boundary_points);
+  std::vector<std::array<int, 2>> boundary_edges =
+    convert_polylines_to_edges(boundary_polylines);
+  polyscope::registerCurveNetwork(
+    "patch_boundaries", boundary_points_mat, boundary_edges);
+  polyscope::getCurveNetwork("patch_boundaries")
+    ->setColor(glm::vec3(0.670, 0.673, 0.292));
+  polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
+  polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
+  polyscope::getCurveNetwork("patch_boundaries")->setEnabled(false);
+}
+
 
 // deprecated
 void CloughTocherSurface::write_cubic_surface_to_msh_with_conn(
