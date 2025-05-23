@@ -136,8 +136,8 @@ if __name__ == "__main__":
     tet_edge_to_vertices, tet_face_to_vertices = map_tri_nodes_to_tet_nodes(
         workspace_path, output_name, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map)
 
-    interpolate_initial_solution(output_name, "laplace_beltrami_mesh.msh", "degenerated_c1_bezier_control_points.msh",
-                                 output_name+"_initial_tetmesh.msh", initial_guess_weight, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
+    # interpolate_initial_solution(output_name, "laplace_beltrami_mesh.msh", "degenerated_c1_bezier_control_points.msh",
+    #                              output_name+"_initial_tetmesh.msh", initial_guess_weight, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
 
     # interpolate_initial_solution_test(output_name, "CT_degenerate_cubic_bezier_points.msh",
     #                                   output_name+"_initial_tetmesh.msh", initial_guess_weight, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
@@ -160,11 +160,11 @@ if __name__ == "__main__":
 
     # step 7 build hard constraints
 
-    build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                                                      "CT_bezier_constraints_expanded_old.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded_old.txt", "CT_bezier_r2f_mat_col_idx_map_old.txt", output_name + "_interp_initial_mesh.msh")
-
     # build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-    #                                                   "CT_bezier_constraints_expanded.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt", output_name + "_interp_initial_mesh.msh")
+    #                                                   "CT_bezier_constraints_expanded_old.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded_old.txt", "CT_bezier_r2f_mat_col_idx_map_old.txt", output_name + "_interp_initial_mesh.msh")
+
+    build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
+                                                      "CT_bezier_constraints_expanded.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt", output_name + "_interp_initial_mesh.msh")
     # build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
     #                                                   "CT_bezier_constraints_expanded.txt", output_name + "_interp_initial_mesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt", output_name + "_interp_initial_mesh.msh")
 

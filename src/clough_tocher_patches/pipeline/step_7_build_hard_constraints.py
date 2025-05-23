@@ -622,18 +622,18 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
         proj[id] = 0
 
     # test
-    test_vec = np.random.rand(v_expanded_reduce.shape[0])
+    # test_vec = np.random.rand(v_expanded_reduce.shape[0])
 
-    full = (r2f_full_expanded @ test_vec + proj)
+    # full = (r2f_full_expanded @ test_vec + proj)
 
-    error = stacked @ full - b
-    print("error: ", np.linalg.norm(error))
+    # error = stacked @ full - b
+    # print("error: ", np.linalg.norm(error))
 
-    # test 2
-    test_v = np.random.rand(bezier_r2f.shape[1])
-    full_sf = bezier_r2f @ test_v
-    error_2 = bezier_cons_matrix @ full_sf
-    print("error 2: ", np.linalg.norm(error_2))
+    # # test 2
+    # test_v = np.random.rand(bezier_r2f.shape[1])
+    # full_sf = bezier_r2f @ test_v
+    # error_2 = bezier_cons_matrix @ full_sf
+    # print("error 2: ", np.linalg.norm(error_2))
 
     with h5py.File(workspace_path + "CT_bezier_all_matrices.hdf5", "w") as f:
         f.create_dataset("A_triplets/values", data=stacked.data)
@@ -652,43 +652,43 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
 
         f.create_dataset("b", data=b[:, None])
 
-    # generate init solution
-    interp_mesh = mio.read(initial_interp_mesh)
-    interp_v = interp_mesh.points
-    interp_v_expanded = np.reshape(interp_v, (interp_v.shape[0]*3, 1)).T[0]
+    # # generate init solution
+    # interp_mesh = mio.read(initial_interp_mesh)
+    # interp_v = interp_mesh.points
+    # interp_v_expanded = np.reshape(interp_v, (interp_v.shape[0]*3, 1)).T[0]
 
-    init_solution = interp_v_expanded - v_expanded
+    # init_solution = interp_v_expanded - v_expanded
 
-    print(interp_mesh.cells)
+    # print(interp_mesh.cells)
 
-    # print("error stacked: ", np.linalg.norm(stacked @ init_solution - b))
-    # print("error stacked: ", np.linalg.norm(stacked @ interp_v_expanded))
+    # # print("error stacked: ", np.linalg.norm(stacked @ init_solution - b))
+    # # print("error stacked: ", np.linalg.norm(stacked @ interp_v_expanded))
 
-    bezier_cons_matrix = scipy.io.mmread("CT_bezier_constraints_expanded.txt")
+    # bezier_cons_matrix = scipy.io.mmread("CT_bezier_constraints_expanded.txt")
 
-    init_surface_v = interp_v[local2global]
-    init_surface_v_expanded = np.reshape(
-        init_surface_v, (init_surface_v.shape[0]*3, 1)).T[0]
-    error_init = bezier_cons_matrix @ init_surface_v_expanded
+    # init_surface_v = interp_v[local2global]
+    # init_surface_v_expanded = np.reshape(
+    #     init_surface_v, (init_surface_v.shape[0]*3, 1)).T[0]
+    # error_init = bezier_cons_matrix @ init_surface_v_expanded
 
-    lap_m = mio.read("laplace_beltrami_mesh.msh")
-    lap_v_lag = lap_m.points
-    lag2bezier_mat = scipy.io.mmread("CT_lag2bezier_matrix.txt")
-    lap_v = lag2bezier_mat @ lap_v_lag
-    # lap_v_expanded = np.reshape(lap_v, (lap_v.shape[0]*3, 1)).T[0]
-    lap_v_expanded = np.reshape(lap_v, (1, lap_v.shape[0]*3))[0]
-    # print(bezier_cons_matrix.shape)
-    # print(lap_v_expanded.shape)
-    error_lap = bezier_cons_matrix @ lap_v_expanded
-    print("error lap: ", np.linalg.norm(error_lap))
+    # lap_m = mio.read("laplace_beltrami_mesh.msh")
+    # lap_v_lag = lap_m.points
+    # lag2bezier_mat = scipy.io.mmread("CT_lag2bezier_matrix.txt")
+    # lap_v = lag2bezier_mat @ lap_v_lag
+    # # lap_v_expanded = np.reshape(lap_v, (lap_v.shape[0]*3, 1)).T[0]
+    # lap_v_expanded = np.reshape(lap_v, (1, lap_v.shape[0]*3))[0]
+    # # print(bezier_cons_matrix.shape)
+    # # print(lap_v_expanded.shape)
+    # error_lap = bezier_cons_matrix @ lap_v_expanded
+    # print("error lap: ", np.linalg.norm(error_lap))
 
-    with open("init_surface_v.xyz", "w") as file:
-        file.write(str(init_surface_v.shape[0]) + "\n")
-        for line in init_surface_v:
-            file.write("{} {} {}\n".format(line[0], line[1], line[2]))
+    # with open("init_surface_v.xyz", "w") as file:
+    #     file.write(str(init_surface_v.shape[0]) + "\n")
+    #     for line in init_surface_v:
+    #         file.write("{} {} {}\n".format(line[0], line[1], line[2]))
 
-    print("error init: ", np.linalg.norm(error_init))
-    # print("error init: ", np.argwhere(np.abs(error_init) > 1e-10))
+    # print("error init: ", np.linalg.norm(error_init))
+    # # print("error init: ", np.argwhere(np.abs(error_init) > 1e-10))
 
-    with h5py.File(workspace_path + "initial_solution.hdf5", "w") as f:
-        f.create_dataset("u", data=init_solution[:, None])
+    # with h5py.File(workspace_path + "initial_solution.hdf5", "w") as f:
+    #     f.create_dataset("u", data=init_solution[:, None])
