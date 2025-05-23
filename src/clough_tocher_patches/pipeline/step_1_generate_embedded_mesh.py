@@ -97,6 +97,11 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
                 winding_numbers_unused_outside.append(
                     winding_numbers_data_unsliced[tid])
 
+        if len(tets_unused_inside) == 0:
+            tets_unused_inside = [[]]
+        if len(tets_unused_outside) == 0:
+            tets_unused_outside = [[]]
+
         unused_inside = mio.Mesh(
             vertices_unsliced, [('tetra', np.array(tets_unused_inside))])
         unused_inside.write("tets_unused_inside.msh", file_format="gmsh")
