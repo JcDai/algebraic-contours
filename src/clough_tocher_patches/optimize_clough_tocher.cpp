@@ -160,16 +160,16 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
 	timer.start();
 	bool use_parametric_metric = true;
-	if (use_parametric_metric) A = generate_laplace_beltrami_stiffness_matrix();
+	if (use_parametric_metric) A = generate_laplace_beltrami_stiffness_matrix() / 2.; // TODO: remove factor of 2 once quadrature fixed
 	else A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
 	hessian = C.transpose() * ((A + k * P) * C);
 	hessian_inverse.compute(hessian);
-
+  double E_prev = std::numeric_limits<double>::infinity();
+  double max_res_error = std::numeric_limits<double>::infinity();
 	for (int i = 0; i < iterations; ++i)
 	{
     // print initial energy
     Eigen::VectorXd N0 = F * p0;
-    double E_prev = evaluate_quadratic_energy(hessian, derivative, E0, N0);
     spdlog::info("initial energy is {}", E_prev);
 
 		// solve for optimal solution
@@ -179,11 +179,11 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 		double res_error = res.cwiseAbs().maxCoeff();
 		spdlog::info("residual error is {}", res_error);
 
-		double t = 0.5;
-		double E = E_prev + 1;
+		double t = (i == 0) ? 1.0 : 0.5;
+		//double t = 1.0;
+		double E = E_prev;
 		Eigen::VectorXd N, p;
-		double max_res_error = 10;
-		while ((E > E_prev) || (res_error > max_res_error))
+		while ((E >= E_prev) || (res_error > max_res_error))
 		{
 			N = t * N1 + (1 - t) * N0;
 			p = C * N;
@@ -221,6 +221,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 								(pr - p).cwiseAbs().maxCoeff());
 
 		p0 = p;
+    E_prev = E;
+    max_res_error = res_error * 10; // allow order of magnitude growth
 
     // exit if done
     if (t < 1e-10) break;

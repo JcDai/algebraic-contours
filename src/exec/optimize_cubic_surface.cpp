@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
   OptimizationParameters optimization_params;
   double weight = 1e3;
   int iterations = 1;
-  int visualize = 0;
+  bool visualize = false;
   app.add_option("-i,--input", input_filename, "Mesh filepath")
       ->check(CLI::ExistingFile)
       ->required();
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
   app.add_option("-n,--iterations", iterations,
                  "Number of iterations of optimization");
   app.add_option("-o, --output", output_name, "Output file prefix");
-  app.add_option("-v, --visualize", visualize, "Visualize with polyscope");
+  app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
   CLI11_PARSE(app, argc, argv);
 
   // Set logger level
@@ -104,7 +104,11 @@ int main(int argc, char *argv[]) {
   ct_surface.lag2bezier_full_mat(l2b_mat);
   Eigen::saveMarket(l2b_mat, "CT_lag2bezier_matrix.txt");
 
-  //ct_surface.add_surface_to_viewer({1, 0.4, 0.3}, 3);
+  if (visualize)
+  {
+    ct_surface.add_surface_to_viewer({1, 0.4, 0.3}, 3);
+    polyscope::show();
+  }
 
   return 0;
 }

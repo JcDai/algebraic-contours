@@ -346,7 +346,8 @@ void
  CloughTocherSurface::discretize_patch_boundaries(
   int num_subdivision,
   std::vector<SpatialVector>& points,
-  std::vector<std::vector<int>>& polylines) const
+  std::vector<std::vector<int>>& polylines,
+  bool only_exterior) const
 {
   points.clear();
   polylines.clear();
@@ -375,6 +376,8 @@ void
 
         append(points, points_k);
         polylines.push_back(polyline);
+
+        if (only_exterior) break;
       }
     }
   }
@@ -399,7 +402,7 @@ void
   // Discretize patch boundaries
   std::vector<SpatialVector> boundary_points;
   std::vector<std::vector<int>> boundary_polylines;
-  discretize_patch_boundaries(num_subdivisions, boundary_points, boundary_polylines);
+  discretize_patch_boundaries(num_subdivisions, boundary_points, boundary_polylines, true);
 
   // View contour curve network
   MatrixXr boundary_points_mat =
