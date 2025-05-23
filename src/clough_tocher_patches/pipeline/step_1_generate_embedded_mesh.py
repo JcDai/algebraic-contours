@@ -88,7 +88,7 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
         tets_unused_outside = []
         winding_numbers_unused_outside = []
         for tid in remaining_indices:
-            if abs(winding_numbers_data_unsliced) >= 0.5:
+            if abs(winding_numbers_data_unsliced[tid]) >= 0.5:
                 tets_unused_inside.append(tets_unsliced[tid])
                 winding_numbers_unused_inside.append(
                     winding_numbers_data_unsliced[tid])
@@ -99,10 +99,10 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
 
         unused_inside = mio.Mesh(
             vertices_unsliced, [('tetra', np.array(tets_unused_inside))])
-        unused_inside.write("tets_unused_inside.msh")
+        unused_inside.write("tets_unused_inside.msh", file_format="gmsh")
         unused_outside = mio.Mesh(
             vertices_unsliced, [('tetra', np.array(tets_unused_outside))])
-        unused_outside.write("tets_unused_outside.msh")
+        unused_outside.write("tets_unused_outside.msh", file_format="gmsh")
 
         # print(winding_numbers_data.shape)
         # print(winding_numbers_data)
