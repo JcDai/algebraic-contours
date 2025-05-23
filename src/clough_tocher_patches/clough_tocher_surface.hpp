@@ -89,11 +89,13 @@ public:
    * @param num_subdivisions: number of subdivisions for the curves
    * @param points: vertices of the boundary curve network
    * @param polylines: edges of the boundary curve network
+   * @param only_exterior: (optional) if true, only discretize the face boundary, not barycentric 
    */
   void discretize_patch_boundaries(
     int num_subdivisions,
     std::vector<SpatialVector>& points,
-    std::vector<std::vector<int>>& polylines) const;
+    std::vector<std::vector<int>>& polylines,
+    bool only_exterior=false) const;
 
   /**
    * @brief Add the Clough Tocher surface to the Polyscope viewer.
