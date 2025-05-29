@@ -28,6 +28,10 @@ public:
   void write_cubic_surface_to_msh_with_conn(std::string filename);
   void write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
       std::string filename, bool write_bezier = false);
+  void write_degenerate_cubic_surface_to_msh_with_conn(
+      std::string filename, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
+
+  void write_degenerate_cubic_surface_to_msh_with_conn(std::string filename);
   void write_external_bd_interpolated_function_values_from_lagrange_nodes(
       std::string filename,
       std::vector<Eigen::Matrix<double, 12, 1>> &external_boundary_data);
@@ -41,6 +45,68 @@ public:
                              const AffineManifold &affine_manifold,
                              Eigen::MatrixXd &N);
 
+  /**
+   * @brief Get the total nunber of cubic patches.
+   *
+   * @return number of patches
+   */
+  PatchIndex num_patches() const { return m_patches.size(); }
+
+  /**
+   * @brief Get the patch with a given id.
+   *
+   * @param patch_index: index of patch in list of all patches
+   * @return reference to patch
+   */
+  const CloughTocherPatch &get_patch(int patch_index) const {
+    return m_patches[patch_index];
+  }
+
+  /**
+   * @brief Triangulate a given patch, split into three sub patches.
+   *
+   * @param patch_index: index of the patch to triangulate
+   * @param num_refinements: number of refinements for the patch
+   * @param V: list of subpatch vertices
+   * @param F: list of subpatch faces
+   */
+  void triangulate_patch(const PatchIndex &patch_index, int num_refinements,
+                         std::array<Eigen::MatrixXd, 3> &V,
+                         std::array<Eigen::MatrixXi, 3> &F) const;
+
+  /**
+   * @brief Triangulate the surface into a union of disconnected patches.
+   *
+   * @param num_subdivisions: number of subdivisions for the mesh
+   * @param V: surface vertices
+   * @param F: surface faces
+   */
+  void discretize(int num_subdivisions, Eigen::MatrixXd &V,
+                  Eigen::MatrixXi &F) const;
+
+  /**
+   * @brief Discretize the patch boundaries into polylines.
+   *
+   * @param num_subdivisions: number of subdivisions for the curves
+   * @param points: vertices of the boundary curve network
+   * @param polylines: edges of the boundary curve network
+   * @param only_exterior: (optional) if true, only discretize the face
+   * boundary, not barycentric
+   */
+  void discretize_patch_boundaries(int num_subdivisions,
+                                   std::vector<SpatialVector> &points,
+                                   std::vector<std::vector<int>> &polylines,
+                                   bool only_exterior = false) const;
+
+  /**
+   * @brief Add the Clough Tocher surface to the Polyscope viewer.
+   *
+   * @param color: color of the mesh
+   * @param num_subdivisions: number of subdivisions for the mesh
+   */
+  void add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color = {1., 0., 0.},
+                             int num_subdivisions = 3) const;
+
 public:
   std::vector<CloughTocherPatch> m_patches;
 
@@ -50,6 +116,19 @@ public:
 
   std::vector<Eigen::Vector3d> m_lagrange_node_values;
   std::vector<Eigen::Vector3d> m_bezier_control_points;
+  Eigen::VectorXd m_degenerated_bezier_control_points_expanded;
+  std::vector<Eigen::Vector3d> m_degenerated_bezier_control_points;
+
+  void compute_degenerate_bezier_control_points(
+      const Eigen::SparseMatrix<double> &r2f_matrix,
+      const std::vector<int> &independent_node_map, const Eigen::MatrixXd &V,
+      const Eigen::MatrixXi &F);
+
+  std::vector<Eigen::Vector3d> m_degenerated_bc_special;
+
+  void compute_degenerate_bezier_control_points_special_midpoint(
+      const Eigen::MatrixXd &V, const Eigen::MatrixXi &F);
+  void write_special_bc_to_msh(const std::string &filename);
 
 public:
   // constraint matrices

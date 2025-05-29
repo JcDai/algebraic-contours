@@ -154,8 +154,8 @@ void compute_LB_of_basis_cp_C(double cp_3d[10][3], double s, double t, double* W
 #include <math.h>
 void compute_elem_matrix_C(double cp_3d[10][3], int quad_dim, double quad_pts[][2], double weights[], double A[10][10]) {
    int i,j, m;
-   double LB_of_basis[quad_dim][10]; 
-   double W[quad_dim];
+   double LB_of_basis[QUAD_DIM][10]; 
+   double W[QUAD_DIM];
    for( m=0; m < quad_dim; m++) {
       compute_LB_of_basis_cp_C(cp_3d, quad_pts[m][0], quad_pts[m][1], &(W[m]), LB_of_basis[m] ); 
    }

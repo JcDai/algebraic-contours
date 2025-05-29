@@ -912,40 +912,40 @@ void compute_M (
   double Mcoeffs[3][3])
 {
   double t1;
-  double t11;
+  double t10;
+  double t12;
   double t13;
+  double t14;
   double t15;
   double t17;
-  double t19;
   double t2;
+  double t20;
   double t3;
   double t4;
-  double t5;
-  double t6;
   double t7;
   double t8;
   t1 = a11 * a11;
   t2 = a12 * a12;
   t3 = t1 + t2;
   t4 = t3 * t3;
-  t5 = a21 * a21;
-  t6 = a22 * a22;
-  t7 = t5 + t6;
-  t8 = t3 * t7;
-  t11 = a11 * a21 + a12 * a22;
-  t13 = 0.2e1 * t11 * t3;
-  t15 = t7 * t7;
-  t17 = 0.2e1 * t11 * t7;
-  t19 = t11 * t11;
+  t7 = a11 * a21 + a12 * a22;
+  t8 = t7 * t7;
+  t10 = 0.2e1 * t7 * t3;
+  t12 = a21 * a21;
+  t13 = a22 * a22;
+  t14 = t12 + t13;
+  t15 = t14 * t14;
+  t17 = 0.2e1 * t7 * t14;
+  t20 = 0.2e1 * t13;
   Mcoeffs[0][0] = t4;
   Mcoeffs[0][1] = t8;
-  Mcoeffs[0][2] = t13;
+  Mcoeffs[0][2] = t10;
   Mcoeffs[1][0] = t8;
   Mcoeffs[1][1] = t15;
   Mcoeffs[1][2] = t17;
-  Mcoeffs[2][0] = t13;
+  Mcoeffs[2][0] = t10;
   Mcoeffs[2][1] = t17;
-  Mcoeffs[2][2] = 0.4e1 * t19;
+  Mcoeffs[2][2] = t1 * (0.4e1 * t12 + t20) + 0.4e1 * a11 * a12 * a21 * a22 + 0.2e1 * (t12 + t20) * t2;
 }
 void compute_UV_2_bary_subtri (double *u, double *v, double UV_2_bary_subtri[3][2][2])
 {

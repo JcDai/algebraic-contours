@@ -185,6 +185,9 @@ int main(int argc, char *argv[]) {
   Eigen::saveMarket(b2l_mat,
                     output_name + "_bezier_to_lag_convertion_matrix.txt");
 
+  // ct_surface.compute_degenerate_bezier_control_points_special_midpoint(V, F);
+  // ct_surface.write_special_bc_to_msh("degenerate_special");
+
   if (skip_constraint) {
     // skip constraint computation
     exit(0);
@@ -432,13 +435,15 @@ int main(int argc, char *argv[]) {
 
   std::vector<bool> node_assigned(node_cnt, false);
 
-  std::cout << "compute cone constraints ..." << std::endl;
-  ct_surface.bezier_cone_constraints_expanded(
-      f2f_expanded, independent_node_map, node_assigned, v_normals);
+  // std::cout << "compute cone constraints ..." << std::endl;
+  // ct_surface.bezier_cone_constraints_expanded(
+  //     f2f_expanded, independent_node_map, node_assigned, v_normals);
 
   std::cout << "compute endpoint constraints ..." << std::endl;
+  // ct_surface.bezier_endpoint_ind2dep_expanded(f2f_expanded,
+  //                                             independent_node_map, false);
   ct_surface.bezier_endpoint_ind2dep_expanded(f2f_expanded,
-                                              independent_node_map, false);
+                                              independent_node_map, true);
 
   std::cout << "compute interior 1 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_1_expanded(f2f_expanded,
@@ -513,7 +518,40 @@ int main(int argc, char *argv[]) {
   }
 
   Eigen::saveMarket(bezier_constraint_matrix,
-                    output_name + "_bezier_constraints_expanded.txt");
+                    output_name + "_bezier_constraints_expanded_old.txt");
+
+  // generate degenerated bezier control points
+  ct_surface.compute_degenerate_bezier_control_points(
+      f2f_expanded, independent_node_map, V, F);
+  ct_surface.write_degenerate_cubic_surface_to_msh_with_conn(
+      "degenerated_c1_bezier_control_points");
+
+  const auto error_degen =
+      bezier_constraint_matrix *
+      ct_surface.m_degenerated_bezier_control_points_expanded;
+  std::cout << "error degen mesh: " << error_degen.norm() << std::endl;
+
+  // error special degen
+  Eigen::MatrixXd sp_deg(ct_surface.m_degenerated_bc_special.size() * 3, 1);
+  for (size_t i = 0; i < ct_surface.m_degenerated_bc_special.size(); ++i) {
+    sp_deg(i * 3 + 0, 0) = ct_surface.m_degenerated_bc_special[i][0];
+    sp_deg(i * 3 + 1, 0) = ct_surface.m_degenerated_bc_special[i][1];
+    sp_deg(i * 3 + 2, 0) = ct_surface.m_degenerated_bc_special[i][2];
+  }
+
+  const auto error_degen_sp = bezier_constraint_matrix * sp_deg;
+  std::cout << "error special degen mesh: " << error_degen_sp.norm()
+            << std::endl;
+
+  // Eigen::MatrixXd degenrated_bc(
+  //     ct_surface.m_degenerated_bezier_control_points.size(), 3);
+  // for (size_t i = 0; i <
+  // ct_surface.m_degenerated_bezier_control_points.size();
+  //      ++i) {
+  //   degenrated_bc.row(i) = ct_surface.m_degenerated_bezier_control_points[i];
+  // }
+
+  // Eigen::MatrixXd degenerated_lag = b2l_mat * degenrated_bc;
 
   // exit(0);
 
@@ -523,24 +561,56 @@ int main(int argc, char *argv[]) {
   // r2f_expanded.reserve(node_cnt * 3 * 5);
   r2f_expanded.reserve(Eigen::VectorXi::Constant(ind_cnt, 40));
   std::vector<int64_t> col2nid_map;
+  std::vector<int64_t> ind2col_map(f2f_expanded.cols(), -1);
   int64_t col_cnt = 0;
   for (int64_t i = 0; i < f2f_expanded.cols(); ++i) {
     if (independent_node_map[i] == 1) {
-      const Eigen::SparseVector<double> &c = f2f_expanded.col(i);
-      r2f_expanded.col(col_cnt) = c;
-      col_cnt++;
+      // const Eigen::SparseVector<double> &c = f2f_expanded.col(i);
+      // r2f_expanded.col(col_cnt) = c;
       col2nid_map.push_back(i);
+      ind2col_map[i] = col_cnt; // map full to independent
+      col_cnt++;
     }
   }
 
   std::ofstream r2f_idx_map_file(output_name +
-                                 "_bezier_r2f_mat_col_idx_map.txt");
+                                 "_bezier_r2f_mat_col_idx_map_old.txt");
   for (size_t i = 0; i < col2nid_map.size(); ++i) {
     r2f_idx_map_file << col2nid_map[i] << std::endl;
   }
   r2f_idx_map_file.close();
 
-  Eigen::saveMarket(r2f_expanded, output_name + "_bezier_r2f_expanded.txt");
+  std::vector<Eigen::Triplet<double>> ind2full_trips;
+  std::vector<bool> diag_seen(f2f_expanded.rows(), false);
+  for (int k = 0; k < f2f_expanded.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(
+             f2f_expanded, k);
+         it; ++it) {
+      // check if dependent node
+      int j = it.col();
+      if (independent_node_map[j] == 1) {
+        if (ind2col_map[j] < 0)
+          spdlog::error("independent column index missing for {}", j);
+
+        // add triplet
+        int i = it.row();
+        double v = it.value();
+
+        // fix diagonal bug
+        if (i == j) {
+          if (diag_seen[i]) {
+            continue;
+          }
+          diag_seen[i] = true;
+        }
+
+        ind2full_trips.push_back(Eigen::Triplet<double>(i, ind2col_map[j], v));
+      }
+    }
+  }
+  r2f_expanded.setFromTriplets(ind2full_trips.begin(), ind2full_trips.end());
+
+  Eigen::saveMarket(r2f_expanded, output_name + "_bezier_r2f_expanded_old.txt");
 
   exit(0);
 

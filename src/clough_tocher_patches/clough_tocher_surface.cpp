@@ -10,6 +10,16 @@
 
 CloughTocherSurface::CloughTocherSurface() {}
 
+/*
+CloughTocherSurface::CloughTocherSurface(const Eigen::MatrixXd &V, const
+AffineManifold &affine_manifold)
+{
+  std::vector<Eigen::Vector3d> bezier_control_points =
+generate_linear_clough_tocher_surface(ct_surface, V);
+  m_patches.push_back(CloughTocherPatch(boundary_data));
+}
+*/
+
 CloughTocherSurface::CloughTocherSurface(
     const Eigen::MatrixXd &V, const AffineManifold &affine_manifold,
     const OptimizationParameters &optimization_params,
@@ -287,6 +297,115 @@ void CloughTocherSurface::sample_to_obj(std::string filename, int sample_size) {
   }
 
   file << "f 1 1 1\n";
+}
+
+void CloughTocherSurface::triangulate_patch(
+    const PatchIndex &patch_index, int num_refinements,
+    std::array<Eigen::MatrixXd, 3> &V,
+    std::array<Eigen::MatrixXi, 3> &F) const {
+  get_patch(patch_index).triangulate(num_refinements, V, F);
+}
+
+void CloughTocherSurface::discretize(int num_subdivisions, Eigen::MatrixXd &V,
+                                     Eigen::MatrixXi &F) const {
+  V.resize(0, 0);
+  F.resize(0, 0);
+  std::array<Eigen::MatrixXd, 3> V_patch;
+  std::array<Eigen::MatrixXi, 3> F_patch;
+
+  // Build triangulated surface in place
+  triangulate_patch(0, num_subdivisions, V_patch, F_patch);
+  int num_patch_vertices = V_patch[0].rows();
+  int num_patch_faces = F_patch[0].rows();
+  V.conservativeResize(3 * num_patch_vertices * num_patches(), 3);
+  F.conservativeResize(3 * num_patch_faces * num_patches(), 3);
+
+  for (PatchIndex patch_index = 0; patch_index < num_patches(); ++patch_index) {
+    triangulate_patch(patch_index, num_subdivisions, V_patch, F_patch);
+    for (int n = 0; n < 3; ++n) {
+      int V_start_index = num_patch_vertices * (3 * patch_index + n);
+      int F_start_index = num_patch_faces * (3 * patch_index + n);
+      V.block(V_start_index, 0, num_patch_vertices, V.cols()) = V_patch[n];
+      F.block(F_start_index, 0, num_patch_faces, F.cols()) =
+          F_patch[n] +
+          Eigen::MatrixXi::Constant(num_patch_faces, F.cols(), V_start_index);
+    }
+  }
+
+  spdlog::info("{} surface vertices", V.rows());
+  spdlog::info("{} surface faces", F.rows());
+}
+
+void CloughTocherSurface::discretize_patch_boundaries(
+    int num_subdivision, std::vector<SpatialVector> &points,
+    std::vector<std::vector<int>> &polylines, bool only_exterior) const {
+  points.clear();
+  polylines.clear();
+
+  for (PatchIndex patch_index = 0; patch_index < num_patches(); ++patch_index) {
+    std::array<std::array<LineSegment, 3>, 3> patch_boundaries;
+    auto &spline_surface_patch = get_patch(patch_index);
+    spline_surface_patch.parametrize_patch_boundaries(patch_boundaries);
+    for (int n = 0; n < 3; ++n)
+    {
+      std::vector<int> boundaries = {0, 1, 2};
+      if (only_exterior) boundaries = {1};
+      for (int k : boundaries) {
+        // Get points on the boundary curve
+        std::vector<PlanarPoint> parameter_points_k;
+        patch_boundaries[n][k].sample_points(1 << num_subdivision,
+                                             parameter_points_k);
+        std::vector<SpatialVector> points_k(parameter_points_k.size());
+        for (size_t i = 0; i < parameter_points_k.size(); ++i) {
+          points_k[i] = spline_surface_patch.CT_eval(parameter_points_k[i][0],
+                                                     parameter_points_k[i][1]);
+        }
+
+        // Build polyline for the given curve
+        std::vector<int> polyline;
+        polyline.resize(points_k.size());
+        for (size_t l = 0; l < points_k.size(); ++l) {
+          polyline[l] = points.size() + l;
+        }
+
+        append(points, points_k);
+        polylines.push_back(polyline);
+      }
+    }
+  }
+}
+
+void CloughTocherSurface::add_surface_to_viewer(
+    Eigen::Matrix<double, 3, 1> color, int num_subdivisions) const {
+  // Generate mesh discretization
+  Eigen::MatrixXd V;
+  Eigen::MatrixXi F;
+  discretize(num_subdivisions, V, F);
+
+  // Add surface mesh
+  polyscope::init();
+  polyscope::registerSurfaceMesh("surface", V, F)->setEdgeWidth(0);
+  polyscope::getSurfaceMesh("surface")->setSurfaceColor(
+      glm::vec3(color[0], color[1], color[2]));
+
+  // Discretize patch boundaries
+  std::vector<SpatialVector> boundary_points;
+  std::vector<std::vector<int>> boundary_polylines;
+  discretize_patch_boundaries(num_subdivisions, boundary_points,
+                              boundary_polylines, true);
+
+  // View contour curve network
+  MatrixXr boundary_points_mat =
+      convert_nested_vector_to_matrix(boundary_points);
+  std::vector<std::array<int, 2>> boundary_edges =
+      convert_polylines_to_edges(boundary_polylines);
+  polyscope::registerCurveNetwork("patch_boundaries", boundary_points_mat,
+                                  boundary_edges);
+  polyscope::getCurveNetwork("patch_boundaries")
+      ->setColor(glm::vec3(0.670, 0.673, 0.292));
+  polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
+  polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
+  polyscope::getCurveNetwork("patch_boundaries")->setEnabled(false);
 }
 
 // deprecated
@@ -636,6 +755,595 @@ void CloughTocherSurface::
   for (const auto &pair : m_affine_manifold.v_to_lagrange_node_map) {
     v_map_file << pair.first << " " << pair.second << std::endl;
   }
+}
+
+double midpoint_degenerate_helper(const EdgeManifoldChart &e_chart,
+                                  const int64_t fid) {
+  double a;
+  if (e_chart.is_boundary) {
+    return 0.5;
+  }
+
+  const auto &left_pos = e_chart.left_vertex_uv_position;
+  const auto &right_pos = e_chart.right_vertex_uv_position;
+  const auto &top_pos = e_chart.top_vertex_uv_position;
+  const auto &bot_pos = e_chart.bottom_vertex_uv_position;
+
+  // r1: pijm r2: pij r3: pji r4: pijm'  r is uv pos
+  if (e_chart.top_face_index == fid) {
+    const Eigen::Vector2d r1 = 4. / 9. * right_pos + 1. / 9. * top_pos +
+                               4. / 9. * left_pos; // (4/9, 1/9)
+    const Eigen::Vector2d r2 =
+        1. / 3. * right_pos + 0 * top_pos + 2. / 3. * left_pos; // (1/3, 0)
+    const Eigen::Vector2d r3 =
+        2. / 3. * right_pos + 0 * top_pos + 1. / 3. * left_pos; // (2/3, 0)
+    const Eigen::Vector2d r4 = 4. / 9. * left_pos + 1. / 9. * bot_pos +
+                               4. / 9. * right_pos; // (4/9, 1/9) in other tri
+    Eigen::Matrix3d r2r1r4, r1r3r4;
+    r2r1r4 << r2[0], r2[1], 1, r1[0], r1[1], 1, r4[0], r4[1], 1;
+    r1r3r4 << r1[0], r1[1], 1, r3[0], r3[1], 1, r4[0], r4[1], 1;
+
+    double r2r1r4_det = r2r1r4.determinant();
+    double r1r3r4_det = r1r3r4.determinant();
+
+    a = r2r1r4_det / (r2r1r4_det + r1r3r4_det);
+
+  } else {
+    const Eigen::Vector2d r1 = 4. / 9. * left_pos + 1. / 9. * bot_pos +
+                               4. / 9. * right_pos; // (4/9, 1/9)
+    const Eigen::Vector2d r2 =
+        1. / 3. * left_pos + 0 * bot_pos + 2. / 3. * right_pos; // (1/3, 0)
+    const Eigen::Vector2d r3 =
+        2. / 3. * left_pos + 0 * bot_pos + 1. / 3. * right_pos; // (2/3, 0)
+    const Eigen::Vector2d r4 = 4. / 9. * right_pos + 1. / 9. * top_pos +
+                               4. / 9. * left_pos; // (4/9, 1/9) in other tri
+    Eigen::Matrix3d r2r1r4, r1r3r4;
+    r2r1r4 << r2[0], r2[1], 1, r1[0], r1[1], 1, r4[0], r4[1], 1;
+    r1r3r4 << r1[0], r1[1], 1, r3[0], r3[1], 1, r4[0], r4[1], 1;
+
+    double r2r1r4_det = r2r1r4.determinant();
+    double r1r3r4_det = r1r3r4.determinant();
+
+    a = r2r1r4_det / (r2r1r4_det + r1r3r4_det);
+  }
+
+  assert(a > -1e-12 && a < 1 + 1e-12);
+  if (!(a > -1e-12 && a < 1 + 1e-12)) {
+    spdlog::warn("a is {}, not in [0,1]", a);
+  }
+
+  return a;
+}
+
+void CloughTocherSurface::
+    compute_degenerate_bezier_control_points_special_midpoint(
+        const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
+  m_degenerated_bc_special.resize(m_affine_manifold.m_lagrange_nodes.size());
+  std::cout << m_degenerated_bc_special.size() << std::endl;
+
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    int64_t patch_id = f_chart.face_index;
+
+    const auto &global_F = F.row(patch_id);
+
+    // endpoints
+    m_degenerated_bc_special[l_nodes[0]] = V.row(global_F[0]);
+    m_degenerated_bc_special[l_nodes[1]] = V.row(global_F[1]);
+    m_degenerated_bc_special[l_nodes[2]] = V.row(global_F[2]);
+
+    // edge points
+    m_degenerated_bc_special[l_nodes[3]] = m_degenerated_bc_special[l_nodes[0]];
+    m_degenerated_bc_special[l_nodes[4]] = m_degenerated_bc_special[l_nodes[1]];
+    m_degenerated_bc_special[l_nodes[5]] = m_degenerated_bc_special[l_nodes[1]];
+    m_degenerated_bc_special[l_nodes[6]] = m_degenerated_bc_special[l_nodes[2]];
+    m_degenerated_bc_special[l_nodes[7]] = m_degenerated_bc_special[l_nodes[2]];
+    m_degenerated_bc_special[l_nodes[8]] = m_degenerated_bc_special[l_nodes[0]];
+
+    // mid points
+    // p01m
+    const auto &e01 = m_affine_manifold.get_edge_chart(patch_id, 2);
+    double a01m = midpoint_degenerate_helper(e01, patch_id);
+    m_degenerated_bc_special[l_nodes[9]] =
+        (1 - a01m) * m_degenerated_bc_special[l_nodes[0]] +
+        a01m * m_degenerated_bc_special[l_nodes[1]];
+
+    const auto &e12 = m_affine_manifold.get_edge_chart(patch_id, 0);
+    double a12m = midpoint_degenerate_helper(e12, patch_id);
+    m_degenerated_bc_special[l_nodes[10]] =
+        (1 - a12m) * m_degenerated_bc_special[l_nodes[1]] +
+        a12m * m_degenerated_bc_special[l_nodes[2]];
+
+    const auto &e20 = m_affine_manifold.get_edge_chart(patch_id, 1);
+    double a20m = midpoint_degenerate_helper(e20, patch_id);
+    m_degenerated_bc_special[l_nodes[11]] =
+        (1 - a20m) * m_degenerated_bc_special[l_nodes[2]] +
+        a20m * m_degenerated_bc_special[l_nodes[0]];
+
+    // interior 1
+    m_degenerated_bc_special[l_nodes[12]] =
+        (m_degenerated_bc_special[l_nodes[0]] +
+         m_degenerated_bc_special[l_nodes[3]] +
+         m_degenerated_bc_special[l_nodes[8]]) /
+        3.;
+
+    m_degenerated_bc_special[l_nodes[14]] =
+        (m_degenerated_bc_special[l_nodes[1]] +
+         m_degenerated_bc_special[l_nodes[5]] +
+         m_degenerated_bc_special[l_nodes[4]]) /
+        3.;
+
+    m_degenerated_bc_special[l_nodes[16]] =
+        (m_degenerated_bc_special[l_nodes[2]] +
+         m_degenerated_bc_special[l_nodes[7]] +
+         m_degenerated_bc_special[l_nodes[6]]) /
+        3.;
+
+    // interior 2
+    m_degenerated_bc_special[l_nodes[13]] =
+        (m_degenerated_bc_special[l_nodes[9]] +
+         m_degenerated_bc_special[l_nodes[11]] +
+         m_degenerated_bc_special[l_nodes[12]]) /
+        3.;
+
+    m_degenerated_bc_special[l_nodes[15]] =
+        (m_degenerated_bc_special[l_nodes[10]] +
+         m_degenerated_bc_special[l_nodes[9]] +
+         m_degenerated_bc_special[l_nodes[14]]) /
+        3.;
+
+    m_degenerated_bc_special[l_nodes[17]] =
+        (m_degenerated_bc_special[l_nodes[11]] +
+         m_degenerated_bc_special[l_nodes[10]] +
+         m_degenerated_bc_special[l_nodes[16]]) /
+        3.;
+    // center
+    m_degenerated_bc_special[l_nodes[18]] =
+        (m_degenerated_bc_special[l_nodes[13]] +
+         m_degenerated_bc_special[l_nodes[15]] +
+         m_degenerated_bc_special[l_nodes[17]]) /
+        3.;
+  }
+}
+
+void CloughTocherSurface::write_special_bc_to_msh(const std::string &filename) {
+  std::ofstream file(filename + ".msh");
+
+  /*
+ $MeshFormat
+   4.1 0 8     MSH4.1, ASCII
+   $EndMeshFormat
+ */
+
+  file << "$MeshFormat\n"
+       << "4.1 0 8\n"
+       << "$EndMeshFormat\n";
+
+  /*
+  subtri0: 0 1 18 3 4 14 15 13 12 9
+  b0 b1 bc b01 b10 b1c bc1 bc0 b0c b01^c
+  subtri1: 1 2 18 5 6 16 17 15 14 10
+  b1 b2 bc b12 b21 b2c bc2 bc1 b1c b12^c
+  subtri2: 2 0 18 7 8 12 13 17 16 11
+  b2 b0 bc b20 b02 b0c bc0 bc2 b2c b20^c
+  */
+
+  // m_affine_manifold.generate_lagrange_nodes();
+
+  // build faces
+  std::vector<std::array<int64_t, 10>> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    faces.push_back(
+        {{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+          l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}});
+    faces.push_back(
+        {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+          l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}});
+    faces.push_back(
+        {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+          l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}});
+  }
+  const auto &vertices = m_degenerated_bc_special;
+
+  file << "$Nodes\n";
+
+  const size_t node_size = vertices.size();
+  file << "1 " << node_size << " 1 " << node_size << "\n";
+  file << "2 1 0 " << node_size << "\n";
+
+  for (size_t i = 1; i <= node_size; ++i) {
+    file << i << "\n";
+  }
+
+  for (size_t i = 0; i < node_size; ++i) {
+    file << std::setprecision(16) << vertices[i][0] << " " << vertices[i][1]
+         << " " << vertices[i][2] << "\n";
+  }
+
+  file << "$EndNodes\n";
+
+  // write elements
+  // assert(m_patches.size() * 3 == faces.size());
+  const size_t element_size = faces.size();
+
+  file << "$Elements\n";
+  file << "1 " << element_size << " 1 " << element_size << "\n";
+  file << "2 1 21 " << element_size << "\n";
+  for (size_t i = 0; i < element_size; ++i) {
+    file << i + 1 << " ";
+    for (int j = 0; j < 10; ++j) {
+      file << faces[i][j] + 1 << " ";
+    }
+    file << "\n";
+  }
+
+  file << "$EndElements\n";
+}
+
+void CloughTocherSurface::compute_degenerate_bezier_control_points(
+    const Eigen::SparseMatrix<double> &f2f_matrix,
+    const std::vector<int> &independent_node_map, const Eigen::MatrixXd &V,
+    const Eigen::MatrixXi &F) {
+  Eigen::VectorXd degenerated_bc_expanded(independent_node_map.size());
+  degenerated_bc_expanded.setZero();
+
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+
+    int64_t patch_id = f_chart.face_index;
+    const auto &global_F = F.row(patch_id);
+
+    for (int i = 0; i < 3; ++i) {
+      // assign endpoint position, must be independent
+      degenerated_bc_expanded[l_nodes[0] * 3 + i] = V.row(global_F[0])[i];
+      degenerated_bc_expanded[l_nodes[1] * 3 + i] = V.row(global_F[1])[i];
+      degenerated_bc_expanded[l_nodes[2] * 3 + i] = V.row(global_F[2])[i];
+
+      // assign edge point position if independent
+      if (independent_node_map[l_nodes[3] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[3] * 3 + i] =
+            degenerated_bc_expanded[l_nodes[0] * 3 + i];
+      }
+      if (independent_node_map[l_nodes[4] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[4] * 3 + i] =
+            degenerated_bc_expanded[l_nodes[1] * 3 + i];
+      }
+      if (independent_node_map[l_nodes[5] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[5] * 3 + i] =
+            degenerated_bc_expanded[l_nodes[1] * 3 + i];
+      }
+      if (independent_node_map[l_nodes[6] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[6] * 3 + i] =
+            degenerated_bc_expanded[l_nodes[2] * 3 + i];
+      }
+      if (independent_node_map[l_nodes[7] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[7] * 3 + i] =
+            degenerated_bc_expanded[l_nodes[2] * 3 + i];
+      }
+      if (independent_node_map[l_nodes[8] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[8] * 3 + i] =
+            degenerated_bc_expanded[l_nodes[0] * 3 + i];
+      }
+
+      // assign midpoint if independent
+      if (independent_node_map[l_nodes[9] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[9] * 3 + i] =
+            (degenerated_bc_expanded[l_nodes[0] * 3 + i] +
+             degenerated_bc_expanded[l_nodes[1] * 3 + i]) /
+            2.;
+      }
+      if (independent_node_map[l_nodes[10] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[10] * 3 + i] =
+            (degenerated_bc_expanded[l_nodes[1] * 3 + i] +
+             degenerated_bc_expanded[l_nodes[2] * 3 + i]) /
+            2.;
+      }
+      if (independent_node_map[l_nodes[11] * 3 + i] == 1) {
+        degenerated_bc_expanded[l_nodes[11] * 3 + i] =
+            (degenerated_bc_expanded[l_nodes[2] * 3 + i] +
+             degenerated_bc_expanded[l_nodes[0] * 3 + i]) /
+            2.;
+      }
+    }
+  }
+
+  m_degenerated_bezier_control_points_expanded =
+      f2f_matrix * degenerated_bc_expanded;
+}
+
+void CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
+    std::string filename) {
+  std::ofstream file(filename + ".msh");
+
+  for (size_t i = 0; i < m_affine_manifold.m_lagrange_nodes.size(); ++i) {
+    m_degenerated_bezier_control_points.push_back(Eigen::Vector3d(
+        m_degenerated_bezier_control_points_expanded[i * 3 + 0],
+        m_degenerated_bezier_control_points_expanded[i * 3 + 1],
+        m_degenerated_bezier_control_points_expanded[i * 3 + 2]));
+  }
+
+  /*
+ $MeshFormat
+   4.1 0 8     MSH4.1, ASCII
+   $EndMeshFormat
+ */
+
+  file << "$MeshFormat\n"
+       << "4.1 0 8\n"
+       << "$EndMeshFormat\n";
+
+  /*
+  subtri0: 0 1 18 3 4 14 15 13 12 9
+  b0 b1 bc b01 b10 b1c bc1 bc0 b0c b01^c
+  subtri1: 1 2 18 5 6 16 17 15 14 10
+  b1 b2 bc b12 b21 b2c bc2 bc1 b1c b12^c
+  subtri2: 2 0 18 7 8 12 13 17 16 11
+  b2 b0 bc b20 b02 b0c bc0 bc2 b2c b20^c
+  */
+
+  // m_affine_manifold.generate_lagrange_nodes();
+
+  // build faces
+  std::vector<std::array<int64_t, 10>> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    faces.push_back(
+        {{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+          l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}});
+    faces.push_back(
+        {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+          l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}});
+    faces.push_back(
+        {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+          l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}});
+  }
+  const auto &vertices = m_degenerated_bezier_control_points;
+
+  file << "$Nodes\n";
+
+  const size_t node_size = vertices.size();
+  file << "1 " << node_size << " 1 " << node_size << "\n";
+  file << "2 1 0 " << node_size << "\n";
+
+  for (size_t i = 1; i <= node_size; ++i) {
+    file << i << "\n";
+  }
+
+  for (size_t i = 0; i < node_size; ++i) {
+    file << std::setprecision(16) << vertices[i][0] << " " << vertices[i][1]
+         << " " << vertices[i][2] << "\n";
+  }
+
+  file << "$EndNodes\n";
+
+  // write elements
+  // assert(m_patches.size() * 3 == faces.size());
+  const size_t element_size = faces.size();
+
+  file << "$Elements\n";
+  file << "1 " << element_size << " 1 " << element_size << "\n";
+  file << "2 1 21 " << element_size << "\n";
+  for (size_t i = 0; i < element_size; ++i) {
+    file << i + 1 << " ";
+    for (int j = 0; j < 10; ++j) {
+      file << faces[i][j] + 1 << " ";
+    }
+    file << "\n";
+  }
+
+  file << "$EndElements\n";
+}
+
+void CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
+    std::string filename, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
+  std::ofstream file(filename + ".msh");
+
+  /*
+    $MeshFormat
+      4.1 0 8     MSH4.1, ASCII
+      $EndMeshFormat
+    */
+
+  file << "$MeshFormat\n"
+       << "4.1 0 8\n"
+       << "$EndMeshFormat\n";
+
+  /*
+  subtri0: 0 1 18 3 4 14 15 13 12 9
+  b0 b1 bc b01 b10 b1c bc1 bc0 b0c b01^c
+  subtri1: 1 2 18 5 6 16 17 15 14 10
+  b1 b2 bc b12 b21 b2c bc2 bc1 b1c b12^c
+  subtri2: 2 0 18 7 8 12 13 17 16 11
+  b2 b0 bc b20 b02 b0c bc0 bc2 b2c b20^c
+  */
+
+  // m_affine_manifold.generate_lagrange_nodes();
+
+  // build faces
+  std::vector<std::array<int64_t, 10>> faces;
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+    faces.push_back(
+        {{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+          l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}});
+    faces.push_back(
+        {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+          l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}});
+    faces.push_back(
+        {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+          l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16], l_nodes[11]}});
+  }
+
+  // compute degenerated bezier control points
+  std::vector<Eigen::Vector3d> degenerated_bezier_control_points(
+      m_affine_manifold.m_lagrange_nodes.size());
+
+  for (const auto &f_chart : m_affine_manifold.m_face_charts) {
+    const auto &l_nodes = f_chart.lagrange_nodes;
+
+    // std::array<std::array<int64_t, 10>, 3> indices_sub = {
+    //     {{{l_nodes[0], l_nodes[1], l_nodes[18], l_nodes[3], l_nodes[4],
+    //        l_nodes[14], l_nodes[15], l_nodes[13], l_nodes[12], l_nodes[9]}},
+    //      {{l_nodes[1], l_nodes[2], l_nodes[18], l_nodes[5], l_nodes[6],
+    //        l_nodes[16], l_nodes[17], l_nodes[15], l_nodes[14], l_nodes[10]}},
+    //      {{l_nodes[2], l_nodes[0], l_nodes[18], l_nodes[7], l_nodes[8],
+    //        l_nodes[12], l_nodes[13], l_nodes[17], l_nodes[16],
+    //        l_nodes[11]}}}};
+
+    // fid in input
+    // int64_t patch_id = m_affine_manifold.m_lagrange_nodes[l_nodes[18]].first;
+    int64_t patch_id = f_chart.face_index;
+    const auto &global_F = F.row(patch_id);
+
+    // endpoints
+    degenerated_bezier_control_points[l_nodes[0]] = V.row(global_F[0]);
+    degenerated_bezier_control_points[l_nodes[1]] = V.row(global_F[1]);
+    degenerated_bezier_control_points[l_nodes[2]] = V.row(global_F[2]);
+
+    // const auto &v_charts = m_affine_manifold.m_vertex_charts;
+
+    // edges
+    degenerated_bezier_control_points[l_nodes[3]] =
+        degenerated_bezier_control_points[l_nodes[0]];
+    degenerated_bezier_control_points[l_nodes[4]] =
+        degenerated_bezier_control_points[l_nodes[1]];
+    degenerated_bezier_control_points[l_nodes[5]] =
+        degenerated_bezier_control_points[l_nodes[1]];
+    degenerated_bezier_control_points[l_nodes[6]] =
+        degenerated_bezier_control_points[l_nodes[2]];
+    degenerated_bezier_control_points[l_nodes[7]] =
+        degenerated_bezier_control_points[l_nodes[2]];
+    degenerated_bezier_control_points[l_nodes[8]] =
+        degenerated_bezier_control_points[l_nodes[0]];
+
+    // if (v_charts[l_nodes[0]].is_cone) {
+    //   degenerated_bezier_control_points[l_nodes[4]] =
+    //       degenerated_bezier_control_points[l_nodes[0]];
+    //   degenerated_bezier_control_points[l_nodes[7]] =
+    //       degenerated_bezier_control_points[l_nodes[0]];
+    // } else if (v_charts[l_nodes[1]].is_cone) {
+    //   degenerated_bezier_control_points[l_nodes[3]] =
+    //       degenerated_bezier_control_points[l_nodes[1]];
+    //   degenerated_bezier_control_points[l_nodes[6]] =
+    //       degenerated_bezier_control_points[l_nodes[1]];
+    // } else if (v_charts[l_nodes[2]].is_cone) {
+    //   degenerated_bezier_control_points[l_nodes[8]] =
+    //       degenerated_bezier_control_points[l_nodes[2]];
+    //   degenerated_bezier_control_points[l_nodes[5]] =
+    //       degenerated_bezier_control_points[l_nodes[2]];
+    // }
+
+    // midpoint
+    degenerated_bezier_control_points[l_nodes[9]] =
+        (degenerated_bezier_control_points[l_nodes[0]] +
+         degenerated_bezier_control_points[l_nodes[1]]) /
+        2.;
+    degenerated_bezier_control_points[l_nodes[10]] =
+        (degenerated_bezier_control_points[l_nodes[1]] +
+         degenerated_bezier_control_points[l_nodes[2]]) /
+        2.;
+    degenerated_bezier_control_points[l_nodes[11]] =
+        (degenerated_bezier_control_points[l_nodes[2]] +
+         degenerated_bezier_control_points[l_nodes[0]]) /
+        2.;
+
+    // if (v_charts[l_nodes[0]].is_cone) {
+    //   degenerated_bezier_control_points[l_nodes[11]] =
+    //       degenerated_bezier_control_points[l_nodes[0]];
+    //   degenerated_bezier_control_points[l_nodes[9]] =
+    //       degenerated_bezier_control_points[l_nodes[0]];
+    // } else if (v_charts[l_nodes[1]].is_cone) {
+    //   degenerated_bezier_control_points[l_nodes[9]] =
+    //       degenerated_bezier_control_points[l_nodes[1]];
+    //   degenerated_bezier_control_points[l_nodes[10]] =
+    //       degenerated_bezier_control_points[l_nodes[1]];
+    // } else if (v_charts[l_nodes[2]].is_cone) {
+    //   degenerated_bezier_control_points[l_nodes[10]] =
+    //       degenerated_bezier_control_points[l_nodes[2]];
+    //   degenerated_bezier_control_points[l_nodes[11]] =
+    //       degenerated_bezier_control_points[l_nodes[2]];
+    // }
+    // interior 1
+    degenerated_bezier_control_points[l_nodes[12]] =
+        (degenerated_bezier_control_points[l_nodes[0]] +
+         degenerated_bezier_control_points[l_nodes[3]] +
+         degenerated_bezier_control_points[l_nodes[8]]) /
+        3.;
+
+    degenerated_bezier_control_points[l_nodes[14]] =
+        (degenerated_bezier_control_points[l_nodes[1]] +
+         degenerated_bezier_control_points[l_nodes[5]] +
+         degenerated_bezier_control_points[l_nodes[4]]) /
+        3.;
+
+    degenerated_bezier_control_points[l_nodes[16]] =
+        (degenerated_bezier_control_points[l_nodes[2]] +
+         degenerated_bezier_control_points[l_nodes[7]] +
+         degenerated_bezier_control_points[l_nodes[6]]) /
+        3.;
+
+    // interior 2
+    degenerated_bezier_control_points[l_nodes[13]] =
+        (degenerated_bezier_control_points[l_nodes[9]] +
+         degenerated_bezier_control_points[l_nodes[11]] +
+         degenerated_bezier_control_points[l_nodes[12]]) /
+        3.;
+
+    degenerated_bezier_control_points[l_nodes[15]] =
+        (degenerated_bezier_control_points[l_nodes[10]] +
+         degenerated_bezier_control_points[l_nodes[9]] +
+         degenerated_bezier_control_points[l_nodes[14]]) /
+        3.;
+
+    degenerated_bezier_control_points[l_nodes[17]] =
+        (degenerated_bezier_control_points[l_nodes[11]] +
+         degenerated_bezier_control_points[l_nodes[10]] +
+         degenerated_bezier_control_points[l_nodes[16]]) /
+        3.;
+    // center
+    degenerated_bezier_control_points[l_nodes[18]] =
+        (degenerated_bezier_control_points[l_nodes[13]] +
+         degenerated_bezier_control_points[l_nodes[15]] +
+         degenerated_bezier_control_points[l_nodes[17]]) /
+        3.;
+  }
+
+  const auto &vertices = degenerated_bezier_control_points;
+
+  file << "$Nodes\n";
+
+  const size_t node_size = vertices.size();
+  file << "1 " << node_size << " 1 " << node_size << "\n";
+  file << "2 1 0 " << node_size << "\n";
+
+  for (size_t i = 1; i <= node_size; ++i) {
+    file << i << "\n";
+  }
+
+  for (size_t i = 0; i < node_size; ++i) {
+    file << std::setprecision(16) << vertices[i][0] << " " << vertices[i][1]
+         << " " << vertices[i][2] << "\n";
+  }
+
+  file << "$EndNodes\n";
+
+  // write elements
+  // assert(m_patches.size() * 3 == faces.size());
+  const size_t element_size = faces.size();
+
+  file << "$Elements\n";
+  file << "1 " << element_size << " 1 " << element_size << "\n";
+  file << "2 1 21 " << element_size << "\n";
+  for (size_t i = 0; i < element_size; ++i) {
+    file << i + 1 << " ";
+    for (int j = 0; j < 10; ++j) {
+      file << faces[i][j] + 1 << " ";
+    }
+    file << "\n";
+  }
+
+  file << "$EndElements\n";
 }
 
 void CloughTocherSurface::write_external_point_values_with_conn(
@@ -2768,7 +3476,7 @@ void CloughTocherSurface::bezier_cone_constraints_expanded(
     std::map<int64_t, bool> processed_vid; // record vid (edge chart) in one
                                            // ring that has been processed
     for (size_t i = 0; i < vids_one_ring.size(); ++i) {
-      processed_vid[i] = false;
+      processed_vid[vids_one_ring[i]] = false;
     }
     processed_vid[vid] = true;
 
