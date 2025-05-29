@@ -71,55 +71,50 @@ std::vector<Eigen::Vector3d> CloughTocherOptimizer::optimize_laplacian_energy(
 }
 
 std::vector<double> CloughTocherOptimizer::compute_face_energies(
-	const std::vector<Eigen::Vector3d> &bezier_control_points,
-	bool use_laplace_beltrami
-) {
-	const std::vector<Eigen::Vector3d>& p = bezier_control_points;
+    const std::vector<Eigen::Vector3d> &bezier_control_points,
+    bool use_laplace_beltrami) {
+  const std::vector<Eigen::Vector3d> &p = bezier_control_points;
 
-	// assemble IJV matrix entries
-	const auto &affine_manifold = get_affine_manifold();
-	int num_faces = affine_manifold.num_faces();
-	std::vector<double> face_energies(num_faces);
-	Eigen::SparseMatrix<double> stiffness_matrix;
-	stiffness_matrix.resize(19, 19);
-	std::vector<Eigen::Vector3d> local_control_points(19);
-	for (int fijk = 0; fijk < num_faces; ++fijk)
-	{
-		std::vector<Triplet> stiffness_matrix_trips;
-		FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
-		const auto &l_nodes = face_chart.lagrange_nodes;
-		std::array<std::array<int64_t, 10>, 3> local_nodes = get_local_micro_triangle_nodes();
-		if (use_laplace_beltrami)
-		{
-			for (int i = 0; i < 19; ++i)
-			{
-				local_control_points[i] = bezier_control_points[l_nodes[i]];
-			}
+  // assemble IJV matrix entries
+  const auto &affine_manifold = get_affine_manifold();
+  int num_faces = affine_manifold.num_faces();
+  std::vector<double> face_energies(num_faces);
+  Eigen::SparseMatrix<double> stiffness_matrix;
+  stiffness_matrix.resize(19, 19);
+  std::vector<Eigen::Vector3d> local_control_points(19);
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
+    std::vector<Triplet> stiffness_matrix_trips;
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    const auto &l_nodes = face_chart.lagrange_nodes;
+    std::array<std::array<int64_t, 10>, 3> local_nodes =
+        get_local_micro_triangle_nodes();
+    if (use_laplace_beltrami) {
+      for (int i = 0; i < 19; ++i) {
+        local_control_points[i] = bezier_control_points[l_nodes[i]];
+      }
 
-			assemble_local_laplace_beltrami_siffness_matrix(local_control_points, local_nodes,
-																							stiffness_matrix_trips);
-		} else {
-			assemble_local_laplacian_siffness_matrix(face_chart.face_uv_positions, local_nodes,
-																							stiffness_matrix_trips);
-		}
+      assemble_local_laplace_beltrami_siffness_matrix(
+          local_control_points, local_nodes, stiffness_matrix_trips);
+    } else {
+      assemble_local_laplacian_siffness_matrix(
+          face_chart.face_uv_positions, local_nodes, stiffness_matrix_trips);
+    }
 
-		// build matrix
-		stiffness_matrix.setFromTriplets(stiffness_matrix_trips.begin(),
-																		stiffness_matrix_trips.end());
+    // build matrix
+    stiffness_matrix.setFromTriplets(stiffness_matrix_trips.begin(),
+                                     stiffness_matrix_trips.end());
 
-		for (int i = 0; i < 19; ++i)
-		{
-			for (int j = 0; j < 19; ++j)
-			{
-				for (int d = 0; d < 3; ++d)
-				{
-					int I = l_nodes[i];
-					int J = l_nodes[j];
-					face_energies[fijk] += 0.5 * p[I][d] * p[J][d] * stiffness_matrix.coeff(i, j);
-				}
-			}
-		}
-	}
+    for (int i = 0; i < 19; ++i) {
+      for (int j = 0; j < 19; ++j) {
+        for (int d = 0; d < 3; ++d) {
+          int I = l_nodes[i];
+          int J = l_nodes[j];
+          face_energies[fijk] +=
+              0.5 * p[I][d] * p[J][d] * stiffness_matrix.coeff(i, j);
+        }
+      }
+    }
+  }
 
   return face_energies;
 }
@@ -127,14 +122,14 @@ std::vector<double> CloughTocherOptimizer::compute_face_energies(
 double CloughTocherOptimizer::compute_normalized_fitting_weight() const {
   const auto &V = get_vertices();
   const auto &faces = get_faces();
-	Eigen::VectorXd double_area;
-	igl::doublearea(V, faces, double_area);
-  //return fitting_weight;
-	double area = double_area.sum() / 2.;
-  //return fitting_weight / area;
-	int num_vertices = V.rows();
-  //return (1. / num_vertices) * fitting_weight;
-  // TODO: This is probably wrong; want to use 1/area.
+  Eigen::VectorXd double_area;
+  igl::doublearea(V, faces, double_area);
+  // return fitting_weight;
+  double area = double_area.sum() / 2.;
+  // return fitting_weight / area;
+  int num_vertices = V.rows();
+  // return (1. / num_vertices) * fitting_weight;
+  //  TODO: This is probably wrong; want to use 1/area.
   return (area / num_vertices) * fitting_weight;
 }
 
@@ -146,7 +141,7 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
   // get fixed matrices
   double k = compute_normalized_fitting_weight();
-	spdlog::info("Using normalized fitting weight {}", k);
+  spdlog::info("Using normalized fitting weight {}", k);
   const Eigen::SparseMatrix<double> &C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double> &F = get_full_to_ind_matrix();
   const Eigen::SparseMatrix<double> &P = get_position_matrix();
@@ -157,82 +152,87 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   // get derivative
   Eigen::VectorXd derivative = -k * C.transpose() * (P * p0);
 
-	Eigen::SparseMatrix<double> A, hessian;
-	std::vector<Eigen::Vector3d> optimized_control_points = bezier_control_points;
-	Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> hessian_inverse;
-	//Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> hessian_inverse;
+  Eigen::SparseMatrix<double> A, hessian;
+  std::vector<Eigen::Vector3d> optimized_control_points = bezier_control_points;
+  Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> hessian_inverse;
+  // Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> hessian_inverse;
 
-	timer.start();
-	bool use_parametric_metric = true;
-	if (use_parametric_metric) A = generate_laplace_beltrami_stiffness_matrix() / 2.; // TODO: remove factor of 2 once quadrature fixed
-	else A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
-	hessian = C.transpose() * ((A + k * P) * C);
-	hessian_inverse.compute(hessian);
+  timer.start();
+  bool use_parametric_metric = true;
+  if (use_parametric_metric)
+    A = generate_laplace_beltrami_stiffness_matrix() /
+        2.; // TODO: remove factor of 2 once quadrature fixed
+  else
+    A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+  hessian = C.transpose() * ((A + k * P) * C);
+  hessian_inverse.compute(hessian);
   double E_prev = std::numeric_limits<double>::infinity();
   double max_res_error = std::numeric_limits<double>::infinity();
-	for (int i = 0; i < iterations; ++i)
-	{
+  for (int i = 0; i < iterations; ++i) {
     // print initial energy
     Eigen::VectorXd N0 = F * p0;
     spdlog::info("initial energy is {}", E_prev);
 
-		// solve for optimal solution
-		Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
-		Eigen::VectorXd p1 = C * N1;
-		Eigen::VectorXd res = (hessian * N1) + derivative;
-		double res_error = res.cwiseAbs().maxCoeff();
-		spdlog::info("residual error is {}", res_error);
+    // solve for optimal solution
+    Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
+    Eigen::VectorXd p1 = C * N1;
+    Eigen::VectorXd res = (hessian * N1) + derivative;
+    double res_error = res.cwiseAbs().maxCoeff();
+    spdlog::info("residual error is {}", res_error);
 
-		double t = (i == 0) ? 1.0 : 0.5;
-		//double t = 1.0;
-		double E = E_prev;
-		Eigen::VectorXd N, p;
-		while ((E >= E_prev) || (res_error > max_res_error))
-		{
-			N = t * N1 + (1 - t) * N0;
-			p = C * N;
-			double interp_error = (p - (t * p1 + (1 - t) * p0)).cwiseAbs().maxCoeff();
-			spdlog::info("control points in range [{}, {}]", p.minCoeff(), p.maxCoeff());
-			spdlog::info("interpolation error is {}", interp_error);
-			optimized_control_points = build_control_points(p);
+    double t = (i == 0) ? 1.0 : 0.5;
+    // double t = 1.0;
+    double E = E_prev;
+    Eigen::VectorXd N, p;
+    while ((E >= E_prev) || (res_error > max_res_error)) {
+      N = t * N1 + (1 - t) * N0;
+      p = C * N;
+      double interp_error = (p - (t * p1 + (1 - t) * p0)).cwiseAbs().maxCoeff();
+      spdlog::info("control points in range [{}, {}]", p.minCoeff(),
+                   p.maxCoeff());
+      spdlog::info("interpolation error is {}", interp_error);
+      optimized_control_points = build_control_points(p);
 
-			// compute hessian
-			timer.start();
-			A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
-			hessian = C.transpose() * ((A + k * P) * C);
-			spdlog::info("matrix construction took {} s", timer.getElapsedTime());
+      // compute hessian
+      timer.start();
+      A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+      hessian = C.transpose() * ((A + k * P) * C);
+      spdlog::info("matrix construction took {} s", timer.getElapsedTime());
 
-			// invert hessian
-			timer.start();
-			hessian_inverse.compute(hessian);
-			spdlog::info("matrix solve took {} s", timer.getElapsedTime());
+      // invert hessian
+      timer.start();
+      hessian_inverse.compute(hessian);
+      spdlog::info("matrix solve took {} s", timer.getElapsedTime());
 
-			E = evaluate_quadratic_energy(hessian, derivative, E0, N);
-			spdlog::info("optimized energy for step {} is {}", t, E);
+      E = evaluate_quadratic_energy(hessian, derivative, E0, N);
+      spdlog::info("optimized energy for step {} is {}", t, E);
 
-			Eigen::VectorXd N_next = -hessian_inverse.solve(derivative);
-			Eigen::VectorXd res = (hessian * N_next) + derivative;
-			res_error = res.cwiseAbs().maxCoeff();
-			spdlog::info("residual error is {}", res_error);
+      Eigen::VectorXd N_next = -hessian_inverse.solve(derivative);
+      Eigen::VectorXd res = (hessian * N_next) + derivative;
+      res_error = res.cwiseAbs().maxCoeff();
+      spdlog::info("residual error is {}", res_error);
 
-			t = t / 2.;
-			if (t < 1e-10) break;
-		}
+      t = t / 2.;
+      if (t < 1e-10)
+        break;
+    }
 
-		// check that solution satisfies constraints
-		Eigen::VectorXd pr = C * (F * p);
-		spdlog::info("constraint reconstruction error is {}",
-								(pr - p).cwiseAbs().maxCoeff());
+    // check that solution satisfies constraints
+    Eigen::VectorXd pr = C * (F * p);
+    spdlog::info("constraint reconstruction error is {}",
+                 (pr - p).cwiseAbs().maxCoeff());
 
-		p0 = p;
+    p0 = p;
     E_prev = E;
-    max_res_error = std::max(1e-4, res_error * 10); // allow order of magnitude growth
+    max_res_error =
+        std::max(1e-4, res_error * 10); // allow order of magnitude growth
 
     // exit if done
-    if (t < 1e-10) break;
-	}
-	
-	return optimized_control_points;
+    if (t < 1e-10)
+      break;
+  }
+
+  return optimized_control_points;
 }
 
 double CloughTocherOptimizer::evaluate_energy(
@@ -501,27 +501,26 @@ const std::array<PlanarPoint, 19> CT_nodes = {{
 }};
 
 Eigen::SparseMatrix<double>
-CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const
-{
-	// assemble IJV matrix entries
-	const auto &affine_manifold = get_affine_manifold();
-	std::vector<Triplet> stiffness_matrix_trips;
-	int num_faces = affine_manifold.num_faces();
-	std::vector<Eigen::Vector3d> bezier_control_points(19);
-	Eigen::Matrix<double, 10, 10> p3_lag2bezier_matrix = p3_lag2bezier_m();
-	std::array<int64_t, 10> perm = {0, 9, 3, 4, 7, 8, 6, 2, 1, 5};
-	double cp_3d[10][3];
-	double A[10][10];
-	std::array<std::array<int64_t, 10>, 3> nodes = get_local_micro_triangle_nodes();
-	for (int fijk = 0; fijk < num_faces; ++fijk)
-	{
-		FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
-		const auto& P = face_chart.face_uv_positions;
-		Eigen::Vector3d Vi = {P[0][0], P[0][1], 0.};
-		Eigen::Vector3d Vj = {P[1][0], P[1][1], 0.};
-		Eigen::Vector3d Vk = {P[2][0], P[2][1], 0.};
-		std::array<std::array<int64_t, 10>, 3> patch_indices =
-				get_micro_triangle_nodes(fijk);
+CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const {
+  // assemble IJV matrix entries
+  const auto &affine_manifold = get_affine_manifold();
+  std::vector<Triplet> stiffness_matrix_trips;
+  int num_faces = affine_manifold.num_faces();
+  std::vector<Eigen::Vector3d> bezier_control_points(19);
+  Eigen::Matrix<double, 10, 10> p3_lag2bezier_matrix = p3_lag2bezier_m();
+  std::array<int64_t, 10> perm = {0, 9, 3, 4, 7, 8, 6, 2, 1, 5};
+  double cp_3d[10][3];
+  double A[10][10];
+  std::array<std::array<int64_t, 10>, 3> nodes =
+      get_local_micro_triangle_nodes();
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    const auto &P = face_chart.face_uv_positions;
+    Eigen::Vector3d Vi = {P[0][0], P[0][1], 0.};
+    Eigen::Vector3d Vj = {P[1][0], P[1][1], 0.};
+    Eigen::Vector3d Vk = {P[2][0], P[2][1], 0.};
+    std::array<std::array<int64_t, 10>, 3> patch_indices =
+        get_micro_triangle_nodes(fijk);
 
     for (int n = 0; n < 3; ++n) {
       // subtri i
@@ -781,7 +780,7 @@ energy_hessian_inverse; OptimizationParameters optimization_params;
 affine_manifold, optimization_params, fit_matrix, energy_hessian,
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 energy_hessian_inverse);
                                 //ct_surface.m_affine_manifold.generate_lagrange_nodes();
-                                //ct_surface.m_affine_manifold.compute_edge_global_uv_mappings();
+
 
                                 // TODO: Add option to pass in
                                 Eigen::MatrixXd v_normals;
@@ -940,28 +939,28 @@ std::vector<Eigen::Vector3d>
 generate_linear_clough_tocher_surface(CloughTocherSurface &ct_surface,
                                       const Eigen::MatrixXd &V) {
 
-	// TODO: Obtained from affine_manifold.cpp. Make standalone function
-	const std::array<PlanarPoint, 19> CT_nodes = {{
-			PlanarPoint(1., 0.),           // b0    0
-			PlanarPoint(0., 1.),           // b1    1
-			PlanarPoint(0., 0.),           // b2    2
-			PlanarPoint(2. / 3., 1. / 3.), // b01   3
-			PlanarPoint(1. / 3., 2. / 3.), // b10   4
-			PlanarPoint(0., 2. / 3.),      // b12   5
-			PlanarPoint(0., 1. / 3.),      // b21   6
-			PlanarPoint(1. / 3., 0.),      // b20   7
-			PlanarPoint(2. / 3., 0.),      // b02   8
-			PlanarPoint(4. / 9., 4. / 9.), // b01^c 9
-			PlanarPoint(1. / 9., 4. / 9.), // b12^c 10
-			PlanarPoint(4. / 9., 1. / 9.), // b20^c 11
-			PlanarPoint(7. / 9., 1. / 9.), // b0c   12
-			PlanarPoint(5. / 9., 2. / 9.), // bc0   13
-			PlanarPoint(1. / 9., 7. / 9.), // b1c   14
-			PlanarPoint(2. / 9., 5. / 9.), // bc1   15
-			PlanarPoint(1. / 9., 1. / 9.), // b2c   16
-			PlanarPoint(2. / 9., 2. / 9.), // bc2   17
-			PlanarPoint(1. / 3., 1. / 3.), // bc    18
-	}};
+  // TODO: Obtained from affine_manifold.cpp. Make standalone function
+  const std::array<PlanarPoint, 19> CT_nodes = {{
+      PlanarPoint(1., 0.),           // b0    0
+      PlanarPoint(0., 1.),           // b1    1
+      PlanarPoint(0., 0.),           // b2    2
+      PlanarPoint(2. / 3., 1. / 3.), // b01   3
+      PlanarPoint(1. / 3., 2. / 3.), // b10   4
+      PlanarPoint(0., 2. / 3.),      // b12   5
+      PlanarPoint(0., 1. / 3.),      // b21   6
+      PlanarPoint(1. / 3., 0.),      // b20   7
+      PlanarPoint(2. / 3., 0.),      // b02   8
+      PlanarPoint(4. / 9., 4. / 9.), // b01^c 9
+      PlanarPoint(1. / 9., 4. / 9.), // b12^c 10
+      PlanarPoint(4. / 9., 1. / 9.), // b20^c 11
+      PlanarPoint(7. / 9., 1. / 9.), // b0c   12
+      PlanarPoint(5. / 9., 2. / 9.), // bc0   13
+      PlanarPoint(1. / 9., 7. / 9.), // b1c   14
+      PlanarPoint(2. / 9., 5. / 9.), // bc1   15
+      PlanarPoint(1. / 9., 1. / 9.), // b2c   16
+      PlanarPoint(2. / 9., 2. / 9.), // bc2   17
+      PlanarPoint(1. / 3., 1. / 3.), // bc    18
+  }};
 
   int num_nodes = ct_surface.m_lagrange_node_values.size();
   std::vector<Eigen::Vector3d> lagrange_control_points(num_nodes);
@@ -989,19 +988,15 @@ generate_linear_clough_tocher_surface(CloughTocherSurface &ct_surface,
   ct_surface.lag2bezier_full_mat(l2b_mat);
 
   Eigen::MatrixXd lagrange_matrix(num_nodes, 3);
-  for (int64_t i = 0; i < num_nodes; ++i)
-  {
-    for (int j = 0; j < 3; ++j)
-    {
+  for (int64_t i = 0; i < num_nodes; ++i) {
+    for (int j = 0; j < 3; ++j) {
       lagrange_matrix(i, j) = lagrange_control_points[i][j];
     }
   }
   Eigen::MatrixXd bezier_matrix = l2b_mat * lagrange_matrix;
   std::vector<Eigen::Vector3d> bezier_control_points(num_nodes);
-  for (int64_t i = 0; i < num_nodes; ++i)
-  {
-    for (int j = 0; j < 3; ++j)
-    {
+  for (int64_t i = 0; i < num_nodes; ++i) {
+    for (int j = 0; j < 3; ++j) {
       bezier_control_points[i][j] = bezier_matrix(i, j);
     }
   }
@@ -1009,45 +1004,41 @@ generate_linear_clough_tocher_surface(CloughTocherSurface &ct_surface,
   return bezier_control_points;
 }
 
-void set_bezier_control_points(CloughTocherSurface &ct_surface,
-                const std::vector<Eigen::Vector3d> &bezier_control_points)
-{
+void set_bezier_control_points(
+    CloughTocherSurface &ct_surface,
+    const std::vector<Eigen::Vector3d> &bezier_control_points) {
   Eigen::SparseMatrix<double, 1> b2l_mat;
   ct_surface.bezier2lag_full_mat(b2l_mat);
 
   int node_cnt = bezier_control_points.size();
   Eigen::MatrixXd bezier_matrix(node_cnt, 3);
-  for (int64_t i = 0; i < node_cnt; ++i)
-  {
-    for (int j = 0; j < 3; ++j)
-    {
+  for (int64_t i = 0; i < node_cnt; ++i) {
+    for (int j = 0; j < 3; ++j) {
       bezier_matrix(i, j) = bezier_control_points[i][j];
     }
   }
 
   Eigen::MatrixXd lagrange_matrix = b2l_mat * bezier_matrix;
   std::vector<Eigen::Vector3d> lagrange_control_points(node_cnt);
-  for (int64_t i = 0; i < node_cnt; ++i)
-  {
-    for (int j = 0; j < 3; ++j)
-    {
+  for (int64_t i = 0; i < node_cnt; ++i) {
+    for (int j = 0; j < 3; ++j) {
       lagrange_control_points[i][j] = lagrange_matrix(i, j);
     }
   }
 
-  const auto& affine_manifold = ct_surface.m_affine_manifold;
-  for (int fijk = 0; fijk < affine_manifold.num_faces(); ++fijk)
-  {
+  const auto &affine_manifold = ct_surface.m_affine_manifold;
+  for (int fijk = 0; fijk < affine_manifold.num_faces(); ++fijk) {
     std::array<Eigen::Vector2d, 19> planar_control_points;
     std::array<Eigen::Vector3d, 19> local_control_points;
     FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
     const auto &l_nodes = face_chart.lagrange_nodes;
-    for (int i = 0; i < 19; ++i)
-    {
-      planar_control_points[i] = affine_manifold.m_lagrange_nodes[l_nodes[i]].second;
+    for (int i = 0; i < 19; ++i) {
+      planar_control_points[i] =
+          affine_manifold.m_lagrange_nodes[l_nodes[i]].second;
       local_control_points[i] = lagrange_control_points[l_nodes[i]];
     }
-    ct_surface.m_patches[fijk].set_lagrange_nodes(planar_control_points, local_control_points);
+    ct_surface.m_patches[fijk].set_lagrange_nodes(planar_control_points,
+                                                  local_control_points);
   }
 }
 
@@ -1060,10 +1051,8 @@ void write_mesh(CloughTocherSurface &ct_surface,
 
   int node_cnt = bezier_control_points.size();
   Eigen::MatrixXd bezier_matrix(node_cnt, 3);
-  for (int64_t i = 0; i < node_cnt; ++i)
-  {
-    for (int j = 0; j < 3; ++j)
-    {
+  for (int64_t i = 0; i < node_cnt; ++i) {
+    for (int j = 0; j < 3; ++j) {
       bezier_matrix(i, j) = bezier_control_points[i][j];
     }
   }
@@ -1073,32 +1062,27 @@ void write_mesh(CloughTocherSurface &ct_surface,
 }
 
 // write edge geometry to file
-void write_polylines_to_obj(
-    const std::string& filename,
-    const std::vector<SpatialVector>& points,
-    const std::vector<std::vector<int>>& polylines
-) {
-    // write all feature edge vertices
-    std::ofstream output_file(filename, std::ios::out | std::ios::trunc);
-    int num_points = points.size();
-    for (int vi = 0; vi < num_points; ++vi)
-    {
-        output_file << "v ";
-        for (int i = 0; i < 3; ++i)
-        {
-            output_file << std::fixed << std::setprecision(17) << points[vi][i] << " ";
-        }
-        output_file << std::endl;
+void write_polylines_to_obj(const std::string &filename,
+                            const std::vector<SpatialVector> &points,
+                            const std::vector<std::vector<int>> &polylines) {
+  // write all feature edge vertices
+  std::ofstream output_file(filename, std::ios::out | std::ios::trunc);
+  int num_points = points.size();
+  for (int vi = 0; vi < num_points; ++vi) {
+    output_file << "v ";
+    for (int i = 0; i < 3; ++i) {
+      output_file << std::fixed << std::setprecision(17) << points[vi][i]
+                  << " ";
     }
-    for (const auto& polyline : polylines)
-    {
-        int length = polyline.size();
-        for (int i = 0; i < length-1; ++i)
-        {
-          int j = (i + 1) % length;
-          output_file << "l " << polyline[i] + 1 << " " << polyline[j] + 1 << std::endl;
-
-        }
+    output_file << std::endl;
+  }
+  for (const auto &polyline : polylines) {
+    int length = polyline.size();
+    for (int i = 0; i < length - 1; ++i) {
+      int j = (i + 1) % length;
+      output_file << "l " << polyline[i] + 1 << " " << polyline[j] + 1
+                  << std::endl;
     }
-    output_file.close();
+  }
+  output_file.close();
 }

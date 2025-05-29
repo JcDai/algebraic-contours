@@ -39,8 +39,7 @@ int main(int argc, char *argv[]) {
       ->check(CLI::PositiveNumber);
   app.add_option("-n,--iterations", iterations,
                  "Number of iterations of optimization");
-  app.add_option("--scale", scale,
-                 "Scale input mesh");
+  app.add_option("--scale", scale, "Scale input mesh");
   app.add_option("-o, --output", output_name, "Output file prefix");
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
   CLI11_PARSE(app, argc, argv);
@@ -56,10 +55,10 @@ int main(int argc, char *argv[]) {
   Eigen::MatrixXd V, uv, N;
   Eigen::MatrixXi F, FT, FN;
   igl::readOBJ(input_filename, V, uv, N, F, FT, FN);
-  if (scale != 1.) V *= scale;
+  if (scale != 1.)
+    V *= scale;
   AffineManifold affine_manifold(F, uv, FT);
   affine_manifold.generate_lagrange_nodes();
-  affine_manifold.compute_edge_global_uv_mappings();
 
   // build initial surface
   spdlog::info("Computing spline surface");
@@ -78,7 +77,8 @@ int main(int argc, char *argv[]) {
       "CT_degenerate_cubic_bezier_points", V, F);
   std::vector<Eigen::Vector3d> bezier_control_points =
       generate_linear_clough_tocher_surface(ct_surface, V);
-  write_mesh(ct_surface, bezier_control_points, join_path(output_name, "linear"));
+  write_mesh(ct_surface, bezier_control_points,
+             join_path(output_name, "linear"));
 
   // initialize optimizer
   CloughTocherOptimizer optimizer(V, F, affine_manifold);
@@ -87,13 +87,15 @@ int main(int argc, char *argv[]) {
   // optimize the bezier nodes with laplacian energy
   std::vector<Eigen::Vector3d> laplacian_control_points =
       optimizer.optimize_laplacian_energy(bezier_control_points);
-  write_mesh(ct_surface, laplacian_control_points, join_path(output_name, "laplacian_mesh"));
+  write_mesh(ct_surface, laplacian_control_points,
+             join_path(output_name, "laplacian_mesh"));
 
   // optimize the bezier nodes with laplace beltrami energy
   std::vector<Eigen::Vector3d> laplace_beltrami_control_points =
       optimizer.optimize_laplace_beltrami_energy(bezier_control_points,
                                                  iterations);
-  write_mesh(ct_surface, laplace_beltrami_control_points, join_path(output_name, "laplace_beltrami_mesh"));
+  write_mesh(ct_surface, laplace_beltrami_control_points,
+             join_path(output_name, "laplace_beltrami_mesh"));
 
   set_bezier_control_points(ct_surface, laplace_beltrami_control_points);
   Eigen::MatrixXd V_out;
@@ -104,9 +106,12 @@ int main(int argc, char *argv[]) {
   std::vector<SpatialVector> points;
   std::vector<std::vector<int>> polylines;
   ct_surface.discretize_patch_boundaries(3, points, polylines, true);
-  write_polylines_to_obj(join_path(output_name, "patch_boundaries.obj"), points, polylines);
+  write_polylines_to_obj(join_path(output_name, "patch_boundaries.obj"), points,
+                         polylines);
   ct_surface.discretize_patch_boundaries(3, points, polylines, false);
-  write_polylines_to_obj(join_path(output_name, "interior_patch_boundaries.obj"), points, polylines);
+  write_polylines_to_obj(
+      join_path(output_name, "interior_patch_boundaries.obj"), points,
+      polylines);
 
   // write lag2bezier mat for c1meshing soft constraint
   Eigen::SparseMatrix<double, 1> l2b_mat;
@@ -115,8 +120,7 @@ int main(int argc, char *argv[]) {
 
   ct_surface.add_surface_to_viewer({1, 0.4, 0.3}, 3);
   polyscope::screenshot(join_path(output_name, "render.png"));
-  if (visualize)
-  {
+  if (visualize) {
     polyscope::show();
   }
 

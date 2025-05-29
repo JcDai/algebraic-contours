@@ -167,7 +167,6 @@ int main(int argc, char *argv[]) {
   // important !!! call the following two before compute constraints, but only
   // once!!!
   ct_surface.m_affine_manifold.generate_lagrange_nodes();
-  ct_surface.m_affine_manifold.compute_edge_global_uv_mappings();
 
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
       output_name + "_from_lagrange_nodes");

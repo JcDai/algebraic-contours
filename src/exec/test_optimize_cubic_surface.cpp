@@ -82,8 +82,7 @@ int main(int argc, char *argv[]) {
   igl::readOBJ(input_filename, V, uv, N, F, FT, FN);
   AffineManifold affine_manifold(F, uv, FT);
   affine_manifold.generate_lagrange_nodes();
-  affine_manifold.compute_edge_global_uv_mappings();
-  //affine_manifold.view(V);
+  // affine_manifold.view(V);
 
   // build initial surface
   spdlog::info("Computing spline surface");
@@ -95,8 +94,8 @@ int main(int argc, char *argv[]) {
                                  fit_matrix, energy_hessian,
                                  energy_hessian_inverse);
   ct_surface.add_surface_to_viewer({1, 0, 0}, 3);
-  //ct_surface.m_patches[0].view();
-  //polyscope::show();
+  // ct_surface.m_patches[0].view();
+  // polyscope::show();
 
   // WARNING: surface writing needed to generate points
   // TODO: make part of initialization
@@ -113,11 +112,12 @@ int main(int argc, char *argv[]) {
             << std::endl;
 
   // get initial bezier points
-  std::vector<Eigen::Vector3d> bezier_control_points = ct_surface.m_bezier_control_points;
+  std::vector<Eigen::Vector3d> bezier_control_points =
+      ct_surface.m_bezier_control_points;
   set_bezier_control_points(ct_surface, bezier_control_points);
   ct_surface.add_surface_to_viewer({1, 0, 0}, 3);
-  //ct_surface.m_patches[0].view();
-  //polyscope::show();
+  // ct_surface.m_patches[0].view();
+  // polyscope::show();
   write_mesh(ct_surface, bezier_control_points, "initial_mesh");
 
   // map bezier points to original positions
@@ -146,8 +146,11 @@ int main(int argc, char *argv[]) {
   write_mesh(ct_surface, laplacian_control_points, "laplacian_mesh");
 
   // optimize the bezier nodes with laplace beltrami energy
-  std::vector<Eigen::Vector3d> laplace_beltrami_control_points = optimizer.optimize_laplace_beltrami_energy(bezier_control_points, iterations);
-  write_mesh(ct_surface, laplace_beltrami_control_points, "laplace_beltrami_mesh");
+  std::vector<Eigen::Vector3d> laplace_beltrami_control_points =
+      optimizer.optimize_laplace_beltrami_energy(bezier_control_points,
+                                                 iterations);
+  write_mesh(ct_surface, laplace_beltrami_control_points,
+             "laplace_beltrami_mesh");
   set_bezier_control_points(ct_surface, laplace_beltrami_control_points);
   ct_surface.add_surface_to_viewer({1, 0.4, 0.3}, 3);
   Eigen::MatrixXd V_out;
@@ -160,9 +163,10 @@ int main(int argc, char *argv[]) {
   ct_surface.discretize_patch_boundaries(3, points, polylines);
   write_polylines("patch_boundaries.obj", points, polylines);
 
-
-  std::vector<double> laplacian_energies = optimizer.compute_face_energies(laplace_beltrami_control_points, false);
-  std::vector<double> lb_energies = optimizer.compute_face_energies(laplace_beltrami_control_points, true);
+  std::vector<double> laplacian_energies =
+      optimizer.compute_face_energies(laplace_beltrami_control_points, false);
+  std::vector<double> lb_energies =
+      optimizer.compute_face_energies(laplace_beltrami_control_points, true);
 
   double laplacian_energy = 0.;
   double lb_energy = 0.;
@@ -171,7 +175,8 @@ int main(int argc, char *argv[]) {
     energy_ratio[fijk] = lb_energies[fijk] / laplacian_energies[fijk];
     laplacian_energy += laplacian_energies[fijk];
     lb_energy += lb_energies[fijk];
-    // spdlog::info("face energies are {} and {}", laplacian_energies[fijk], lb_energies[fijk]);
+    // spdlog::info("face energies are {} and {}", laplacian_energies[fijk],
+    // lb_energies[fijk]);
   }
   spdlog::info("total laplacian energy is {}", laplacian_energy);
   spdlog::info("total laplace beltrami energy is {}", lb_energy);
