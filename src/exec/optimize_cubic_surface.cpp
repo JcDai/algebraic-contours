@@ -55,8 +55,25 @@ int main(int argc, char *argv[]) {
   Eigen::MatrixXd V, uv, N;
   Eigen::MatrixXi F, FT, FN;
   igl::readOBJ(input_filename, V, uv, N, F, FT, FN);
+  spdlog::info("{} vertices", V.rows());
   if (scale != 1.)
     V *= scale;
+
+  Eigen::VectorXd double_area;
+  igl::doublearea(V, F, double_area);
+  double area = double_area.sum() / 2.;
+  igl::doublearea(uv, FT, double_area);
+  double uv_area = double_area.sum() / 2.;
+  spdlog::info("embedding area: {}", area);
+  spdlog::info("uv area: {}", uv_area);
+
+  // normalize area
+  spdlog::info("normalizing uv area");
+  uv *= std::sqrt(area / uv_area);
+  igl::doublearea(uv, FT, double_area);
+  uv_area = double_area.sum() / 2.;
+  spdlog::info("new uv area: {}", uv_area);
+
   AffineManifold affine_manifold(F, uv, FT);
   affine_manifold.generate_lagrange_nodes();
 
@@ -119,6 +136,7 @@ int main(int argc, char *argv[]) {
   Eigen::saveMarket(l2b_mat, "CT_lag2bezier_matrix.txt");
 
   ct_surface.add_surface_to_viewer({1, 0.4, 0.3}, 3);
+  polyscope::registerSurfaceMesh("PL mesh", V, F);
   polyscope::screenshot(join_path(output_name, "render.png"));
   if (visualize) {
     polyscope::show();

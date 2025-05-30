@@ -89,8 +89,13 @@ public:
 
 	double compute_normalized_fitting_weight() const;
 
+	void initialize_data_log();
+	void write_data_log_entry();
+	void close_logs();
+
 private:
 	igl::Timer timer;
+	igl::Timer total_timer;
 	typedef Eigen::Matrix<double, 10, 10> CubicHessian;
 	typedef Eigen::Triplet<double> Triplet;
 
@@ -104,6 +109,23 @@ private:
 	AffineManifold m_affine_manifold;
 
 	Eigen::SparseMatrix<double> m_full2ind, m_ind2full;
+	
+	std::string output_dir = "./";
+  std::ofstream log_file;
+
+	struct IterationData
+	{
+		int iter;
+		double initial_energy;
+		double optimized_energy;
+		double step_size;
+		double total_time;
+		double assemble_time;
+		double solve_time;
+		double solve_residual;
+		double constraint_error;
+	};
+	IterationData ID;
 
 	/**
 	 * @brief Helper function to produce the constraint and independent variable projection matrices.
