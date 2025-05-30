@@ -69,6 +69,7 @@ public:
 	const AffineManifold &get_affine_manifold() const { return m_affine_manifold; }
 
 	double fitting_weight;
+    bool double_area = false;
 
 	/**
 	 * @brief Assemble the stiffness matrix for the parameterization metric Laplacian energy

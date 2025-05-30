@@ -877,6 +877,7 @@ CloughTocherOptimizer::assemble_local_laplacian_siffness_matrix(
         int64_t I = patch_indices[n][i];
         int64_t J = patch_indices[n][j];
         double V = AT[n][perm[i]][perm[j]] / detT[n];
+        if (!double_area) V = AT[n][perm[i]][perm[j]];
         stiffness_matrix_trips.push_back(Triplet(I, J, V));
       }
     }
