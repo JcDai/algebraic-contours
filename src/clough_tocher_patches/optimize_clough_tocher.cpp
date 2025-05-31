@@ -172,20 +172,24 @@ CloughTocherOptimizer::compute_face_energies(
   return face_energies;
 }
 
-double
-CloughTocherOptimizer::compute_normalized_fitting_weight() const
-{
-  const auto& V = get_vertices();
-  const auto& faces = get_faces();
-  Eigen::VectorXd double_area;
-  igl::doublearea(V, faces, double_area);
-  // return fitting_weight;
-  double area = double_area.sum() / 2.;
-  // return fitting_weight / area;
-  //int num_vertices = V.rows();
-  //return (1. / (area * num_vertices)) * fitting_weight;
-  return (1. / area) * fitting_weight;
-  //  TODO: This is probably wrong; want to use 1/area.
+double CloughTocherOptimizer::compute_normalized_fitting_weight() const {
+  const auto &V = get_vertices();
+  const auto &faces = get_faces();
+	Eigen::VectorXd double_area;
+	igl::doublearea(V, faces, double_area);
+  //return fitting_weight;
+	double area = double_area.sum() / 2.;
+  //return fitting_weight / area;
+	//int num_vertices = V.rows();
+    double normalized_fitting_weight = fitting_weight;
+    if (invert_area){
+        normalized_fitting_weight /= area;
+    } eles {
+        normalized_fitting_weight *= area;
+    }
+    
+  // TODO: This is probably wrong; want to use 1/area.
+  return normalized_fitting_weight;
   //return (area / num_vertices) * fitting_weight;
 }
 

@@ -36,6 +36,7 @@ main(int argc, char* argv[])
   CLI::App app{ "Optimize Clough-Tocher cubic surface mesh." };
   std::string input_filename = "";
   std::string output_name = "./";
+  std::string render_path = "./render.png";
   spdlog::level::level_enum log_level = spdlog::level::warn;
   Eigen::Matrix<double, 3, 1> color = SKY_BLUE;
   OptimizationParameters optimization_params;
@@ -44,9 +45,12 @@ main(int argc, char* argv[])
   double scale = 1.;
   bool visualize = false;
   int refinement = 0;
+    bool invert_area = false;
+    bool square_area = false;
   app.add_option("-i,--input", input_filename, "Mesh filepath")
-    ->check(CLI::ExistingFile)
-    ->required();
+      ->check(CLI::ExistingFile)
+      ->required();
+    app.add_option("--render_path", render_path, "Render output filepath");
   app.add_option("--log_level", log_level, "Level of logging")
     ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case));
   app
@@ -60,7 +64,10 @@ main(int argc, char* argv[])
   app.add_option("--refinement", refinement, "Levels of refinement");
   app.add_option("-o, --output", output_name, "Output file prefix");
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
+    app.add_flag("--invert_area", invert_area, "Use inverse area for fitting noramlization");
+    app.add_flag("--square_area", square_area, "Use squared area in laplacian");
   CLI11_PARSE(app, argc, argv);
+    std::string mesh_name = std::filesystem::path(input_filename).filename().replace_extension();
 
   // Set logger level
   spdlog::set_level(log_level);
@@ -123,6 +130,8 @@ main(int argc, char* argv[])
   // initialize optimizer
   CloughTocherOptimizer optimizer(V, F, affine_manifold);
   optimizer.fitting_weight = weight;
+    optimizer.invert_area = invert_area;
+    optimizer.double_area = square_area;
 
   // optimize the bezier nodes with laplacian energy
   std::vector<Eigen::Vector3d> laplacian_control_points =
@@ -161,6 +170,7 @@ main(int argc, char* argv[])
 
   ct_surface.add_surface_to_viewer({ 1, 0.4, 0.3 }, 3);
   polyscope::registerSurfaceMesh("PL mesh", V, F);
+  polyscope::screenshot(render_path);
   polyscope::screenshot(join_path(output_name, "render.png"));
   if (visualize) {
     polyscope::show();

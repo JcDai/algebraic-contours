@@ -70,7 +70,7 @@ public:
 
 	double fitting_weight;
     bool double_area = false;
-
+    bool invert_area = false;
 	/**
 	 * @brief Assemble the stiffness matrix for the parameterization metric Laplacian energy
 	 * in terms of Bezier coordinates.
