@@ -2,8 +2,8 @@
 #include "polyscope/surface_mesh.h"
 #include <CLI/CLI.hpp>
 #include <igl/readOBJ.h>
-#include <igl/writeOBJ.h>
 #include <igl/upsample.h>
+#include <igl/writeOBJ.h>
 
 /**
  * @brief Executable to take a triangle mesh file (stored as OBJ) and produce an
@@ -13,13 +13,13 @@
 
 void
 refine_mesh(Eigen::MatrixXd& V,
-           Eigen::MatrixXi& F,
-           Eigen::MatrixXd& uv,
-           Eigen::MatrixXi& FT,
-           int refinement)
+            Eigen::MatrixXi& F,
+            Eigen::MatrixXd& uv,
+            Eigen::MatrixXi& FT,
+            int refinement)
 {
-    igl::upsample(V, F, refinement);
-    igl::upsample(uv, FT, refinement);
+  igl::upsample(V, F, refinement);
+  igl::upsample(uv, FT, refinement);
 }
 
 int
@@ -45,12 +45,13 @@ main(int argc, char* argv[])
   double scale = 1.;
   bool visualize = false;
   int refinement = 0;
-    bool invert_area = false;
-    bool square_area = false;
+  bool invert_area = false;
+  bool square_area = false;
+  bool normalize_count = false;
   app.add_option("-i,--input", input_filename, "Mesh filepath")
-      ->check(CLI::ExistingFile)
-      ->required();
-    app.add_option("--render_path", render_path, "Render output filepath");
+    ->check(CLI::ExistingFile)
+    ->required();
+  app.add_option("--render_path", render_path, "Render output filepath");
   app.add_option("--log_level", log_level, "Level of logging")
     ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case));
   app
@@ -64,10 +65,13 @@ main(int argc, char* argv[])
   app.add_option("--refinement", refinement, "Levels of refinement");
   app.add_option("-o, --output", output_name, "Output file prefix");
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
-    app.add_flag("--invert_area", invert_area, "Use inverse area for fitting noramlization");
-    app.add_flag("--square_area", square_area, "Use squared area in laplacian");
+  app.add_flag(
+    "--invert_area", invert_area, "Use inverse area for fitting noramlization");
+  app.add_flag("--square_area", square_area, "Use squared area in laplacian");
+  app.add_flag("--normalize_count", normalize_count, "Normalize");
   CLI11_PARSE(app, argc, argv);
-    std::string mesh_name = std::filesystem::path(input_filename).filename().replace_extension();
+  std::string mesh_name =
+    std::filesystem::path(input_filename).filename().replace_extension();
 
   // Set logger level
   spdlog::set_level(log_level);
@@ -118,10 +122,10 @@ main(int argc, char* argv[])
                                  energy_hessian_inverse);
   // WARNING: surface writing needed to generate points
   // TODO: make part of initialization
-  ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes("initial",
+  ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(join_path(output_name, "initial"),
                                                                       true);
   ct_surface.write_degenerate_cubic_surface_to_msh_with_conn(
-    "CT_degenerate_cubic_bezier_points", V, F);
+    join_path(output_name, "CT_degenerate_cubic_bezier_points"), V, F);
   std::vector<Eigen::Vector3d> bezier_control_points =
     generate_linear_clough_tocher_surface(ct_surface, V);
   write_mesh(
@@ -130,8 +134,10 @@ main(int argc, char* argv[])
   // initialize optimizer
   CloughTocherOptimizer optimizer(V, F, affine_manifold);
   optimizer.fitting_weight = weight;
-    optimizer.invert_area = invert_area;
-    optimizer.double_area = square_area;
+  optimizer.invert_area = invert_area;
+  optimizer.double_area = square_area;
+  optimizer.normalize_count = normalize_count;
+  optimizer.output_dir = output_name;
 
   // optimize the bezier nodes with laplacian energy
   std::vector<Eigen::Vector3d> laplacian_control_points =
@@ -166,7 +172,7 @@ main(int argc, char* argv[])
   // write lag2bezier mat for c1meshing soft constraint
   Eigen::SparseMatrix<double, 1> l2b_mat;
   ct_surface.lag2bezier_full_mat(l2b_mat);
-  Eigen::saveMarket(l2b_mat, "CT_lag2bezier_matrix.txt");
+  Eigen::saveMarket(l2b_mat, join_path(output_name, "CT_lag2bezier_matrix.txt"));
 
   ct_surface.add_surface_to_viewer({ 1, 0.4, 0.3 }, 3);
   polyscope::registerSurfaceMesh("PL mesh", V, F);

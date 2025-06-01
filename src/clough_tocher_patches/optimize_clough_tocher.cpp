@@ -27,7 +27,8 @@ CloughTocherOptimizer::CloughTocherOptimizer(
   spdlog::info("energy matrix construction took {} s", timer.getElapsedTime());
 }
 
-void CloughTocherOptimizer::initialize_data_log()
+void
+CloughTocherOptimizer::initialize_data_log()
 {
   // Generate data log path
   std::filesystem::create_directory(output_dir);
@@ -51,22 +52,27 @@ void CloughTocherOptimizer::initialize_data_log()
 }
 
 // Write newton log iteration data to file
-void CloughTocherOptimizer::write_data_log_entry()
+void
+CloughTocherOptimizer::write_data_log_entry()
 {
   log_file << ID.iter << ",";
   log_file << std::fixed << std::setprecision(17) << ID.initial_energy << ",";
-  log_file << std::fixed << std::setprecision(17) << ID.initial_energy - ID.optimized_energy << ",";
+  log_file << std::fixed << std::setprecision(17)
+           << ID.initial_energy - ID.optimized_energy << ",";
   log_file << std::scientific << std::setprecision(6) << ID.step_size << ",";
   log_file << std::fixed << std::setprecision(6) << ID.total_time << ",";
   log_file << std::fixed << std::setprecision(6) << ID.assemble_time << ",";
   log_file << std::fixed << std::setprecision(6) << ID.solve_time << ",";
-  log_file << std::scientific << std::setprecision(6) << ID.solve_residual << ",";
-  log_file << std::scientific << std::setprecision(6) << ID.constraint_error << ",";
+  log_file << std::scientific << std::setprecision(6) << ID.solve_residual
+           << ",";
+  log_file << std::scientific << std::setprecision(6) << ID.constraint_error
+           << ",";
   log_file << std::endl;
 }
 
 // close the log file
-void CloughTocherOptimizer::close_logs()
+void
+CloughTocherOptimizer::close_logs()
 {
   log_file.close();
 }
@@ -172,25 +178,33 @@ CloughTocherOptimizer::compute_face_energies(
   return face_energies;
 }
 
-double CloughTocherOptimizer::compute_normalized_fitting_weight() const {
-  const auto &V = get_vertices();
-  const auto &faces = get_faces();
-	Eigen::VectorXd double_area;
-	igl::doublearea(V, faces, double_area);
-  //return fitting_weight;
-	double area = double_area.sum() / 2.;
-  //return fitting_weight / area;
-	//int num_vertices = V.rows();
-    double normalized_fitting_weight = fitting_weight;
-    if (invert_area){
-        normalized_fitting_weight /= area;
-    } eles {
-        normalized_fitting_weight *= area;
-    }
-    
-  // TODO: This is probably wrong; want to use 1/area.
+double
+CloughTocherOptimizer::compute_normalized_fitting_weight() const
+{
+  const auto& V = get_vertices();
+  const auto& faces = get_faces();
+
+  // begin with just the base fitting weight
+  double normalized_fitting_weight = fitting_weight;
+
+  // normalize by area (inverted or not)
+  Eigen::VectorXd double_area;
+  igl::doublearea(V, faces, double_area);
+  double area = double_area.sum() / 2.;
+  if (invert_area) {
+    normalized_fitting_weight /= area;
+  } else {
+    normalized_fitting_weight *= area;
+  }
+
+  // optionally normalize by the vertex count
+  if (normalize_count)
+  {
+    int num_vertices = V.rows();
+    normalized_fitting_weight /= num_vertices;
+  }
+
   return normalized_fitting_weight;
-  //return (area / num_vertices) * fitting_weight;
 }
 
 std::vector<Eigen::Vector3d>
@@ -244,14 +258,14 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
     Eigen::VectorXd res = (hessian * N1) + derivative;
     ID.solve_residual = res.cwiseAbs().maxCoeff();
 
-    spdlog::info("iter {}: E={}, res={}", ID.iter, ID.initial_energy, ID.solve_residual);
+    spdlog::info(
+      "iter {}: E={}, res={}", ID.iter, ID.initial_energy, ID.solve_residual);
 
     // do line search
     ID.step_size = (ID.iter == 1) ? 1.0 : 0.5;
     ID.optimized_energy = ID.initial_energy;
     Eigen::VectorXd N, p;
-    while (true)
-    {
+    while (true) {
       // interpolate in reduced space and project to full constrol points
       N = ID.step_size * N1 + (1 - ID.step_size) * N0;
       p = C * N;
@@ -264,7 +278,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
       ID.assemble_time = timer.getElapsedTime();
 
       // compute optimized energy
-      ID.optimized_energy = evaluate_quadratic_energy(hessian, derivative, E0, N);
+      ID.optimized_energy =
+        evaluate_quadratic_energy(hessian, derivative, E0, N);
 
       // invert hessian
       timer.start();
@@ -277,10 +292,14 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
       ID.solve_residual = res.cwiseAbs().maxCoeff();
 
       // write log
-      spdlog::info("step {}: delta E={}, res={}", ID.step_size, ID.initial_energy - ID.optimized_energy, ID.solve_residual);
+      spdlog::info("step {}: delta E={}, res={}",
+                   ID.step_size,
+                   ID.initial_energy - ID.optimized_energy,
+                   ID.solve_residual);
 
       // check convergence criteria
-      if ((ID.optimized_energy <= ID.initial_energy) && (ID.solve_residual <= max_res_error))
+      if ((ID.optimized_energy <= ID.initial_energy) &&
+          (ID.solve_residual <= max_res_error))
         break;
       if (ID.step_size < 1e-10)
         break;
@@ -292,13 +311,15 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
     // check that solution satisfies constraints
     Eigen::VectorXd pr = C * (F * p);
     ID.constraint_error = (pr - p).cwiseAbs().maxCoeff();
-    if (ID.constraint_error > 1e-10)
-    {
-      spdlog::warn("constraint reconstruction error is {}", ID.constraint_error);
+    if (ID.constraint_error > 1e-10) {
+      spdlog::warn("constraint reconstruction error is {}",
+                   ID.constraint_error);
     }
 
     // end iteration log output
-    spdlog::info("matrix assembly took {} s, solve took {} s\n", ID.assemble_time, ID.solve_time);
+    spdlog::info("matrix assembly took {} s, solve took {} s\n",
+                 ID.assemble_time,
+                 ID.solve_time);
 
     ID.total_time = total_timer.getElapsedTime();
     write_data_log_entry();
@@ -441,8 +462,12 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices()
     row_id++;
   }
 
-  Eigen::saveMarket(bezier_constraint_matrix,
-                    "CT_bezier_constraints_expanded.txt");
+  // TODO Make optional
+  if (false)
+  {
+    Eigen::saveMarket(bezier_constraint_matrix,
+                      "CT_bezier_constraints_expanded.txt");
+  }
 
   m_ind2full.resize(node_cnt * 3, ind_cnt);
   m_ind2full.reserve(Eigen::VectorXi::Constant(ind_cnt, 40));
@@ -495,7 +520,10 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices()
   }
   m_ind2full.setFromTriplets(ind2full_trips.begin(), ind2full_trips.end());
 
-  Eigen::saveMarket(m_ind2full, "CT_bezier_r2f_expanded.txt");
+  if (false)
+  {
+    Eigen::saveMarket(m_ind2full, "CT_bezier_r2f_expanded.txt");
+  }
 
   // build projection from full to independent nodes
   std::vector<Triplet> full2ind_trips;
@@ -881,7 +909,8 @@ CloughTocherOptimizer::assemble_local_laplacian_siffness_matrix(
         int64_t I = patch_indices[n][i];
         int64_t J = patch_indices[n][j];
         double V = AT[n][perm[i]][perm[j]] / detT[n];
-        if (!double_area) V = AT[n][perm[i]][perm[j]];
+        if (!double_area)
+          V = AT[n][perm[i]][perm[j]];
         stiffness_matrix_trips.push_back(Triplet(I, J, V));
       }
     }
