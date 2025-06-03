@@ -69,22 +69,6 @@ struct EdgeManifoldChart {
   bool is_boundary;
 
   // added for C1 constraints
-  // global uv vertex mapping
-  int64_t left_global_uv_idx;
-  int64_t right_global_uv_idx;
-  int64_t top_global_uv_idx;
-  int64_t bottom_global_uv_idx;
-  int64_t reverse_left_global_uv_idx;
-  int64_t reverse_right_global_uv_idx;
-
-  // global uv vertex positions
-  PlanarPoint left_global_uv_position;
-  PlanarPoint right_global_uv_position;
-  PlanarPoint top_global_uv_position;
-  PlanarPoint bottom_global_uv_position;
-  PlanarPoint reverse_left_global_uv_position;
-  PlanarPoint reverse_right_global_uv_position;
-
   std::array<int64_t, 4> lagrange_nodes;
 
   // for beizer cone constraint
@@ -108,10 +92,6 @@ struct FaceManifoldChart {
       false, false, false}; // Mark individual corners adjacent to a cone
 
   // added for C1 constraints
-  // std::array<int64_t, 3> vertex_indices;
-  // std::array<int64_t, 3> global_uv_indices;
-  // std::array<PlanarPoint, 3> global_uv_positions;
-
   std::array<int64_t, 19> lagrange_nodes;
 };
 
@@ -412,9 +392,6 @@ public:
   void get_P_d_E(Eigen::SparseMatrix<int64_t> &P_d_E) const;
   void get_P_d_M(Eigen::SparseMatrix<int64_t> &P_d_M) const;
 
-  void compute_face_edge_lagrange_node_indices();
-  void compute_edge_global_uv_mappings();
-  void compute_face_global_uv_mappings();
   void generate_lagrange_nodes();
 
   // per face control points indices

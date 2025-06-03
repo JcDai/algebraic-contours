@@ -22,7 +22,13 @@ def face_split(workspace_path, toolkit_tetmesh_file, toolkit_surface_file, toolk
     # tet_after_para_tets = tet_after_para_mesh.cells_dict['tetra'].tolist()
 
     tet_after_para_tets = tet_after_para_mesh.cells_dict["tetra"]
-    tet_after_para_tets = tet_after_para_tets[:, [1, 0, 2, 3]]
+
+    # check orientation
+    vv = tet_after_para_mesh.points
+    tt = tet_after_para_mesh.cells_dict["tetra"]
+    if not orient3d(vv[tt[0][0]], vv[tt[0][1]], vv[tt[0][2]], vv[tt[0][3]]):
+        # fix orientation
+        tet_after_para_tets = tet_after_para_tets[:, [1, 0, 2, 3]]
     tet_after_para_tets = tet_after_para_tets.tolist()
 
     para_out_v, para_out_tc, _, para_out_f, para_out_ftc, _ = igl.read_obj(
