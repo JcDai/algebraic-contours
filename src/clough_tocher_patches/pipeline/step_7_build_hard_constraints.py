@@ -653,11 +653,11 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
         f.create_dataset("b", data=b[:, None])
 
     # # generate init solution
-    # interp_mesh = mio.read(initial_interp_mesh)
-    # interp_v = interp_mesh.points
-    # interp_v_expanded = np.reshape(interp_v, (interp_v.shape[0]*3, 1)).T[0]
+    interp_mesh = mio.read(initial_interp_mesh)
+    interp_v = interp_mesh.points
+    interp_v_expanded = np.reshape(interp_v, (interp_v.shape[0]*3, 1)).T[0]
 
-    # init_solution = interp_v_expanded - v_expanded
+    init_solution = interp_v_expanded - v_expanded
 
     # print(interp_mesh.cells)
 
@@ -690,5 +690,5 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
     # print("error init: ", np.linalg.norm(error_init))
     # # print("error init: ", np.argwhere(np.abs(error_init) > 1e-10))
 
-    # with h5py.File(workspace_path + "initial_solution.hdf5", "w") as f:
-    #     f.create_dataset("u", data=init_solution[:, None])
+    with h5py.File(workspace_path + "initial_solution.hdf5", "w") as f:
+        f.create_dataset("u", data=init_solution[:, None])
