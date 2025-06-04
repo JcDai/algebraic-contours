@@ -661,8 +661,8 @@ def build_full_expanded_bezier_hard_constraint_matrix(workspace_path, tri_to_tet
 
     # print(interp_mesh.cells)
 
-    # # print("error stacked: ", np.linalg.norm(stacked @ init_solution - b))
-    # # print("error stacked: ", np.linalg.norm(stacked @ interp_v_expanded))
+    print("error stacked: ", np.linalg.norm(stacked @ init_solution - b))
+    # print("error stacked: ", np.linalg.norm(stacked @ interp_v_expanded))
 
     # bezier_cons_matrix = scipy.io.mmread("CT_bezier_constraints_expanded.txt")
 

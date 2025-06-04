@@ -16,16 +16,25 @@ import datetime
 from utils import *
 
 
-def call_CT_code(workspace_path, path_to_ct_exe, meshfile):
+def call_CT_code(workspace_path, path_to_ct_exe, meshfile, skip_cons=False):
     print("[{}] ".format(datetime.datetime.now()),
           "Calling Clough Tocher code")
-    ct_command = (
-        path_to_ct_exe
-        + " --input "
-        + workspace_path
-        + meshfile + " -o CT --skip_constraint true"
-        # + meshfile + " -o CT"
-    )
+
+    ct_command = ""
+    if skip_cons:
+        ct_command = (
+            path_to_ct_exe
+            + " --input "
+            + workspace_path
+            + meshfile + " -o CT --skip_constraint true"
+        )
+    else:
+        ct_command = (
+            path_to_ct_exe
+            + " --input "
+            + workspace_path
+            + meshfile + " -o CT"
+        )
 
     subprocess.run(ct_command, shell=True, check=True)
 

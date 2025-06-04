@@ -330,8 +330,8 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices()
     f2f_expanded, independent_node_map, true);
 
   std::cout << "compute midpoint constraints ..." << std::endl;
-  ct_surface.bezier_midpoint_ind2dep_expanded(f2f_expanded,
-                                              independent_node_map);
+  ct_surface.bezier_midpoint_ind2dep_expanded(
+    f2f_expanded, independent_node_map, true);
 
   std::cout << "compute interior 2 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_2_expanded(

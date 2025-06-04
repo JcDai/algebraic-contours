@@ -63,6 +63,7 @@ main(int argc, char* argv[])
     V *= scale;
   AffineManifold affine_manifold(F, uv, FT);
   affine_manifold.compute_incenter_for_face_charts();
+  affine_manifold.compute_incenter_for_edge_charts();
   affine_manifold.generate_lagrange_nodes(true);
 
   // build initial surface

@@ -562,7 +562,7 @@ main(int argc, char* argv[])
   std::cout << "error special degen mesh: " << error_degen_sp.norm()
             << std::endl;
 
-  std::cout << error_degen_sp << std::endl;
+  // std::cout << error_degen_sp << std::endl;
 
   // Eigen::MatrixXd degenrated_bc(
   //     ct_surface.m_degenerated_bezier_control_points.size(), 3);
