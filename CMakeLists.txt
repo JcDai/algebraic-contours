@@ -61,14 +61,14 @@ if (BUILD_EXECUTABLES)
 endif()
 
 # Optionally build experiments
-option(BUILD_FIGURE_EXECUTABLES "Build executables to generate paper figures"  ON)
+option(BUILD_FIGURE_EXECUTABLES "Build executables to generate paper figures" OFF)
 if (BUILD_FIGURE_EXECUTABLES)
   message("Building figure executables")
   add_subdirectory(src/figures)
 endif()
 
 # Optionally build tests
-option(BUILD_TESTS  "Build contour tests"  ON)
+option(BUILD_TESTS  "Build contour tests"  OFF)
 if (BUILD_TESTS)
   message("Building tests")
   add_subdirectory(src/tests)

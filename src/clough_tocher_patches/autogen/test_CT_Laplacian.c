@@ -1,5 +1,5 @@
 
-#include "autogen/Clough_Tocher_Laplacian.c"
+#include "Clough_Tocher_Laplacian.c"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
