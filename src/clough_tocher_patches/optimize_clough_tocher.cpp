@@ -1,6 +1,6 @@
 #include "optimize_clough_tocher.hpp"
-#include "Clough_Tocher_Laplace_Beltrami.c"
-#include "Clough_Tocher_Laplacian.c"
+#include "autogen/Clough_Tocher_Laplace_Beltrami.c"
+#include "autogen/Clough_Tocher_Laplacian.c"
 #include "clough_tocher_constraint_matrices.hpp"
 #include "igl/doublearea.h"
 
