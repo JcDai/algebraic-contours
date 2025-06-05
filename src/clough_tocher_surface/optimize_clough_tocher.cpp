@@ -7,16 +7,18 @@
 CloughTocherOptimizer::CloughTocherOptimizer(
   const Eigen::MatrixXd V,
   const Eigen::MatrixXi F,
-  const AffineManifold affine_manifold)
+  const AffineManifold affine_manifold,
+  bool use_incenter)
   : fitting_weight(1e5)
   , m_V(V)
   , m_F(F)
   , m_affine_manifold(affine_manifold)
+  , m_use_incenter(use_incenter)
 {
 
   // build constraint and projection matrices
   timer.start();
-  initialize_ind_to_full_matrices();
+  initialize_ind_to_full_matrices(m_use_incenter);
   spdlog::info("constraint matrix construction took {} s",
                timer.getElapsedTime());
 
@@ -284,7 +286,7 @@ assign_spvec_to_spmat_row_help(Eigen::SparseMatrix<double, 1>& mat,
 }
 
 void
-CloughTocherOptimizer::initialize_ind_to_full_matrices()
+CloughTocherOptimizer::initialize_ind_to_full_matrices(bool use_incenter)
 {
   // TODO: Would be better to avoid the uneccesary construction of a surface
   Eigen::SparseMatrix<double> fit_matrix;
@@ -315,27 +317,27 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices()
   std::vector<int> independent_node_map(node_cnt * 3, -1);
   std::vector<bool> node_assigned(node_cnt, false);
 
-  // std::cout << "compute cone constraints ..." << std::endl;
-  // ct_surface.bezier_cone_constraints_expanded(
-  //   f2f_expanded, independent_node_map, node_assigned, v_normals);
+  if (!use_incenter) {
+    std::cout << "compute cone constraints ..." << std::endl;
+    ct_surface.bezier_cone_constraints_expanded(
+      f2f_expanded, independent_node_map, node_assigned, v_normals);
+  }
 
   std::cout << "compute endpoint constraints ..." << std::endl;
-  // ct_surface.bezier_endpoint_ind2dep_expanded(
-  //   f2f_expanded, independent_node_map, false);
   ct_surface.bezier_endpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, true);
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute interior 1 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_1_expanded(
-    f2f_expanded, independent_node_map, true);
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute midpoint constraints ..." << std::endl;
   ct_surface.bezier_midpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, true);
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute interior 2 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_2_expanded(
-    f2f_expanded, independent_node_map, true);
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "done constraint computation" << std::endl;
 

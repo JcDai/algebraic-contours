@@ -31,6 +31,7 @@ main(int argc, char* argv[])
   int iterations = 1;
   double scale = 1.;
   bool visualize = false;
+  bool use_incenter = false;
   app.add_option("-i,--input", input_filename, "Mesh filepath")
     ->check(CLI::ExistingFile)
     ->required();
@@ -46,6 +47,8 @@ main(int argc, char* argv[])
   app.add_option("--scale", scale, "Scale input mesh");
   app.add_option("-o, --output", output_name, "Output file prefix");
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
+  app.add_flag(
+    "--use_incenter", use_incenter, "Use incenter instead of barycenter");
   CLI11_PARSE(app, argc, argv);
 
   // Set logger level
@@ -62,9 +65,12 @@ main(int argc, char* argv[])
   if (scale != 1.)
     V *= scale;
   AffineManifold affine_manifold(F, uv, FT);
-  affine_manifold.compute_incenter_for_face_charts();
-  affine_manifold.compute_incenter_for_edge_charts();
-  affine_manifold.generate_lagrange_nodes(true);
+
+  if (use_incenter) {
+    affine_manifold.compute_incenter_for_face_charts();
+    affine_manifold.compute_incenter_for_edge_charts();
+  }
+  affine_manifold.generate_lagrange_nodes(use_incenter);
 
   // build initial surface
   spdlog::info("Computing spline surface");
@@ -90,7 +96,7 @@ main(int argc, char* argv[])
     ct_surface, bezier_control_points, join_path(output_name, "linear"));
 
   // initialize optimizer
-  CloughTocherOptimizer optimizer(V, F, affine_manifold);
+  CloughTocherOptimizer optimizer(V, F, affine_manifold, use_incenter);
   optimizer.fitting_weight = weight;
 
   // optimize the bezier nodes with laplacian energy
