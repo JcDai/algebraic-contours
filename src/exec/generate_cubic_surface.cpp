@@ -61,6 +61,7 @@ main(int argc, char* argv[])
   std::string boundary_data = "";
   std::string vertex_normal_file = "";
   bool skip_constraint = false;
+  bool use_incenter = false;
   spdlog::level::level_enum log_level = spdlog::level::off;
   Eigen::Matrix<double, 3, 1> color = SKY_BLUE;
   int num_subdivisions = DISCRETIZATION_LEVEL;
@@ -88,9 +89,11 @@ main(int argc, char* argv[])
   app.add_option("--vertex_normals",
                  vertex_normal_file,
                  "vertex normals in the order of lagrange nodes");
-  app.add_option("--skip_constraint",
-                 skip_constraint,
-                 "skip constraint computation if not needed");
+  app.add_flag("--skip_constraint",
+               skip_constraint,
+               "skip constraint computation if not needed");
+  app.add_flag(
+    "--use_incenter", use_incenter, "use incenter instead of barycenter");
   CLI11_PARSE(app, argc, argv);
 
   // Set logger level
@@ -184,19 +187,22 @@ main(int argc, char* argv[])
 
   // important !!! call the following two before compute constraints, but only
   // once!!!
-  ct_surface.m_affine_manifold.compute_incenter_for_face_charts();
-  ct_surface.m_affine_manifold.compute_incenter_for_edge_charts();
-  ct_surface.m_affine_manifold.generate_lagrange_nodes(true);
+  if (use_incenter) {
+    ct_surface.m_affine_manifold.compute_incenter_for_face_charts();
+    ct_surface.m_affine_manifold.compute_incenter_for_edge_charts();
+  }
+  ct_surface.m_affine_manifold.generate_lagrange_nodes(use_incenter);
 
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
     output_name + "_from_lagrange_nodes");
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
     output_name + "_from_bezier_nodes", true);
 
-  ct_surface.write_connected_lagrange_nodes(output_name + "_bilaplacian_nodes",
-                                            V);
-  ct_surface.write_connected_lagrange_nodes_values(output_name +
-                                                   "_bilaplacian_nodes_values");
+  // ct_surface.write_connected_lagrange_nodes(output_name +
+  // "_bilaplacian_nodes",
+  //                                           V);
+  // ct_surface.write_connected_lagrange_nodes_values(output_name +
+  //                                                  "_bilaplacian_nodes_values");
 
   Eigen::SparseMatrix<double, 1> b2l_mat;
   ct_surface.bezier2lag_full_mat(b2l_mat);
@@ -204,8 +210,10 @@ main(int argc, char* argv[])
   Eigen::saveMarket(b2l_mat,
                     output_name + "_bezier_to_lag_convertion_matrix.txt");
 
-  ct_surface.compute_degenerate_bezier_control_points_special_midpoint(V, F);
-  ct_surface.write_special_bc_to_msh("degenerate_special");
+  if (use_incenter) {
+    ct_surface.compute_degenerate_bezier_control_points_special_midpoint(V, F);
+    ct_surface.write_special_bc_to_msh("degenerate_special");
+  }
 
   if (skip_constraint) {
     // skip constraint computation
@@ -250,19 +258,6 @@ main(int argc, char* argv[])
     igl::per_vertex_normals(
       V, F, igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_AREA, v_normals);
   }
-
-  // // debug use
-  // Eigen::MatrixXd test_normals(v_normals.rows(), v_normals.cols());
-  // for (int64_t i = 0; i < v_normals.rows(); ++i) {
-  //   for (int64_t j = 0; j < v_normals.cols(); ++j)
-  //     if (j == 2) {
-  //       test_normals(i, j) = 1;
-  //     } else {
-  //       test_normals(i, j) = 1;
-  //     }
-  // }
-
-  // v_normals = test_normals;
 
   //////////////////////////////////
   /////     bezier form    /////////
@@ -445,36 +440,31 @@ main(int argc, char* argv[])
   // f2f_expanded.reserve(node_cnt * 3 * 5);
   f2f_expanded.reserve(Eigen::VectorXi::Constant(node_cnt * 3, 40));
 
-  // std::map<int64_t, int> independent_node_map;
   std::vector<int> independent_node_map(node_cnt * 3, -1);
-  // for (int64_t i = 0; i < node_cnt * 3; ++i) {
-  //   // init to -1
-  //   independent_node_map[i] = -1;
-  // }
 
   std::vector<bool> node_assigned(node_cnt, false);
 
-  // std::cout << "compute cone constraints ..." << std::endl;
-  // ct_surface.bezier_cone_constraints_expanded(
-  //     f2f_expanded, independent_node_map, node_assigned, v_normals);
+  if (!use_incenter) {
+    std::cout << "compute cone constraints ..." << std::endl;
+    ct_surface.bezier_cone_constraints_expanded(
+      f2f_expanded, independent_node_map, node_assigned, v_normals);
+  }
 
   std::cout << "compute endpoint constraints ..." << std::endl;
-  // ct_surface.bezier_endpoint_ind2dep_expanded(f2f_expanded,
-  //                                             independent_node_map, false);
   ct_surface.bezier_endpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, true);
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute interior 1 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_1_expanded(
-    f2f_expanded, independent_node_map, true);
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute midpoint constraints ..." << std::endl;
   ct_surface.bezier_midpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, true);
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute interior 2 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_2_expanded(
-    f2f_expanded, independent_node_map, true);
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "done constraint computation" << std::endl;
 
@@ -526,55 +516,26 @@ main(int argc, char* argv[])
     assign_spvec_to_spmat_row_main(bezier_constraint_matrix, f2f_row, row_id);
     bezier_constraint_matrix.coeffRef(row_id, i) -= 1;
 
-    // Eigen::SparseVector<double> eye_row;
-    // eye_row.resize(node_cnt * 3);
-    // eye_row.insert(i) = 1;
-
-    // Eigen::SparseVector<double> cons_row = f2f_row - eye_row;
-    // assign_spvec_to_spmat_row_main(bezier_constraint_matrix, cons_row,
-    // row_id);
     row_id++;
   }
 
   Eigen::saveMarket(bezier_constraint_matrix,
                     output_name + "_bezier_constraints_expanded_old.txt");
 
-  // // generate degenerated bezier control points
-  // ct_surface.compute_degenerate_bezier_control_points(
-  //   f2f_expanded, independent_node_map, V, F);
-  // ct_surface.write_degenerate_cubic_surface_to_msh_with_conn(
-  //   "degenerated_c1_bezier_control_points");
+  if (use_incenter) {
+    // only compute this for if with incenter
+    // error special degen
+    Eigen::MatrixXd sp_deg(ct_surface.m_degenerated_bc_special.size() * 3, 1);
+    for (size_t i = 0; i < ct_surface.m_degenerated_bc_special.size(); ++i) {
+      sp_deg(i * 3 + 0, 0) = ct_surface.m_degenerated_bc_special[i][0];
+      sp_deg(i * 3 + 1, 0) = ct_surface.m_degenerated_bc_special[i][1];
+      sp_deg(i * 3 + 2, 0) = ct_surface.m_degenerated_bc_special[i][2];
+    }
 
-  // const auto error_degen =
-  //   bezier_constraint_matrix *
-  //   ct_surface.m_degenerated_bezier_control_points_expanded;
-  // std::cout << "error degen mesh: " << error_degen.norm() << std::endl;
-
-  // error special degen
-  Eigen::MatrixXd sp_deg(ct_surface.m_degenerated_bc_special.size() * 3, 1);
-  for (size_t i = 0; i < ct_surface.m_degenerated_bc_special.size(); ++i) {
-    sp_deg(i * 3 + 0, 0) = ct_surface.m_degenerated_bc_special[i][0];
-    sp_deg(i * 3 + 1, 0) = ct_surface.m_degenerated_bc_special[i][1];
-    sp_deg(i * 3 + 2, 0) = ct_surface.m_degenerated_bc_special[i][2];
+    const auto error_degen_sp = bezier_constraint_matrix * sp_deg;
+    std::cout << "error special degen mesh: " << error_degen_sp.norm()
+              << std::endl;
   }
-
-  const auto error_degen_sp = bezier_constraint_matrix * sp_deg;
-  std::cout << "error special degen mesh: " << error_degen_sp.norm()
-            << std::endl;
-
-  // std::cout << error_degen_sp << std::endl;
-
-  // Eigen::MatrixXd degenrated_bc(
-  //     ct_surface.m_degenerated_bezier_control_points.size(), 3);
-  // for (size_t i = 0; i <
-  // ct_surface.m_degenerated_bezier_control_points.size();
-  //      ++i) {
-  //   degenrated_bc.row(i) = ct_surface.m_degenerated_bezier_control_points[i];
-  // }
-
-  // Eigen::MatrixXd degenerated_lag = b2l_mat * degenrated_bc;
-
-  // exit(0);
 
   // compute reduce to full
   std::cout << "computing reduce to full" << std::endl;
