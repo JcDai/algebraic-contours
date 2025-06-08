@@ -21,23 +21,24 @@
 /// nth vertex is the same as the first. For a boundary vertex, the one ring
 /// begins as the boundary face to the right of the vertex and ends at the left
 /// boundary face, and the nth vertex is generally different from the 0th.
-struct VertexManifoldChart {
+struct VertexManifoldChart
+{
   Halfedge::Index vertex_index; // Index of the vertex in the affine manifold
   std::vector<Halfedge::Index>
-      vertex_one_ring; // List of manifold vertex indices in the one ring
+    vertex_one_ring; // List of manifold vertex indices in the one ring
   std::vector<Halfedge::Index>
-      face_one_ring; // List of manifold face indices in the one ring
+    face_one_ring; // List of manifold face indices in the one ring
   MatrixXr
-      one_ring_uv_positions; // Local uv coordinates of the one ring vertices
-  bool is_boundary = false;  // Mark boundary vertices
-  bool is_cone = false;      // Mark cone vertices
+    one_ring_uv_positions;  // Local uv coordinates of the one ring vertices
+  bool is_boundary = false; // Mark boundary vertices
+  bool is_cone = false;     // Mark cone vertices
   bool is_cone_adjacent = false; // Mark vertices adjacent to a cone
 
   // for bezier cone constraints
   bool base_decided = false;
   Eigen::Matrix2d U_ijik_inv, U_ijik;
-  std::array<int64_t, 2> vid_j_k = {{-1, -1}};
-  std::array<int64_t, 3> node_id_i_j_k = {{-1, -1, -1}};
+  std::array<int64_t, 2> vid_j_k = { { -1, -1 } };
+  std::array<int64_t, 3> node_id_i_j_k = { { -1, -1, -1 } };
 };
 
 /// Local layout manifold chart in R2 of the triangles around an edge.
@@ -48,7 +49,8 @@ struct VertexManifoldChart {
 /// edge, there is only one adjacent face. The bottom vertex and face indices
 /// are set to an out of range value (e.g., -1), and the bottom vertex is set to
 /// the empty vector.
-struct EdgeManifoldChart {
+struct EdgeManifoldChart
+{
   // Face indices
   Halfedge::Index top_face_index;
   Halfedge::Index bottom_face_index;
@@ -73,12 +75,23 @@ struct EdgeManifoldChart {
 
   // for beizer cone constraint
   bool processed = false;
+
+  // for incenter
+  PlanarPoint top_incenter;
+  PlanarPoint bottom_incenter;
+  double top_alpha;
+  double top_beta;
+  double top_gamma;
+  double bottom_alpha;
+  double bottom_beta;
+  double bottom_gamma;
 };
 
 /// Local layout manifold chart in R2 of a triangle.
 ///
 /// This is the same as global uv positions when these are provided.
-struct FaceManifoldChart {
+struct FaceManifoldChart
+{
   // Face indices
   Halfedge::Index face_index;
 
@@ -89,15 +102,25 @@ struct FaceManifoldChart {
   bool is_boundary = false;      // True iff the edge is on the boundary
   bool is_cone_adjacent = false; // Mark faces adjacent to a cone
   std::array<bool, 3> is_cone_corner = {
-      false, false, false}; // Mark individual corners adjacent to a cone
+    false,
+    false,
+    false
+  }; // Mark individual corners adjacent to a cone
 
   // added for C1 constraints
   std::array<int64_t, 19> lagrange_nodes;
+
+  // for incenter
+  PlanarPoint incenter;
+  double alpha;
+  double beta;
+  double gamma;
 };
 
 /// Representation for an affine manifold, which is a topological manifold F
 /// equipped with a discrete metric l that satisfies the triangle inequality.
-class AffineManifold {
+class AffineManifold
+{
 public:
   typedef int Index;
 
@@ -109,8 +132,9 @@ public:
   /// @param[in] F: faces of the cone manifold
   /// @param[in] global_uv: global layout of the manifold
   /// @param[in] F_uv: faces of the global layout
-  AffineManifold(const Eigen::MatrixXi &F, const MatrixXr &global_uv,
-                 const Eigen::MatrixXi &F_uv);
+  AffineManifold(const Eigen::MatrixXi& F,
+                 const MatrixXr& global_uv,
+                 const Eigen::MatrixXi& F_uv);
 
   /// Get the number of faces in the manifold
   ///
@@ -125,25 +149,26 @@ public:
   /// Get faces for the manifold
   ///
   /// @return faces of the manifold
-  Eigen::MatrixXi const &get_faces() const;
+  Eigen::MatrixXi const& get_faces() const;
 
   /// Get halfedge for the manifold
   ///
   /// @return halfedge of the manifold
-  Halfedge const &get_halfedge() const { return m_halfedge; }
+  Halfedge const& get_halfedge() const { return m_halfedge; }
 
   /// Get halfedge to corner map for the manifold
   ///
   /// @return halfedge to corner map of the manifold
-  std::vector<std::pair<Eigen::Index, Eigen::Index>> const &
-  get_he_to_corner() const {
+  std::vector<std::pair<Eigen::Index, Eigen::Index>> const& get_he_to_corner()
+    const
+  {
     return m_he_to_corner;
   }
 
   /// Get faces for the manifold parametrization
   ///
   /// @return faces of the manifold layout
-  Eigen::MatrixXi const &get_F_uv() const;
+  Eigen::MatrixXi const& get_F_uv() const;
 
   /// Get an isometric chart for the vertex with the given index.
   ///
@@ -155,7 +180,7 @@ public:
   ///
   /// @param[in] vertex_index: index of the vertex for the chart
   /// @return chart for the given vertex
-  VertexManifoldChart const &get_vertex_chart(Index vertex_index) const;
+  VertexManifoldChart const& get_vertex_chart(Index vertex_index) const;
 
   /// Get an isometric chart for the edge opposite the corner with the given
   /// face index and vertex index within the face.
@@ -164,16 +189,16 @@ public:
   /// @param[in] face_vertex_index: index of the corner opposite the edge in the
   /// face
   /// @return chart for the given edge
-  EdgeManifoldChart const &get_edge_chart(Index face_index,
+  EdgeManifoldChart const& get_edge_chart(Index face_index,
                                           Index face_vertex_index) const;
 
-  EdgeManifoldChart &get_edge_chart(Index face_index, Index face_vertex_index);
+  EdgeManifoldChart& get_edge_chart(Index face_index, Index face_vertex_index);
 
   /// Get an isometric chart for the given face.
   ///
   /// @param[in] face_index: index of a face
   /// @return chart for the given face
-  FaceManifoldChart const &get_face_chart(Index face_index) const;
+  FaceManifoldChart const& get_face_chart(Index face_index) const;
 
   /// Get the portions of the isometric vertex charts corresponding to the
   /// corners of a given face.
@@ -185,9 +210,9 @@ public:
   ///
   /// @param[in] face_index: index of the face for the chart segments
   /// @param[out] corner_uv_positions: chart uv positions as enumerated above
-  void
-  get_face_corner_charts(Index face_index,
-                         std::array<Matrix2x2r, 3> &corner_uv_positions) const;
+  void get_face_corner_charts(
+    Index face_index,
+    std::array<Matrix2x2r, 3>& corner_uv_positions) const;
 
   /// Get the portion of the edge charts contained in the interior of the given
   /// face.
@@ -200,16 +225,16 @@ public:
   /// @param[in] face_index: index of the face for the charts
   /// @param[out] face_edge_uv_positions: uv positions contained in the given
   /// face
-  void
-  get_face_edge_charts(Index face_index,
-                       std::array<Matrix3x2r, 3> &face_edge_uv_positions) const;
+  void get_face_edge_charts(
+    Index face_index,
+    std::array<Matrix3x2r, 3>& face_edge_uv_positions) const;
 
   /// @brief Get the uv coordinates of the face.
   ///
   /// @param[in] face_index: index of the face for the chart
   /// @param[out] face_edge_uv_positions: global uv positions of the face
   void get_face_global_uv(Index face_index,
-                          std::array<PlanarPoint, 3> &face_uv_positions) const;
+                          std::array<PlanarPoint, 3>& face_uv_positions) const;
 
   /// Compute the curvature curvature at the given vertex.
   ///
@@ -236,24 +261,24 @@ public:
   /// Get list of all flat vertices in the manifold
   ///
   /// @param[out] flat_vertices: list of flat vertices
-  void compute_flat_vertices(std::vector<Index> &flat_vertices);
+  void compute_flat_vertices(std::vector<Index>& flat_vertices);
 
   /// Get list of all cones in the manifold
   ///
   /// @param[out] cones: list of cone vertices
-  void compute_cones(std::vector<Index> &cones) const;
+  void compute_cones(std::vector<Index>& cones) const;
 
   /// Get boolean mask of all cones corners in the manifold
   ///
   /// @param[out] is_cone_corner: true iff corner i, j is a cone
-  void
-  compute_cones_corners(std::vector<std::array<bool, 3>> &is_cone_corner) const;
+  void compute_cones_corners(
+    std::vector<std::array<bool, 3>>& is_cone_corner) const;
 
   /// Compute a matrix of cone point positions from mesh vertex positions.
   ///
   /// @param[in] V: mesh vertex positions
   /// @param[out] cone_points: cone positions w.r.t. V
-  void compute_cone_points(const MatrixXr &V, MatrixXr &cone_points) const;
+  void compute_cone_points(const MatrixXr& V, MatrixXr& cone_points) const;
 
   /// Return list of all cones in the manifold
   ///
@@ -263,7 +288,7 @@ public:
   /// Get list of all boundary vertices in the manifold
   ///
   /// @param[out] boundary_vertices: list of boundary vertices
-  void compute_boundary_vertices(std::vector<Index> &boundary_vertices) const;
+  void compute_boundary_vertices(std::vector<Index>& boundary_vertices) const;
 
   /// Return list of all boundary vertices in the manifold
   ///
@@ -283,7 +308,7 @@ public:
   /// Get global uv coordinates
   ///
   /// @return global uv coordinates, or the empty matrix if they do not exist
-  MatrixXr const &get_global_uv() const;
+  MatrixXr const& get_global_uv() const;
 
   /// Cut edges adjacent to cones so that a planar layout is possible around
   /// them.
@@ -294,13 +319,13 @@ public:
   ///
   /// @param[in] V: mesh vertex positions
   /// @param[in] color: color for the affine manifold in the viewer
-  void add_to_viewer(const MatrixXr &V,
+  void add_to_viewer(const MatrixXr& V,
                      Eigen::Matrix<double, 3, 1> color = GOLD_YELLOW) const;
 
   /// View the cone manifold and its data
   ///
   /// @param[in] V: mesh vertex positions
-  void view(const MatrixXr &V) const;
+  void view(const MatrixXr& V) const;
 
   /// Save an image of the cone manifold and its data to file.
   ///
@@ -309,47 +334,52 @@ public:
   /// @param[in] camera_position: camera position for the screenshot
   /// @param[in] camera_target: camera target for the screenshot
   /// @param[in] use_orthographic: use orthographic perspective if true
-  void screenshot(const std::string &filename, const MatrixXr &V,
-                  SpatialVector camera_position, SpatialVector camera_target,
+  void screenshot(const std::string& filename,
+                  const MatrixXr& V,
+                  SpatialVector camera_position,
+                  SpatialVector camera_target,
                   bool use_orthographic) const;
   // Clear all internal data for a trivial cone manifold
   void clear();
 
 public:
   void build_vertex_charts_from_lengths(
-      const Eigen::MatrixXi &F, const std::vector<std::vector<double>> &l,
-      std::vector<VertexManifoldChart> &vertex_charts) const;
+    const Eigen::MatrixXi& F,
+    const std::vector<std::vector<double>>& l,
+    std::vector<VertexManifoldChart>& vertex_charts) const;
 
   void build_edge_charts_from_lengths(
-      const Eigen::MatrixXi &F, const Halfedge &halfedge,
-      const std::vector<std::vector<double>> &l,
-      std::vector<EdgeManifoldChart> &edge_charts) const;
+    const Eigen::MatrixXi& F,
+    const Halfedge& halfedge,
+    const std::vector<std::vector<double>>& l,
+    std::vector<EdgeManifoldChart>& edge_charts) const;
 
-  void build_face_charts(const Eigen::MatrixXi &F, const MatrixXr &global_uv,
-                         const Eigen::MatrixXi &F_uv,
-                         std::vector<FaceManifoldChart> &face_charts) const;
+  void build_face_charts(const Eigen::MatrixXi& F,
+                         const MatrixXr& global_uv,
+                         const Eigen::MatrixXi& F_uv,
+                         std::vector<FaceManifoldChart>& face_charts) const;
 
   void build_corner_to_edge_map(
-      const std::vector<std::vector<Halfedge::Index>> &corner_to_he,
-      const std::vector<Halfedge::Index> &he_to_edge,
-      std::vector<std::vector<Halfedge::Index>> &corner_to_edge) const;
+    const std::vector<std::vector<Halfedge::Index>>& corner_to_he,
+    const std::vector<Halfedge::Index>& he_to_edge,
+    std::vector<std::vector<Halfedge::Index>>& corner_to_edge) const;
 
-  PlanarPoint layout_next_vertex(const PlanarPoint &current_point,
+  PlanarPoint layout_next_vertex(const PlanarPoint& current_point,
                                  double next_edge_length,
                                  double prev_edge_length) const;
 
-  void layout_one_ring(const Eigen::MatrixXi &F,
-                       const std::vector<std::vector<double>> &l,
+  void layout_one_ring(const Eigen::MatrixXi& F,
+                       const std::vector<std::vector<double>>& l,
                        Index vertex_index,
-                       const std::vector<Index> &vertex_one_ring,
-                       const std::vector<Index> &face_one_ring,
-                       MatrixXr &one_ring_uv_positions) const;
+                       const std::vector<Index>& vertex_one_ring,
+                       const std::vector<Index>& face_one_ring,
+                       MatrixXr& one_ring_uv_positions) const;
 
-  void build_lengths_from_global_uv(const Eigen::MatrixXi &F,
-                                    const MatrixXr &global_uv,
-                                    std::vector<std::vector<double>> &l) const;
+  void build_lengths_from_global_uv(const Eigen::MatrixXi& F,
+                                    const MatrixXr& global_uv,
+                                    std::vector<std::vector<double>>& l) const;
 
-  void align_local_charts(const MatrixXr &uv, const Eigen::MatrixXi &F_uv);
+  void align_local_charts(const MatrixXr& uv, const Eigen::MatrixXi& F_uv);
 
   void mark_cones();
 
@@ -383,33 +413,39 @@ public:
   // code added for C1 constraints
 
   // edge vectors
-  void get_u_ij(Eigen::SparseMatrix<double> &u_ij_u,
-                Eigen::SparseMatrix<double> &u_ij_v) const;
+  void get_u_ij(Eigen::SparseMatrix<double>& u_ij_u,
+                Eigen::SparseMatrix<double>& u_ij_v) const;
 
   // reindexing matrices
-  void get_P_G2F(Eigen::SparseMatrix<int64_t> &P_G2F) const;
-  void get_P_G2E(Eigen::SparseMatrix<int64_t> &P_G2E) const;
-  void get_P_d_E(Eigen::SparseMatrix<int64_t> &P_d_E) const;
-  void get_P_d_M(Eigen::SparseMatrix<int64_t> &P_d_M) const;
-
-  void generate_lagrange_nodes();
+  void get_P_G2F(Eigen::SparseMatrix<int64_t>& P_G2F) const;
+  void get_P_G2E(Eigen::SparseMatrix<int64_t>& P_G2E) const;
+  void get_P_d_E(Eigen::SparseMatrix<int64_t>& P_d_E) const;
+  void get_P_d_M(Eigen::SparseMatrix<int64_t>& P_d_M) const;
 
   // per face control points indices
   // b0 b1 b2 b01 b10 b12 b21 b20 b02 b01^c b12^c b20^c b0c bc0 b1c bc1 b2c
   // bc2 bc
   std::vector<std::pair<int64_t, PlanarPoint>>
-      m_lagrange_nodes; // (face_idx, barycentric coord)
+    m_lagrange_nodes; // (face_idx, barycentric coord)
   std::map<int64_t, int64_t> v_to_lagrange_node_map; // vidx to node idx
   std::map<int64_t, int64_t> lagrange_node_to_v_map; // node idx to vids
 
   // edge with v_idx to two nodes idx on edge
   std::map<std::pair<int64_t, int64_t>, std::array<int64_t, 4>>
-      m_boundary_edge_to_node_map;
+    m_boundary_edge_to_node_map;
+
+  // added for initial solutions
+  // call before generate_lagrange_nodes_incenter()
+  void compute_incenter_for_edge_charts();
+  void compute_incenter_for_face_charts();
+
+  void generate_lagrange_nodes(bool use_incenter = false);
 };
 
 /// Representation for an affine manifold with a global parametrization, which
 /// yields a flat metric and thus an affine manifold structure.
-class ParametricAffineManifold : public AffineManifold {
+class ParametricAffineManifold : public AffineManifold
+{
 public:
   ParametricAffineManifold();
 
@@ -418,13 +454,13 @@ public:
   ///
   /// @param[in] F: faces of the affine manifold
   /// @param[in] global_uv: affine global layout of the manifold
-  ParametricAffineManifold(const Eigen::MatrixXi &F, const MatrixXr &global_uv);
+  ParametricAffineManifold(const Eigen::MatrixXi& F, const MatrixXr& global_uv);
 
   /// Get global uv coordinates for a given vertex.
   ///
   /// @param[in] vertex_index: index of the vertex for the uv position
   /// @param[out] uv_coords: global uv position for the given vertex
-  void get_vertex_global_uv(Index vertex_index, PlanarPoint &uv_coords) const;
+  void get_vertex_global_uv(Index vertex_index, PlanarPoint& uv_coords) const;
 
 public:
   bool is_valid_parametric_affine_manifold() const;
@@ -432,9 +468,10 @@ public:
 
 /// Generate an affine manifold with the cone faces removed but cone adjaceny
 /// information retained
-void remove_cones(const Eigen::MatrixXd &V,
-                  const AffineManifold &affine_manifold,
-                  Eigen::MatrixXd &pruned_V,
-                  AffineManifold &pruned_affine_manifold,
-                  std::vector<AffineManifold::Index> &cones,
-                  std::vector<AffineManifold::Index> &removed_faces);
+void
+remove_cones(const Eigen::MatrixXd& V,
+             const AffineManifold& affine_manifold,
+             Eigen::MatrixXd& pruned_V,
+             AffineManifold& pruned_affine_manifold,
+             std::vector<AffineManifold::Index>& cones,
+             std::vector<AffineManifold::Index>& removed_faces);

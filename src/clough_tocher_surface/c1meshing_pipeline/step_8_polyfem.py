@@ -67,12 +67,12 @@ def create_polyfem_json(enable_offset, output_name, initial_mesh, soft_file, har
                 },
                 # "advanced": {"save_solve_sequence_debug": True}
             },
-            # "input": {
-            #     "data": {
-            #         "state": "initial_solution.hdf5",
-            #         "reorder": True
-            #     }
-            # }
+            "input": {
+                "data": {
+                    "state": "initial_solution.hdf5",
+                    "reorder": True
+                }
+            }
         }
     else:
         c_json = {
@@ -182,12 +182,12 @@ def create_polyfem_json_amips(enable_offset, output_name, initial_mesh, soft_fil
                 },
                 # "advanced": {"save_solve_sequence_debug": True}
             },
-            # "input": {
-            #     "data": {
-            #         "state": "initial_solution.hdf5",
-            #         "reorder": True
-            #     }
-            # }
+            "input": {
+                "data": {
+                    "state": "initial_solution.hdf5",
+                    "reorder": True
+                }
+            }
         }
     else:
         c_json = {

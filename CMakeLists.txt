@@ -41,7 +41,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_subdirectory(src/core)
 add_subdirectory(src/quadratic_spline_surface)
 add_subdirectory(src/contour_network)
-add_subdirectory(src/clough_tocher_patches)
+add_subdirectory(src/clough_tocher_surface)
 target_include_directories(QuadraticContoursCoreLib PUBLIC ${PROJECT_SOURCE_DIR}/ext )
 add_library(QuadraticContoursLib INTERFACE)
 target_link_libraries(QuadraticContoursLib INTERFACE
@@ -61,14 +61,14 @@ if (BUILD_EXECUTABLES)
 endif()
 
 # Optionally build experiments
-option(BUILD_FIGURE_EXECUTABLES "Build executables to generate paper figures"  ON)
+option(BUILD_FIGURE_EXECUTABLES "Build executables to generate paper figures" OFF)
 if (BUILD_FIGURE_EXECUTABLES)
   message("Building figure executables")
   add_subdirectory(src/figures)
 endif()
 
 # Optionally build tests
-option(BUILD_TESTS  "Build contour tests"  ON)
+option(BUILD_TESTS  "Build contour tests"  OFF)
 if (BUILD_TESTS)
   message("Building tests")
   add_subdirectory(src/tests)

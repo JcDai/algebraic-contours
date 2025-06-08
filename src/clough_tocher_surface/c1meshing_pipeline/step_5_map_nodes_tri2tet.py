@@ -342,6 +342,9 @@ def interpolate_initial_solution(output_name, target_surface_mesh, degenerate_su
 
     interpolated_sf_v = alpha * tar_sf_v + (1-alpha) * de_sf_v
 
+    # # set to degenerate
+    # interpolated_sf_v = de_sf_v
+
     interpolated_tet_v = copy.deepcopy(tet_v)
     for i in range(local2global.shape[0]):
         interpolated_tet_v[local2global[i]] = interpolated_sf_v[i]
