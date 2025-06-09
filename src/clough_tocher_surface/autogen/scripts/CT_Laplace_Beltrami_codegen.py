@@ -7,6 +7,7 @@ from sympy.printing.c import C99CodePrinter
 from typing import List, Union
 from pathlib import Path
 import sys
+from c_codegen_helper import *
 
 def dot3(a, b):
     return sum(ai * bi for ai, bi in zip(a, b))
@@ -518,117 +519,6 @@ def print_cps_for_c(metric_expr, fun_expr):
     print(mcp_str)
     print(fcp_str)
 
-
-def generate_c_function_from_expressions(
-    expr: Union[List[sp.Expr], List[List[sp.Expr]]],
-    func_name: str,
-    result_array: str,
-    result_dims: List[int],
-    coeff_arrays: List[sp.MatrixSymbol] = None,
-    coeff_scalars: List[sp.Symbol] = None, 
-    use_cse: bool = True,
-) -> str:
-    """ Generate a C function from a list or list of lists of sympy expressions. 
-        The function computes an output C array (1d or 2d) with elements assigned based on 
-        experssions.  
-    expr: either a list of list of lists of expressions, with free symbols either from 
-        coeff_arrays or scalar_vars. If it is a list of lists, all sublists should have the same lengths.
-    func_name:  the name of the C function to produce. 
-    result_array: the name of the array to return the expression values in 
-    resul_dims: a list of length 1 or 2, dimensions of the array [TODO: infer from input]
-    coeff_arrays: list of  matrix free symbols used in expressions, as MatrixSymbol
-          these are converted to function arguments.  Matrices of size 1 x n become 1D arrays 
-          otherwise 2D arrays
-    coeff_scalars: list of scalar free variables, become double function arguments. 
-    use_cse:  use common expression elimination
-    """
-    
-    coeff_arrays = coeff_arrays or []
-    coeff_scalars = coeff_scalars or []
-    shape_map = {sym: sym.shape for sym in coeff_arrays}
-
-    # Flatten expressions
-    is_nested = isinstance(expr[0], list)
-    flat_exprs = [e for row in expr for e in row] if is_nested else expr
-    nrows = len(expr) if is_nested else len(flat_exprs)
-    ncols = len(expr[0]) if is_nested else 1
-
-
-    # Recursively replace integer powers with repeated multiplication
-    def recursive_pow_replace(expr):
-        if isinstance(expr, sp.Pow) and expr.exp.is_Integer and expr.exp > 1:
-            res = sp.Mul(*[recursive_pow_replace(expr.base)] * int(expr.exp), evaluate=False)
-            return res
-        elif expr.args:
-            # Recursively apply to all subexpressions
-            args = [recursive_pow_replace(arg) for arg in expr.args]
-            try:
-                return expr.func(*args, evaluate=False)
-            except TypeError:
-                return expr.func(*args)
-        else:
-            return expr
-
-
-    # Apply CSE and replace Pow
-    if use_cse:
-        cse_repl, reduced_exprs = sp.cse(flat_exprs)
-        cse_repl = [(sym, recursive_pow_replace(ex)) for sym, ex in cse_repl]
-        reduced_exprs = [recursive_pow_replace(ex) for ex in reduced_exprs]
-    else:
-        cse_repl = []
-        reduced_exprs = [recursive_pow_replace(ex) for ex in flat_exprs]
-
-    class MatrixSymbolPrinter(C99CodePrinter):
-        def _print_MatrixElement(self, expr):
-            base = self._print(expr.parent)
-            i = self._print(expr.i)
-            j = self._print(expr.j)
-            shape = shape_map.get(expr.parent)
-            if shape[0] == 1:
-                return f"{base}[{j}]"
-            if shape[1] == 1:
-                return f"{base}[{i}]"
-            else:
-                return f"{base}[{i}][{j}]"
-
-    printer = MatrixSymbolPrinter()
-
-    # Function signature
-    lines = [f"void {func_name}("]
-    for sym in coeff_arrays:
-        name = sym.name
-        shape = sym.shape
-        if  shape[0] == 1:
-            lines.append(f"    double {name}[{shape[1]}],")
-        elif shape[1] == 1:
-            lines.append(f"    double {name}[{shape[0]}],")
-        else:
-            lines.append(f"    double {name}[{shape[0]}][{shape[1]}],")
-    for sym in coeff_scalars: 
-        name = sym.name
-        lines.append(f" double {name},")
-    if len(result_dims) == 1:
-        lines.append(f"    double {result_array}[{result_dims[0]}]")
-    else:
-        lines.append(f"    double {result_array}[{result_dims[0]}][{result_dims[1]}]")
-    lines.append(") {")
-
-    # CSE temporaries
-    for sym, expr in cse_repl:
-        lines.append(f"    double {printer.doprint(sym)} = {printer.doprint(expr)};")
-
-    # Final output assignment
-    for i, expr in enumerate(reduced_exprs):
-        lhs = (
-            f"{result_array}[{i}]"
-            if len(result_dims) == 1
-            else f"{result_array}[{i // ncols}][{i % ncols}]"
-        )
-        lines.append(f"    {lhs} = {printer.doprint(expr)};")
-
-    lines.append("}")
-    return "\n".join(lines)
 
 def generate_Laplace_Beltrami_element_matrix_C(fname, quad_pts, weights):
     scp3d = sp.MatrixSymbol('cp3d',10,3)
