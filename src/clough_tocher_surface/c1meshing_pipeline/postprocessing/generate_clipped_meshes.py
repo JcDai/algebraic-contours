@@ -1,3 +1,30 @@
+'''
+Usage: python generate_clipped_meshes.py <init_file.msh> <solution.txt> <inside.msh> <sf_mesh_file.msh> <local2global_file.txt> <winding_number_file.txt> <output_name> <upsample_factor> <clip_axis> <clip_ratio> <eps>
+
+post-process the result vtu into .msh and .obj files use for rendering
+outputs:
+1. full mesh
+2. full mesh surface (with edges)
+3. clipped mesh
+4. clipped mesh surface (with edges)
+5. dropped mesh
+6. dropped mesh surface (with edges)
+7. intersection of clipped and dropped (with edges)
+8. clipeed inside surface (with edges)
+9. dropped inside surface (with edges)
+10. clipped mesh surface w/o intersection faces (with edges)
+11. dropped mesh surface w/o intersection faces (with edges)
+
+clip/drop r.t. input clip axis (012 for xyz) and clip ratio
+clip_plane = clip_min + clip_ratio * (clip_max - clip_min)
+tet with centroid > clip_plane in clip_axis are clipped, otherwise dropped
+
+for rendering clipped surface using different color use 10, 7, 8 for clipped part, and 11, 7, 9 for dropped part
+10/11 use one color as mesh surface, 7/8/9 use another color as clip surface
+
+'''
+
+
 import igl
 import meshio as mio
 import numpy as np
