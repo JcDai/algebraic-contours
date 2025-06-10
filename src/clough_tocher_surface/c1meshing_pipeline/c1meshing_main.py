@@ -55,6 +55,7 @@ if __name__ == "__main__":
     ct_iteration = args.spec["cubic_optimization_iterations"]
 
     initial_guess_weight = args.spec["interp_alpha"]
+    use_initial_guess = args.spec["use_degenerated_initial_solution"]
 
     path_to_para_exe = args.bins[
         "seamless_parametrization_binary"
@@ -127,10 +128,10 @@ if __name__ == "__main__":
 
     # step 4 generate CT constraints
     call_CT_code(workspace_path, path_to_ct_exe,
-                 "surface_uv_after_cone_split.obj", skip_cons=False)
+                 "surface_uv_after_cone_split.obj", skip_cons=False, use_initial_guess=True)
 
     call_CT_optimize_code(workspace_path, path_to_ct_optimize_exe,
-                          "surface_uv_after_cone_split.obj", ct_weight, ct_iteration)
+                          "surface_uv_after_cone_split.obj", ct_weight, ct_iteration, use_initial_guess=True)
 
     # step 5 map tri to tet
     tet_edge_to_vertices, tet_face_to_vertices = map_tri_nodes_to_tet_nodes(
