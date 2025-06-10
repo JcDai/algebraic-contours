@@ -1,6 +1,9 @@
 '''
 Usage:
 python compute_deviation.py <init_file.msh> <solution_file.txt> <target_file.msh> <local2global_file.txt> <b2l_mat_file.txt> <output_name>
+
+compute the distance of bezier control points between the target and result surface mesh
+output the max and avg deviation
 '''
 
 
