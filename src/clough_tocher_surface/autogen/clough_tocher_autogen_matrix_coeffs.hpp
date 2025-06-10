@@ -1,7 +1,9 @@
 #pragma once
 
 namespace CT_interpolant {
-inline void CT_tri_bounds_coeffs(double bound_coeffs[3][3][3]) {
+inline void
+CT_tri_bounds_coeffs(double bound_coeffs[3][3][3])
+{
   bound_coeffs[0][0][0] = 0;
   bound_coeffs[0][0][1] = 0;
   bound_coeffs[0][0][2] = 1;
@@ -31,7 +33,9 @@ inline void CT_tri_bounds_coeffs(double bound_coeffs[3][3][3]) {
   bound_coeffs[2][2][2] = 0;
 }
 
-inline void CT_sub_tri_matrices(double subtri_matrix[3][10][12]) {
+inline void
+CT_sub_tri_matrices(double subtri_matrix[3][10][12])
+{
   subtri_matrix[0][0][0] = 1.0 / 2.0;
   subtri_matrix[0][0][1] = 1.0 / 2.0;
   subtri_matrix[0][0][2] = 0;

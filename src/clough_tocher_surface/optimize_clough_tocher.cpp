@@ -1,5 +1,6 @@
 #include "optimize_clough_tocher.hpp"
 #include "autogen/Clough_Tocher_Laplace_Beltrami.c"
+#include "autogen/Clough_Tocher_Laplace_Beltrami_old.c"
 #include "autogen/Clough_Tocher_Laplacian.c"
 #include "clough_tocher_constraint_matrices.hpp"
 #include "igl/doublearea.h"
@@ -600,6 +601,8 @@ CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const
 
       // compute 10x10 local stiffness matrix (same for all dimensions)
       compute_elem_matrix_C(cp_3d, QUAD_DIM, quad_pts, weights, A);
+      // compute_elem_matrix_C_old(
+      //   cp_3d, QUAD_DIM_OLD, quad_pts_old, weights_old, A);
 
       // build single dimension copy of the stiffness matrix
       for (int i = 0; i < 10; i++) {
@@ -650,6 +653,8 @@ CloughTocherOptimizer::assemble_local_laplace_beltrami_siffness_matrix(
 
     // compute 10x10 local stiffness matrix (same for all dimensions)
     compute_elem_matrix_C(cp_3d, QUAD_DIM, quad_pts, weights, A);
+    // compute_elem_matrix_C_old(
+    //   cp_3d, QUAD_DIM_OLD, quad_pts_old, weights_old, A);
 
     // build single dimension copy of the stiffness matrix
     for (int i = 0; i < 10; i++) {
