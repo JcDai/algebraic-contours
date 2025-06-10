@@ -9,11 +9,11 @@ outputs:
 4. clipped mesh surface (with edges)
 5. dropped mesh
 6. dropped mesh surface (with edges)
-7. intersection of clipped and dropped (with edges)
-8. clipeed inside surface (with edges)
-9. dropped inside surface (with edges)
-10. clipped mesh surface w/o intersection faces (with edges)
-11. dropped mesh surface w/o intersection faces (with edges)
+7. intersection of clipped and dropped (with edges) "*_intersect.obj"
+8. clipeed inside surface (with edges) "*_inside_mesh_clip.obj"
+9. dropped inside surface (with edges) "*_inside_mesh_drop.obj"
+10. clipped mesh surface w/o intersection faces (with edges) "*_clip_wo_intersect.obj"
+11. dropped mesh surface w/o intersection faces (with edges) "*_drop_wo_intersect.obj"
 
 clip/drop r.t. input clip axis (012 for xyz) and clip ratio
 clip_plane = clip_min + clip_ratio * (clip_max - clip_min)
@@ -593,7 +593,7 @@ if __name__ == "__main__":
 
     # extract edges
     processed_edge = {}
-    with open(output_name + "_inside_edge_clip.obj", "w") as edge_file:
+    with open(output_name + "_inside_mesh_edge_clip.obj", "w") as edge_file:
         for vv in inside_sf_mesh.points:
             edge_file.write("v {} {} {}\n".format(vv[0], vv[1], vv[2]))
         for ff in inside_sf_mesh.cells_dict['triangle']:
@@ -616,7 +616,7 @@ if __name__ == "__main__":
 
     # extract edges
     processed_edge = {}
-    with open(output_name + "_inside_edge_drop.obj", "w") as edge_file:
+    with open(output_name + "_inside_mesh_edge_drop.obj", "w") as edge_file:
         for vv in inside_sf_mesh_d.points:
             edge_file.write("v {} {} {}\n".format(vv[0], vv[1], vv[2]))
         for ff in inside_sf_mesh_d.cells_dict['triangle']:
