@@ -532,7 +532,7 @@ CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix(
 }
 
 // TODO: Obtained from affine_manifold.cpp. Make standalone function
-const std::array<PlanarPoint, 19> CT_nodes = { {
+const std::array<PlanarPoint, 19> CT_nodes_uniform = { {
   PlanarPoint(1., 0.),           // b0    0
   PlanarPoint(0., 1.),           // b1    1
   PlanarPoint(0., 0.),           // b2    2
@@ -576,6 +576,39 @@ CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const
     Eigen::Vector3d Vk = { P[2][0], P[2][1], 0. };
     std::array<std::array<int64_t, 10>, 3> patch_indices =
       get_micro_triangle_nodes(fijk);
+
+    std::array<PlanarPoint, 19> CT_nodes;
+
+    if (m_use_incenter) {
+      const double& alpha = face_chart.alpha;
+      const double& beta = face_chart.beta;
+      const double& gamma = face_chart.gamma;
+
+      CT_nodes = { {
+        PlanarPoint(1., 0.),           // b0    0
+        PlanarPoint(0., 1.),           // b1    1
+        PlanarPoint(0., 0.),           // b2    2
+        PlanarPoint(2. / 3., 1. / 3.), // b01   3
+        PlanarPoint(1. / 3., 2. / 3.), // b10   4
+        PlanarPoint(0., 2. / 3.),      // b12   5
+        PlanarPoint(0., 1. / 3.),      // b21   6
+        PlanarPoint(1. / 3., 0.),      // b20   7
+        PlanarPoint(2. / 3., 0.),      // b02   8
+        PlanarPoint(1. / 3. + 1. / 3. * beta,
+                    1. / 3. + 1. / 3. * gamma),                 // b01^c 9
+        PlanarPoint(1. / 3. * beta, 1. / 3. + 1. / 3. * gamma), // b12^c 10
+        PlanarPoint(1. / 3. + 1. / 3. * beta, 1. / 3. * gamma), // b20^c 11
+        PlanarPoint(2. / 3. + 1. / 3. * beta, 1. / 3. * gamma), // b0c   12
+        PlanarPoint(1. / 3. + 2. / 3. * beta, 2. / 3. * gamma), // bc0   13
+        PlanarPoint(1. / 3. * beta, 2. / 3. + 1. / 3. * gamma), // b1c   14
+        PlanarPoint(2. / 3. * beta, 1. / 3. + 2. / 3. * gamma), // bc1   15
+        PlanarPoint(1. / 3. * beta, 1. / 3. * gamma),           // b2c   16
+        PlanarPoint(2. / 3. * beta, 2. / 3. * gamma),           // bc2   17
+        PlanarPoint(beta, gamma),                               // bc    18
+      } };
+    } else {
+      CT_nodes = CT_nodes_uniform;
+    }
 
     for (int n = 0; n < 3; ++n) {
       // subtri i
