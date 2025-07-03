@@ -47,7 +47,24 @@ public:
    */
   std::vector<Eigen::Vector3d> optimize_laplace_beltrami_energy(
     const std::vector<Eigen::Vector3d>& bezier_control_points,
-    int iterations = 1);
+    int iterations = 1,
+    double step_size = 1.);
+
+  std::vector<Eigen::Vector3d>
+  gradient_descent_laplace_beltrami_energy(
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    int iterations=10,
+    double step_size=1e-4);
+
+  /**
+   * @brief Project the surface determined by the control points to the constraint.
+   * 
+   * @param bezier_control_points: initial Bezier control points 
+   * @return projected Bezier control points
+   */
+  std::vector<Eigen::Vector3d>
+  project_to_constraints (
+    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   /**
    * @brief Evaluate the quadratic Laplacian energy over the parameterization
@@ -75,19 +92,19 @@ public:
     return m_bezier_control_points;
   }
 
-  const Eigen::SparseMatrix<double>& get_ind_to_full_matrix()
+  const Eigen::SparseMatrix<double>& get_ind_to_full_matrix() const
   {
     return m_ind2full;
   };
-  const Eigen::SparseMatrix<double>& get_full_to_ind_matrix()
+  const Eigen::SparseMatrix<double>& get_full_to_ind_matrix() const
   {
     return m_full2ind;
   };
-  const Eigen::SparseMatrix<double>& get_stiffness_matrix()
+  const Eigen::SparseMatrix<double>& get_stiffness_matrix() const
   {
     return m_stiffness_matrix;
   };
-  const Eigen::SparseMatrix<double>& get_position_matrix()
+  const Eigen::SparseMatrix<double>& get_position_matrix() const
   {
     return m_position_matrix;
   };
@@ -102,6 +119,10 @@ public:
   bool double_area = false;
   bool invert_area = false;
   bool normalize_count = false;
+  bool bound_energy = true; // bound the energy during Laplace Beltrami optimization
+  bool bound_residual = true; // bound the residual during Laplace Beltrami optimization
+  bool use_orthogonal_projection = true; // use orthongonal projection to constraint subset
+  bool use_parametric_metric = false; // use parameterization metric for first iteration of Laplace Beltrami
 
   /**
    * @brief Assemble the stiffness matrix for the parameterization metric
@@ -236,7 +257,7 @@ private:
    * @return flattened variable vector
    */
   Eigen::VectorXd build_node_vector(
-    const std::vector<Eigen::Vector3d>& bezier_control_points);
+    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   /**
    * @brief Given a vector of full Bezier variables, construct a list of Bezier
@@ -247,7 +268,15 @@ private:
    * @param p: flattened varibale vector
    * @return list of 3D variable nodes
    */
-  std::vector<Eigen::Vector3d> build_control_points(const Eigen::VectorXd& p);
+  std::vector<Eigen::Vector3d> build_control_points(const Eigen::VectorXd& p) const;
+
+  /**
+   * @brief Project a vector orthogonally to the reduced constraint subspace.
+   * 
+   * @param p0: initial Bezier node vector
+   * @return reduced space vector
+   */
+  Eigen::VectorXd project_to_reduced_subspace(const Eigen::VectorXd& p0) const;
 
   /**
    * @brief Helper function to assemble to local stiffness matrix for a given
@@ -276,6 +305,29 @@ private:
     const std::vector<Eigen::Vector3d>& bezier_control_points,
     const std::array<std::array<int64_t, 10>, 3>& patch_indices,
     std::vector<Triplet>& stiffness_matrix_trips) const;
+
+  std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
+  generate_autodiff_laplace_beltrami_stiffness_matrix(
+    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
+
+  void
+  assemble_autodiff_laplace_beltrami_siffness_matrix(
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    const std::array<std::array<int64_t, 10>, 3>& patch_indices,
+    double& energy,
+    Eigen::VectorXd& gradient,
+    std::vector<Triplet>& stiffness_matrix_trips) const;
+
+  std::tuple<double, Eigen::VectorXd>
+  generate_autodiff_laplace_beltrami_gradient(
+    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
+
+  void
+  assemble_autodiff_laplace_beltrami_gradient(
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    const std::array<std::array<int64_t, 10>, 3>& patch_indices,
+    double& energy,
+    Eigen::VectorXd& gradient) const;
 
   /**
    * @brief Helper function to assemble local hessian into the global Hessian.

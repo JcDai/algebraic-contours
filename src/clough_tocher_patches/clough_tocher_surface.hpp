@@ -105,7 +105,7 @@ public:
    * @param num_subdivisions: number of subdivisions for the mesh
    */
   void add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color = {1., 0., 0.},
-                             int num_subdivisions = 3) const;
+                             int num_subdivisions = 3, std::string meshname="surface") const;
 
 public:
   std::vector<CloughTocherPatch> m_patches;

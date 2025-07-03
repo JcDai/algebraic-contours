@@ -8,7 +8,7 @@ import subprocess
 import argparse, shutil
 import multiprocessing 
 
-input_dir = './data/parametrized_splitted_meshes'
+input_dir = './data/distorted'
 output_dir = './output/sweep-6'
 os.makedirs(os.path.join(output_dir, 'renders'), exist_ok=True)
 
@@ -20,7 +20,7 @@ def process_file(m):
     exec = ['./build/bin/optimize_cubic_surface',]
     exec += ['-i', os.path.join(input_dir, m, 'surface_uv_after_cone_split.obj')]
     exec += ['--render_path', os.path.join(output_dir, 'renders', m+'.png')]
-    exec += ['-w', '1e8']
+    exec += ['-w', '1e6']
     exec += ['-n', '10']
     exec += ['--log_level', 'info']
     exec += ['--invert_area']
