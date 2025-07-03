@@ -8,8 +8,8 @@ import subprocess
 import argparse, shutil
 import multiprocessing 
 
-input_dir = './data/distorted'
-output_dir = './output/sweep-6'
+input_dir = './data/dataset'
+output_dir = './output/sweep-step-size-w3'
 os.makedirs(os.path.join(output_dir, 'renders'), exist_ok=True)
 
 def process_file(m):
@@ -20,10 +20,11 @@ def process_file(m):
     exec = ['./build/bin/optimize_cubic_surface',]
     exec += ['-i', os.path.join(input_dir, m, 'surface_uv_after_cone_split.obj')]
     exec += ['--render_path', os.path.join(output_dir, 'renders', m+'.png')]
-    exec += ['-w', '1e6']
-    exec += ['-n', '10']
+    exec += ['-w', '1e3']
+    exec += ['-n', '500']
     exec += ['--log_level', 'info']
     exec += ['--invert_area']
+    exec += ['--step_size', '0.1']
     exec += ['-o', test_dir]
     
     log_path = os.path.join(test_dir, 'optimization_log.txt')

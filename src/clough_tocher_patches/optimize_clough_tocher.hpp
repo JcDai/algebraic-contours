@@ -123,6 +123,7 @@ public:
   bool bound_residual = true; // bound the residual during Laplace Beltrami optimization
   bool use_orthogonal_projection = true; // use orthongonal projection to constraint subset
   bool use_parametric_metric = false; // use parameterization metric for first iteration of Laplace Beltrami
+  bool use_fixed_metric = false; // use fixed metric for gradient computation
 
   /**
    * @brief Assemble the stiffness matrix for the parameterization metric
@@ -144,9 +145,18 @@ public:
 
   double compute_normalized_fitting_weight() const;
 
+  Eigen::SparseMatrix<double>
+  generate_position_matrix(const Eigen::VectorXd& p) const;
+
   void initialize_data_log();
   void write_data_log_entry();
   void close_logs();
+  void checkpoint_control_points(const std::vector<Eigen::Vector3d>& bezier_control_points, int iter);
+
+  std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
+  generate_position_energy_quadratic(
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    const std::vector<Eigen::Vector3d>& optimized_control_points) const;
 
   std::string output_dir = "./";
 
@@ -164,6 +174,7 @@ private:
   Eigen::MatrixXd m_V;
   Eigen::MatrixXi m_F;
   AffineManifold m_affine_manifold;
+  CloughTocherSurface ct_surface;
 
   Eigen::SparseMatrix<double> m_full2ind, m_ind2full;
 

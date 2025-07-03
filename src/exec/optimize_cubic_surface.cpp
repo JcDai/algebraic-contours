@@ -82,6 +82,7 @@ main(int argc, char* argv[])
   bool skip_residual = false;
   bool use_coordinate_projection = false;
   bool use_parametric_metric = false;
+  bool use_fixed_metric = false;
   bool use_gradient = false;
   bool triangulate = false;
   app.add_option("-i,--input", input_filename, "Mesh filepath")
@@ -114,6 +115,7 @@ main(int argc, char* argv[])
   app.add_flag("--skip_residual", skip_residual, "skip residual bound in Laplace Beltrami optimization");
   app.add_flag("--use_coordinate_projection", use_coordinate_projection, "use initial coordinate projection instead of orthogonal");
   app.add_flag("--use_parametric_metric", use_parametric_metric, "use parameterization metric for first iteration of Laplace Beltrami");
+  app.add_flag("--use_fixed_metric", use_fixed_metric, "use fixed metric for gradient computation");
   app.add_flag("--triangulate", triangulate, "triangulate the quadratic surface and save OBJ");
   app.add_flag("--use_gradient", use_gradient, "use gradient descent");
   CLI11_PARSE(app, argc, argv);
