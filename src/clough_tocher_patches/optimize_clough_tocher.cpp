@@ -269,6 +269,7 @@ void CloughTocherOptimizer::checkpoint_control_points(const std::vector<Eigen::V
   polyscope::screenshot(join_path(output_dir, "iter_" + std::to_string(iter) + ".png"));
 }
 
+
 std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
 CloughTocherOptimizer::generate_position_energy_quadratic(
   const std::vector<Eigen::Vector3d>& bezier_control_points,
@@ -281,8 +282,8 @@ CloughTocherOptimizer::generate_position_energy_quadratic(
   Eigen::SparseMatrix<double> P = generate_position_matrix(d);
   Eigen::VectorXd g = P * d;
   double energy = g.dot(d);
-  P *= 12;
-  g *= 4;
+  P *= p_norm * (p_norm - 1);
+  g *= p_norm;
   return std::make_tuple(energy, g, P);
 }
 
@@ -475,8 +476,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
       break;
 
     // serialize if checkpoint iteration
-    int checkpoint = 50;
-    if (((ID.iter % checkpoint) == 0) || (ID.iter < 10))
+    int checkpoint = 10;
+    if (((ID.iter % checkpoint) == 0) || (ID.iter < 0))
     {
       checkpoint_control_points(optimized_control_points, ID.iter);
     }
@@ -1157,7 +1158,7 @@ CloughTocherOptimizer::generate_position_matrix(const Eigen::VectorXd& p) const
     for (int d = 0; d < 3; ++d)
     {
       int I = 3 * i + d;
-      position_matrix_trips.push_back(Triplet(I, I, p[I] * p[I]));
+      position_matrix_trips.push_back(Triplet(I, I, power(std::abs(p[I]), p_norm - 2)));
     }
   }
 

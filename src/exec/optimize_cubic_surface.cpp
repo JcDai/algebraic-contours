@@ -70,11 +70,12 @@ main(int argc, char* argv[])
   Eigen::Matrix<double, 3, 1> color = SKY_BLUE;
   OptimizationParameters optimization_params;
   double weight = 1e3;
-  double step_size = 1e-4;
+  double step_size = 1;
   int iterations = 1;
   double scale = 1.;
   bool visualize = false;
   int refinement = 0;
+  int p_norm = 2;
   bool invert_area = false;
   bool square_area = false;
   bool normalize_count = false;
@@ -106,6 +107,7 @@ main(int argc, char* argv[])
   app.add_option("--scale", scale, "Scale input mesh");
   app.add_option("--refinement", refinement, "Levels of refinement");
   app.add_option("-o, --output", output_name, "Output file prefix");
+  app.add_option("-p, --p_norm", p_norm, "p norm for fitting term");
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
   app.add_flag(
     "--invert_area", invert_area, "Use inverse area for fitting noramlization");
@@ -195,6 +197,7 @@ main(int argc, char* argv[])
   optimizer.bound_energy = !skip_energy_decrease;
   optimizer.bound_residual = !skip_residual;
   optimizer.use_parametric_metric = use_parametric_metric;
+  optimizer.p_norm = p_norm;
 
   // just project to constraints
   std::vector<Eigen::Vector3d> projected_control_points =

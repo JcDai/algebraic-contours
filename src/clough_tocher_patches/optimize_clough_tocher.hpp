@@ -159,6 +159,7 @@ public:
     const std::vector<Eigen::Vector3d>& optimized_control_points) const;
 
   std::string output_dir = "./";
+  int p_norm = 2;
 
 private:
   igl::Timer timer;
