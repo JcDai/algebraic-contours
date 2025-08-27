@@ -60,6 +60,8 @@ main(int argc, char* argv[])
   std::string output_name = "CT";
   std::string boundary_data = "";
   std::string vertex_normal_file = "";
+  std::string feature_edge_file = "";
+  std::string feature_vertex_file = "";
   bool skip_constraint = false;
   bool use_incenter = false;
   spdlog::level::level_enum log_level = spdlog::level::off;
@@ -94,6 +96,9 @@ main(int argc, char* argv[])
                "skip constraint computation if not needed");
   app.add_flag(
     "--use_incenter", use_incenter, "use incenter instead of barycenter");
+
+  app.add_option("--feature_edge", feature_edge_file, "feature edges");
+  app.add_option("--feature_vertex", feature_vertex_file, "feature vertices");
   CLI11_PARSE(app, argc, argv);
 
   // Set logger level
@@ -197,6 +202,62 @@ main(int argc, char* argv[])
     output_name + "_from_lagrange_nodes");
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
     output_name + "_from_bezier_nodes", true);
+
+  // code added for sharp feature
+  // call order cannot be changed
+  ct_surface.m_affine_manifold.compute_he_to_echart_id();
+  ct_surface.m_affine_manifold.compute_vchart_one_ring_echarts();
+
+  // mark sharp features
+  if (feature_vertex_file != "") {
+    std::ifstream fv(feature_edge_file);
+
+    std::vector<int64_t> feature_vids;
+    int64_t vid;
+    while (fv >> vid) {
+      feature_vids.push_back(vid);
+    }
+
+    fv.close();
+
+    ct_surface.m_affine_manifold.mark_feature_vertices(feature_vids);
+  }
+
+  if (feature_edge_file != "") {
+    std::ifstream fe(feature_edge_file);
+
+    std::vector<std::pair<int64_t, int64_t>> feature_edges;
+    int64_t e1, e2;
+    while (fe >> e1 >> e2) {
+      feature_edges.push_back(std::make_pair(e1, e2));
+    }
+
+    fe.close();
+
+    ct_surface.m_affine_manifold.mark_feature_edges(feature_edges);
+
+    ct_surface.m_affine_manifold.mark_separate_endpoint_constraint_group();
+  }
+
+  // debug test
+  // for (const auto& e :
+  //      ct_surface.m_affine_manifold.m_vertex_charts[0].edge_one_ring) {
+  //   const auto& echart = ct_surface.m_affine_manifold.m_edge_charts[e];
+  //   std::cout << e << ": " << echart.left_vertex_index << " "
+  //             << echart.right_vertex_index << std::endl;
+  // }
+  for (const auto& group : ct_surface.m_affine_manifold.m_vertex_charts[0]
+                             .separate_constraint_groups) {
+    std::cout << "----------" << std::endl;
+    for (const auto& eid : group) {
+      const auto& echart = ct_surface.m_affine_manifold.m_edge_charts[eid];
+      std::cout << eid << ": " << echart.left_vertex_index << " "
+                << echart.right_vertex_index << std::endl;
+    }
+  }
+
+  ct_surface.write_connected_lagrange_nodes("test_control_points", V);
+  // exit(0);
 
   // ct_surface.write_connected_lagrange_nodes(output_name +
   // "_bilaplacian_nodes",
@@ -444,15 +505,17 @@ main(int argc, char* argv[])
 
   std::vector<bool> node_assigned(node_cnt, false);
 
-  if (!use_incenter) {
-    std::cout << "compute cone constraints ..." << std::endl;
-    ct_surface.bezier_cone_constraints_expanded(
-      f2f_expanded, independent_node_map, node_assigned, v_normals);
-  }
+  // if (!use_incenter) {
+  //   std::cout << "compute cone constraints ..." << std::endl;
+  //   ct_surface.bezier_cone_constraints_expanded(
+  //     f2f_expanded, independent_node_map, node_assigned, v_normals);
+  // }
+
+  bool debug_isolate = true; // TODO: set to false. true only for debugging
 
   std::cout << "compute endpoint constraints ..." << std::endl;
   ct_surface.bezier_endpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, use_incenter);
+    f2f_expanded, independent_node_map, debug_isolate);
 
   std::cout << "compute interior 1 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_1_expanded(
@@ -479,6 +542,12 @@ main(int argc, char* argv[])
     } else if (independent_node_map[i] == 1) {
       ind_cnt++;
     }
+  }
+
+  std::ofstream indep_map_file("independent_node_map.txt");
+  for (int64_t i = 0; i < node_cnt * 3; ++i) {
+    // std::cout << i << " " << independent_node_map[i] << std::endl;
+    indep_map_file << independent_node_map[i] << std::endl;
   }
 
   std::cout << "node cnt: " << node_cnt * 3 << std::endl;
@@ -518,6 +587,8 @@ main(int argc, char* argv[])
 
     row_id++;
   }
+
+  Eigen::saveMarket(f2f_expanded, output_name + "_bezier_f2f_expanded.txt");
 
   Eigen::saveMarket(bezier_constraint_matrix,
                     output_name + "_bezier_constraints_expanded_old.txt");

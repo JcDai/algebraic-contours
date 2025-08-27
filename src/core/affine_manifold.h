@@ -39,6 +39,28 @@ struct VertexManifoldChart
   Eigen::Matrix2d U_ijik_inv, U_ijik;
   std::array<int64_t, 2> vid_j_k = { { -1, -1 } };
   std::array<int64_t, 3> node_id_i_j_k = { { -1, -1, -1 } };
+
+  // for sharp features
+  bool is_feature_cone = false; // Mark feature cone
+  bool is_feature_edge_endpoint =
+    false; // Mark stand-alone endpoint of a feature edge
+  bool is_feature_edge_intersection =
+    false; // Mark intersection of feature edges
+  bool is_feature_edge_interior =
+    false; // Mark vertex as in the middle of the edge chain
+  // std::vector<int>
+  //   face_feature_section;            // face sections devided by feature
+  //   edges
+  std::vector<bool> is_feature_edge; // is v-v_one_ring a feature edge. same
+                                     // size as vertex_one_ring
+
+  std::vector<int64_t> edge_one_ring; // edge v-v_onering id in m_edge_charts
+  std::map<int64_t, int64_t>
+    edge_to_local_vid_map; // corresponding local vid to edge id in the one ring
+
+  std::vector<std::vector<int64_t>>
+    separate_constraint_groups; // vector edges that are considered in the same
+                                // group
 };
 
 /// Local layout manifold chart in R2 of the triangles around an edge.
@@ -85,6 +107,10 @@ struct EdgeManifoldChart
   double bottom_alpha;
   double bottom_beta;
   double bottom_gamma;
+
+  // for sharp features
+  bool is_feature_edge = false;
+  // bool is_boundary_feature_edge = false;
 };
 
 /// Local layout manifold chart in R2 of a triangle.
@@ -409,6 +435,13 @@ public:
   std::vector<EdgeManifoldChart> m_edge_charts;
   std::vector<FaceManifoldChart> m_face_charts;
 
+  // code for sharp features
+  // half edge to edge chart id
+  std::map<std::pair<int64_t, int64_t>, int64_t> m_he_to_echart_id;
+
+  void compute_he_to_echart_id();
+  void compute_vchart_one_ring_echarts();
+
 public:
   // code added for C1 constraints
 
@@ -440,6 +473,12 @@ public:
   void compute_incenter_for_face_charts();
 
   void generate_lagrange_nodes(bool use_incenter = false);
+
+  // for sharp features
+  void mark_feature_vertices(const std::vector<int64_t>& feature_vids);
+  void mark_feature_edges(
+    const std::vector<std::pair<int64_t, int64_t>>& feature_edge_vids);
+  void mark_separate_endpoint_constraint_group();
 };
 
 /// Representation for an affine manifold with a global parametrization, which

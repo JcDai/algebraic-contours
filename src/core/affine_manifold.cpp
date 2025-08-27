@@ -1544,3 +1544,172 @@ AffineManifold::generate_lagrange_nodes(bool use_incenter)
     }
   }
 }
+
+// for sharp features
+void
+AffineManifold::compute_he_to_echart_id()
+{
+  for (size_t idx = 0; idx < m_edge_charts.size(); ++idx) {
+    m_he_to_echart_id[std::make_pair(m_edge_charts[idx].left_vertex_index,
+                                     m_edge_charts[idx].right_vertex_index)] =
+      idx;
+  }
+}
+
+void
+AffineManifold::compute_vchart_one_ring_echarts()
+{
+  assert(!m_he_to_echart_id.empty());
+  for (auto& v : m_vertex_charts) {
+    const int64_t vid = v.vertex_index;
+
+    // std::cout << "----------" << std::endl;
+    // std::cout << "vid: " << vid << std::endl;
+
+    int cnt = 0;
+    for (const auto& v_one_ring : v.vertex_one_ring) {
+      if (m_he_to_echart_id.find(std::make_pair(vid, v_one_ring)) !=
+          m_he_to_echart_id.end()) {
+        v.edge_one_ring.push_back(
+          m_he_to_echart_id[std::make_pair(vid, v_one_ring)]);
+        // std::cout << "edge " << vid << "-" << v_one_ring << " "
+        //           << m_he_to_echart_id[std::make_pair(vid, v_one_ring)]
+        //           << std::endl;
+        v.edge_to_local_vid_map[m_he_to_echart_id[std::make_pair(
+          vid, v_one_ring)]] = cnt;
+      } else {
+        v.edge_one_ring.push_back(
+          m_he_to_echart_id[std::make_pair(v_one_ring, vid)]);
+        // std::cout << "edge " << v_one_ring << "-" << vid << " "
+        //           << m_he_to_echart_id[std::make_pair(v_one_ring, vid)]
+        //           << std::endl;
+        v.edge_to_local_vid_map[m_he_to_echart_id[std::make_pair(v_one_ring,
+                                                                 vid)]] = cnt;
+      }
+
+      // TODO: need to consider boundary half edge case. direction matters for
+      // endpoint constraints
+      cnt++;
+    }
+  }
+}
+
+void
+AffineManifold::mark_feature_vertices(const std::vector<int64_t>& feature_vids)
+{
+  for (const auto& v : feature_vids) {
+    m_vertex_charts[v].is_feature_cone = true;
+  }
+}
+
+void
+AffineManifold::mark_feature_edges(
+  const std::vector<std::pair<int64_t, int64_t>>& feature_edge_vids)
+{
+  // construct feature edge map
+  std::map<std::pair<int64_t, int64_t>, bool> is_feature_edge;
+  // count vertex occurrance in feature edges
+  std::vector<int> v_occur_cnt(m_vertex_charts.size(), 0);
+
+  for (const auto& e : feature_edge_vids) {
+    is_feature_edge[std::make_pair(e.first, e.second)] = true;
+    is_feature_edge[std::make_pair(e.second, e.first)] = true;
+
+    v_occur_cnt[e.first]++;
+    v_occur_cnt[e.second]++;
+  }
+
+  // mark feature edges in edge charts
+  for (auto& e : m_edge_charts) {
+    if (is_feature_edge.find(
+          std::make_pair(e.left_vertex_index, e.right_vertex_index)) !=
+        is_feature_edge.end()) {
+      e.is_feature_edge = true;
+    }
+  }
+
+  // mark vertex on feature edges
+  for (size_t i = 0; i < m_vertex_charts.size(); ++i) {
+    if (v_occur_cnt[i] > 2) {
+      m_vertex_charts[i].is_feature_edge_intersection = true;
+    } else if (v_occur_cnt[i] == 1) {
+      m_vertex_charts[i].is_feature_edge_endpoint = true;
+    } else if (v_occur_cnt[i] == 2) {
+      m_vertex_charts[i].is_feature_edge_interior = true;
+    }
+  }
+}
+
+void
+AffineManifold::mark_separate_endpoint_constraint_group()
+{
+  for (auto& v : m_vertex_charts) {
+    if (v.is_feature_cone) {
+      // prioritize feature cone than edge feature
+      continue;
+    }
+
+    if (v.is_feature_edge_endpoint) {
+      // single group excluding the edge itself
+      // TODO: this is wrong for boundary cases
+      size_t end_idx =
+        v.is_boundary ? v.vertex_one_ring.size() : v.vertex_one_ring.size() - 1;
+
+      std::vector<int64_t> group;
+
+      for (size_t i = 0; i < end_idx; ++i) {
+        if (!m_edge_charts[v.edge_one_ring[i]].is_feature_edge) {
+          group.push_back(v.edge_one_ring[i]);
+        }
+      }
+
+      v.separate_constraint_groups.push_back(group);
+    } else if (v.is_feature_edge_interior || v.is_feature_edge_intersection) {
+      // multiple groups separated by feature edges
+      size_t end_idx =
+        v.is_boundary ? v.vertex_one_ring.size() : v.vertex_one_ring.size() - 1;
+
+      // compute feature edge local ids in one ring
+      std::vector<int64_t> feature_edge_local_ids;
+      for (size_t i = 0; i < end_idx; ++i) {
+        if (m_edge_charts[v.edge_one_ring[i]].is_feature_edge) {
+          feature_edge_local_ids.push_back(i);
+        }
+      }
+
+      if (v.is_boundary) {
+        int64_t start_idx = 0;
+        for (const auto& elid : feature_edge_local_ids) {
+          if (start_idx != elid) {
+            std::vector<int64_t> group;
+            for (int i = start_idx; i <= elid; ++i) {
+              group.push_back(v.edge_one_ring[i]);
+            }
+
+            v.separate_constraint_groups.push_back(group);
+
+            start_idx = elid;
+          }
+        }
+      } else {
+        for (size_t i = 0; i < feature_edge_local_ids.size(); ++i) {
+          int64_t start_idx = feature_edge_local_ids[i];
+          int64_t end_idx =
+            feature_edge_local_ids[(i + 1) % feature_edge_local_ids.size()];
+
+          if (end_idx < start_idx) {
+            end_idx += v.vertex_one_ring.size() - 1;
+          }
+
+          std::vector<int64_t> group;
+          for (int k = start_idx; k <= end_idx; ++k) {
+            group.push_back(
+              v.edge_one_ring[k % (v.vertex_one_ring.size() - 1)]);
+          }
+
+          v.separate_constraint_groups.push_back(group);
+        }
+      }
+    }
+  }
+}
