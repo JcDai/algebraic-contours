@@ -23,7 +23,8 @@ public:
    */
   CloughTocherOptimizer(const Eigen::MatrixXd V,
                         const Eigen::MatrixXi F,
-                        const AffineManifold affine_manifold);
+                        const AffineManifold affine_manifold,
+                        bool use_incenter = false);
 
   /**
    * @brief Optimize the quadratic Laplacian energy over the parameterization
@@ -50,20 +51,19 @@ public:
     int iterations = 1,
     double step_size = 1.);
 
-  std::vector<Eigen::Vector3d>
-  gradient_descent_laplace_beltrami_energy(
+  std::vector<Eigen::Vector3d> gradient_descent_laplace_beltrami_energy(
     const std::vector<Eigen::Vector3d>& bezier_control_points,
-    int iterations=10,
-    double step_size=1e-4);
+    int iterations = 10,
+    double step_size = 1e-4);
 
   /**
-   * @brief Project the surface determined by the control points to the constraint.
-   * 
-   * @param bezier_control_points: initial Bezier control points 
+   * @brief Project the surface determined by the control points to the
+   * constraint.
+   *
+   * @param bezier_control_points: initial Bezier control points
    * @return projected Bezier control points
    */
-  std::vector<Eigen::Vector3d>
-  project_to_constraints (
+  std::vector<Eigen::Vector3d> project_to_constraints(
     const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   /**
@@ -119,10 +119,14 @@ public:
   bool double_area = false;
   bool invert_area = false;
   bool normalize_count = false;
-  bool bound_energy = true; // bound the energy during Laplace Beltrami optimization
-  bool bound_residual = true; // bound the residual during Laplace Beltrami optimization
-  bool use_orthogonal_projection = true; // use orthongonal projection to constraint subset
-  bool use_parametric_metric = false; // use parameterization metric for first iteration of Laplace Beltrami
+  bool bound_energy =
+    true; // bound the energy during Laplace Beltrami optimization
+  bool bound_residual =
+    true; // bound the residual during Laplace Beltrami optimization
+  bool use_orthogonal_projection =
+    true; // use orthongonal projection to constraint subset
+  bool use_parametric_metric = false; // use parameterization metric for first
+                                      // iteration of Laplace Beltrami
   bool use_fixed_metric = false; // use fixed metric for gradient computation
 
   /**
@@ -145,13 +149,15 @@ public:
 
   double compute_normalized_fitting_weight() const;
 
-  Eigen::SparseMatrix<double>
-  generate_position_matrix(const Eigen::VectorXd& p) const;
+  Eigen::SparseMatrix<double> generate_position_matrix(
+    const Eigen::VectorXd& p) const;
 
   void initialize_data_log();
   void write_data_log_entry();
   void close_logs();
-  void checkpoint_control_points(const std::vector<Eigen::Vector3d>& bezier_control_points, int iter);
+  void checkpoint_control_points(
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    int iter);
 
   std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
   generate_position_energy_quadratic(
@@ -195,12 +201,14 @@ private:
   };
   IterationData ID;
 
+  bool m_use_incenter;
+
   /**
    * @brief Helper function to produce the constraint and independent variable
    * projection matrices.
    *
    */
-  void initialize_ind_to_full_matrices();
+  void initialize_ind_to_full_matrices(bool use_incenter = false);
 
   /**
    * @brief Get the Bezier node indices of the three micro-triangles of a given
@@ -280,11 +288,12 @@ private:
    * @param p: flattened varibale vector
    * @return list of 3D variable nodes
    */
-  std::vector<Eigen::Vector3d> build_control_points(const Eigen::VectorXd& p) const;
+  std::vector<Eigen::Vector3d> build_control_points(
+    const Eigen::VectorXd& p) const;
 
   /**
    * @brief Project a vector orthogonally to the reduced constraint subspace.
-   * 
+   *
    * @param p0: initial Bezier node vector
    * @return reduced space vector
    */
@@ -322,8 +331,7 @@ private:
   generate_autodiff_laplace_beltrami_stiffness_matrix(
     const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
-  void
-  assemble_autodiff_laplace_beltrami_siffness_matrix(
+  void assemble_autodiff_laplace_beltrami_siffness_matrix(
     const std::vector<Eigen::Vector3d>& bezier_control_points,
     const std::array<std::array<int64_t, 10>, 3>& patch_indices,
     double& energy,
@@ -334,8 +342,7 @@ private:
   generate_autodiff_laplace_beltrami_gradient(
     const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
-  void
-  assemble_autodiff_laplace_beltrami_gradient(
+  void assemble_autodiff_laplace_beltrami_gradient(
     const std::vector<Eigen::Vector3d>& bezier_control_points,
     const std::array<std::array<int64_t, 10>, 3>& patch_indices,
     double& energy,

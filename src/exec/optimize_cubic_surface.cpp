@@ -22,9 +22,10 @@ refine_mesh(Eigen::MatrixXd& V,
   igl::upsample(uv, FT, refinement);
 }
 
-Eigen::Vector3d build_color_from_rgb(int r, int g, int b)
+Eigen::Vector3d
+build_color_from_rgb(int r, int g, int b)
 {
-  return Eigen::Vector3d({(r / 255.), (g / 255.), (b / 255.)});
+  return Eigen::Vector3d({ (r / 255.), (g / 255.), (b / 255.) });
 }
 
 int
@@ -38,28 +39,27 @@ main(int argc, char* argv[])
   };
 
   // color palette
-  //rgb(134, 16, 16) 
+  // rgb(134, 16, 16)
   Eigen::Vector3d rgb_maroon = build_color_from_rgb(134, 16, 15);
-  //rgb(24, 197, 188) 
+  // rgb(24, 197, 188)
   Eigen::Vector3d rgb_teal = build_color_from_rgb(24, 197, 188);
-  //rgb(191, 143, 211) 
+  // rgb(191, 143, 211)
   Eigen::Vector3d rgb_lavender = build_color_from_rgb(191, 143, 211);
-  //rgb(196, 118, 10) 
+  // rgb(196, 118, 10)
   Eigen::Vector3d rgb_orange = build_color_from_rgb(196, 118, 10);
-    // rgb(253, 214, 183)
-    // rgb(111, 50, 0)
+  // rgb(253, 214, 183)
+  // rgb(111, 50, 0)
 
-    // rgb(27, 130, 190)
-    // rgb(1, 22, 34)
+  // rgb(27, 130, 190)
+  // rgb(1, 22, 34)
 
-    // rgb(227, 205, 237)
-    // rgb(58, 8, 80)
-    // rgb(110, 30, 144)
+  // rgb(227, 205, 237)
+  // rgb(58, 8, 80)
+  // rgb(110, 30, 144)
 
-    // rgb(0, 47, 74)
-    // rgb(0, 104, 33)
-    // rgb(34, 0, 74)
-
+  // rgb(0, 47, 74)
+  // rgb(0, 104, 33)
+  // rgb(34, 0, 74)
 
   // Get command line arguments
   CLI::App app{ "Optimize Clough-Tocher cubic surface mesh." };
@@ -86,10 +86,16 @@ main(int argc, char* argv[])
   bool use_fixed_metric = false;
   bool use_gradient = false;
   bool triangulate = false;
+  bool use_incenter = false;
+
+  std::string feature_edge_file = "";
+  std::string feature_vertex_file = "";
+
   app.add_option("-i,--input", input_filename, "Mesh filepath")
     ->check(CLI::ExistingFile)
     ->required();
   app.add_option("--render_path", render_path, "Render output filepath");
+
   app.add_option("--log_level", log_level, "Level of logging")
     ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case));
   app
@@ -97,10 +103,7 @@ main(int argc, char* argv[])
                 weight,
                 "Fitting weight for the quadratic surface approximation")
     ->check(CLI::PositiveNumber);
-  app
-    .add_option("--step_size",
-                step_size,
-                "step size for gradient descent")
+  app.add_option("--step_size", step_size, "step size for gradient descent")
     ->check(CLI::PositiveNumber);
   app.add_option(
     "-n,--iterations", iterations, "Number of iterations of optimization");
@@ -110,16 +113,10 @@ main(int argc, char* argv[])
   app.add_option("-p, --p_norm", p_norm, "p norm for fitting term");
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
   app.add_flag(
-    "--invert_area", invert_area, "Use inverse area for fitting noramlization");
-  app.add_flag("--square_area", square_area, "Use squared area in laplacian");
-  app.add_flag("--normalize_count", normalize_count, "Normalize");
-  app.add_flag("--skip_energy_decrease", skip_energy_decrease, "skip energy bound in Laplace Beltrami optimization");
-  app.add_flag("--skip_residual", skip_residual, "skip residual bound in Laplace Beltrami optimization");
-  app.add_flag("--use_coordinate_projection", use_coordinate_projection, "use initial coordinate projection instead of orthogonal");
-  app.add_flag("--use_parametric_metric", use_parametric_metric, "use parameterization metric for first iteration of Laplace Beltrami");
-  app.add_flag("--use_fixed_metric", use_fixed_metric, "use fixed metric for gradient computation");
-  app.add_flag("--triangulate", triangulate, "triangulate the quadratic surface and save OBJ");
-  app.add_flag("--use_gradient", use_gradient, "use gradient descent");
+    "--use_incenter", use_incenter, "Use incenter instead of barycenter");
+
+  app.add_option("--feature_edge", feature_edge_file, "feature edges");
+  app.add_option("--feature_vertex", feature_vertex_file, "feature vertices");
   CLI11_PARSE(app, argc, argv);
   std::string mesh_name =
     std::filesystem::path(input_filename).filename().replace_extension();
@@ -157,9 +154,51 @@ main(int argc, char* argv[])
   spdlog::info("new uv area: {}", uv_area);
 
   AffineManifold affine_manifold(F, uv, FT);
-  affine_manifold.generate_lagrange_nodes();
+
+  if (use_incenter) {
+    affine_manifold.compute_incenter_for_face_charts();
+    affine_manifold.compute_incenter_for_edge_charts();
+  }
+  affine_manifold.generate_lagrange_nodes(use_incenter);
   polyscope::init();
-  if (visualize) polyscope::registerSurfaceMesh("PL mesh", V, F);
+  if (visualize)
+    polyscope::registerSurfaceMesh("PL mesh", V, F);
+
+  // code added for sharp feature
+  // call order cannot be changed
+  affine_manifold.compute_he_to_echart_id();
+  affine_manifold.compute_vchart_one_ring_echarts();
+
+  // mark sharp features
+  if (feature_vertex_file != "") {
+    std::ifstream fv(feature_edge_file);
+
+    std::vector<int64_t> feature_vids;
+    int64_t vid;
+    while (fv >> vid) {
+      feature_vids.push_back(vid);
+    }
+
+    fv.close();
+
+    affine_manifold.mark_feature_vertices(feature_vids);
+  }
+
+  if (feature_edge_file != "") {
+    std::ifstream fe(feature_edge_file);
+
+    std::vector<std::pair<int64_t, int64_t>> feature_edges;
+    int64_t e1, e2;
+    while (fe >> e1 >> e2) {
+      feature_edges.push_back(std::make_pair(e1, e2));
+    }
+
+    fe.close();
+
+    affine_manifold.mark_feature_edges(feature_edges);
+
+    affine_manifold.mark_separate_endpoint_constraint_group();
+  }
 
   // build initial surface
   spdlog::info("Computing spline surface");
@@ -175,8 +214,8 @@ main(int argc, char* argv[])
                                  energy_hessian_inverse);
   // WARNING: surface writing needed to generate points
   // TODO: make part of initialization
-  ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(join_path(output_name, "initial"),
-                                                                      true);
+  ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
+    join_path(output_name, "initial"), true);
   ct_surface.write_degenerate_cubic_surface_to_msh_with_conn(
     join_path(output_name, "CT_degenerate_cubic_bezier_points"), V, F);
   std::vector<Eigen::Vector3d> bezier_control_points =
@@ -184,10 +223,11 @@ main(int argc, char* argv[])
   write_mesh(
     ct_surface, bezier_control_points, join_path(output_name, "linear"));
   set_bezier_control_points(ct_surface, bezier_control_points);
-  if (visualize) ct_surface.add_surface_to_viewer(rgb_orange, 3, "linear");
+  if (visualize)
+    ct_surface.add_surface_to_viewer(rgb_orange, 3, "linear");
 
   // initialize optimizer
-  CloughTocherOptimizer optimizer(V, F, affine_manifold);
+  CloughTocherOptimizer optimizer(V, F, affine_manifold, use_incenter);
   optimizer.fitting_weight = weight;
   optimizer.invert_area = invert_area;
   optimizer.double_area = square_area;
@@ -206,7 +246,8 @@ main(int argc, char* argv[])
              projected_control_points,
              join_path(output_name, "projected_mesh"));
   set_bezier_control_points(ct_surface, projected_control_points);
-  if (visualize) ct_surface.add_surface_to_viewer(rgb_maroon, 3, "projected");
+  if (visualize)
+    ct_surface.add_surface_to_viewer(rgb_maroon, 3, "projected");
 
   // optimize the bezier nodes with laplacian energy
   std::vector<Eigen::Vector3d> laplacian_control_points =
@@ -215,34 +256,33 @@ main(int argc, char* argv[])
              laplacian_control_points,
              join_path(output_name, "laplacian_mesh"));
   set_bezier_control_points(ct_surface, laplacian_control_points);
-  if (visualize) ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
-  if (visualize) polyscope::show();
+  if (visualize)
+    ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
+  if (visualize)
+    polyscope::show();
 
   // optimize the bezier nodes with laplace beltrami energy
   std::vector<Eigen::Vector3d> laplace_beltrami_control_points;
-  if (use_gradient)
-  {
+  if (use_gradient) {
     laplace_beltrami_control_points =
-      optimizer.gradient_descent_laplace_beltrami_energy(bezier_control_points,
-                                                iterations, step_size);
-  }
-  else
-  {
+      optimizer.gradient_descent_laplace_beltrami_energy(
+        bezier_control_points, iterations, step_size);
+  } else {
     laplace_beltrami_control_points =
-      optimizer.optimize_laplace_beltrami_energy(bezier_control_points,
-                                                 iterations, step_size);
+      optimizer.optimize_laplace_beltrami_energy(
+        bezier_control_points, iterations, step_size);
   }
   write_mesh(ct_surface,
              laplace_beltrami_control_points,
              join_path(output_name, "laplace_beltrami_mesh"));
 
   set_bezier_control_points(ct_surface, laplace_beltrami_control_points);
-  if (triangulate)
-  {
+  if (triangulate) {
     Eigen::MatrixXd V_out;
     Eigen::MatrixXi F_out;
     ct_surface.discretize(3, V_out, F_out);
-    igl::writeOBJ(join_path(output_name, "triangulated_mesh.obj"), V_out, F_out);
+    igl::writeOBJ(
+      join_path(output_name, "triangulated_mesh.obj"), V_out, F_out);
   }
 
   std::vector<SpatialVector> points;
@@ -257,7 +297,8 @@ main(int argc, char* argv[])
   // write lag2bezier mat for c1meshing soft constraint
   Eigen::SparseMatrix<double, 1> l2b_mat;
   ct_surface.lag2bezier_full_mat(l2b_mat);
-  Eigen::saveMarket(l2b_mat, join_path(output_name, "CT_lag2bezier_matrix.txt"));
+  Eigen::saveMarket(l2b_mat,
+                    join_path(output_name, "CT_lag2bezier_matrix.txt"));
 
   ct_surface.add_surface_to_viewer(rgb_teal, 3, "laplace_beltrami");
   polyscope::screenshot(render_path);

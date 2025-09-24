@@ -1,18 +1,20 @@
 #include "optimize_clough_tocher.hpp"
-#include "Clough_Tocher_Laplace_Beltrami.c"
-#include "Clough_Tocher_Laplace_Beltrami_autodiff.c"
-#include "Clough_Tocher_Laplacian.c"
+#include "autogen/Clough_Tocher_Laplace_Beltrami.c"
+#include "autogen/Clough_Tocher_Laplace_Beltrami_autodiff.c"
+#include "autogen/Clough_Tocher_Laplacian.c"
 #include "clough_tocher_constraint_matrices.hpp"
 #include "igl/doublearea.h"
 
 CloughTocherOptimizer::CloughTocherOptimizer(
   const Eigen::MatrixXd V,
   const Eigen::MatrixXi F,
-  const AffineManifold affine_manifold)
+  const AffineManifold affine_manifold,
+  bool use_incenter)
   : fitting_weight(1e5)
   , m_V(V)
   , m_F(F)
   , m_affine_manifold(affine_manifold)
+  , m_use_incenter(use_incenter)
 {
   // TODO: Would be better to avoid the uneccesary construction of a surface
   Eigen::SparseMatrix<double> fit_matrix;
@@ -21,15 +23,15 @@ CloughTocherOptimizer::CloughTocherOptimizer(
     energy_hessian_inverse;
   OptimizationParameters optimization_params;
   ct_surface = CloughTocherSurface(V,
-                                 affine_manifold,
-                                 optimization_params,
-                                 fit_matrix,
-                                 energy_hessian,
-                                 energy_hessian_inverse);
+                                   affine_manifold,
+                                   optimization_params,
+                                   fit_matrix,
+                                   energy_hessian,
+                                   energy_hessian_inverse);
 
   // build constraint and projection matrices
   timer.start();
-  initialize_ind_to_full_matrices();
+  initialize_ind_to_full_matrices(m_use_incenter);
   spdlog::info("constraint matrix construction took {} s",
                timer.getElapsedTime());
 
@@ -44,17 +46,14 @@ Eigen::VectorXd
 CloughTocherOptimizer::project_to_reduced_subspace(
   const Eigen::VectorXd& p0) const
 {
-  if (use_orthogonal_projection)
-  {
+  if (use_orthogonal_projection) {
     // project to reduced space and up to satisfy constraints
     const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
     const Eigen::SparseMatrix<double>& M = C.transpose() * C;
     Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> solver;
     solver.compute(M);
     return solver.solve(C.transpose() * p0);
-  }
-  else
-  {
+  } else {
     const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
     return F * p0;
   }
@@ -138,7 +137,8 @@ CloughTocherOptimizer::optimize_laplacian_energy(
   const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
   const Eigen::SparseMatrix<double>& hessian_smooth = get_stiffness_matrix();
   const Eigen::SparseMatrix<double>& P = get_position_matrix();
-  Eigen::SparseMatrix<double> hessian = C.transpose() * ((hessian_smooth + k * P) * C);
+  Eigen::SparseMatrix<double> hessian =
+    C.transpose() * ((hessian_smooth + k * P) * C);
   spdlog::info("matrix construction took {} s", timer.getElapsedTime());
 
   // invert hessian
@@ -154,10 +154,14 @@ CloughTocherOptimizer::optimize_laplacian_energy(
   Eigen::VectorXd derivative = -k * C.transpose() * (P * p0);
 
   // print initial energy
-  //Eigen::VectorXd N0 = F * p0;
+  // Eigen::VectorXd N0 = F * p0;
   Eigen::VectorXd N0 = project_to_reduced_subspace(p0);
-  spdlog::info("initial fit energy: {}", evaluate_quadratic_energy(C.transpose() * ((k * P) * C), derivative, E0, N0));
-  spdlog::info("initial smoothness energy: {}", evaluate_quadratic_energy(C.transpose() * (hessian_smooth * C), 0 * derivative, 0., N0));
+  spdlog::info("initial fit energy: {}",
+               evaluate_quadratic_energy(
+                 C.transpose() * ((k * P) * C), derivative, E0, N0));
+  spdlog::info("initial smoothness energy: {}",
+               evaluate_quadratic_energy(
+                 C.transpose() * (hessian_smooth * C), 0 * derivative, 0., N0));
   spdlog::info("initial energy is {}",
                evaluate_quadratic_energy(hessian, derivative, E0, N0));
 
@@ -248,8 +252,7 @@ CloughTocherOptimizer::compute_normalized_fitting_weight() const
   }
 
   // optionally normalize by the vertex count
-  if (normalize_count)
-  {
+  if (normalize_count) {
     int num_vertices = V.rows();
     normalized_fitting_weight /= num_vertices;
   }
@@ -257,18 +260,21 @@ CloughTocherOptimizer::compute_normalized_fitting_weight() const
   return normalized_fitting_weight;
 }
 
-void CloughTocherOptimizer::checkpoint_control_points(const std::vector<Eigen::Vector3d>& bezier_control_points, int iter)
+void
+CloughTocherOptimizer::checkpoint_control_points(
+  const std::vector<Eigen::Vector3d>& bezier_control_points,
+  int iter)
 {
   polyscope::removeAllStructures();
   std::filesystem::create_directory(output_dir);
   set_bezier_control_points(ct_surface, bezier_control_points);
   write_mesh(ct_surface,
              bezier_control_points,
-             join_path(output_dir, "iter_" + std::to_string(iter))); 
-  ct_surface.add_surface_to_viewer({0.1, 0.1, 0.8}, 3, "laplace_beltrami");
-  polyscope::screenshot(join_path(output_dir, "iter_" + std::to_string(iter) + ".png"));
+             join_path(output_dir, "iter_" + std::to_string(iter)));
+  ct_surface.add_surface_to_viewer({ 0.1, 0.1, 0.8 }, 3, "laplace_beltrami");
+  polyscope::screenshot(
+    join_path(output_dir, "iter_" + std::to_string(iter) + ".png"));
 }
-
 
 std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
 CloughTocherOptimizer::generate_position_energy_quadratic(
@@ -304,47 +310,48 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   spdlog::info("Using normalized fitting weight {}", k);
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
-  //Eigen::SparseMatrix<double> P = generate_position_matrix();
+  // Eigen::SparseMatrix<double> P = generate_position_matrix();
 
   Eigen::VectorXd N0 = project_to_reduced_subspace(p_init);
-  std::vector<Eigen::Vector3d> optimized_control_points = build_control_points(C * N0);
+  std::vector<Eigen::Vector3d> optimized_control_points =
+    build_control_points(C * N0);
   Eigen::VectorXd p0 = C * N0;
 
   // get base energy
-  //P = generate_position_matrix(p0 - p_init);
-  //Eigen::VectorXd d_fit = -k * (P * p_init);
+  // P = generate_position_matrix(p0 - p_init);
+  // Eigen::VectorXd d_fit = -k * (P * p_init);
   double energy_fit, energy_smooth;
   Eigen::VectorXd derivative_fit, derivative_smooth, derivative;
   Eigen::SparseMatrix<double> hessian_fit, hessian_smooth, hessian;
-  //energy_fit = 0.5 * k * p_init.dot(p_init);
-  //derivative_fit = k * (P * (p0 - p_init));
-  //derivative = C.transpose() * (derivative_fit + derivative_smooth);
+  // energy_fit = 0.5 * k * p_init.dot(p_init);
+  // derivative_fit = k * (P * (p0 - p_init));
+  // derivative = C.transpose() * (derivative_fit + derivative_smooth);
 
   Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> hessian_inverse;
-  //Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> hessian_inverse;
+  // Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> hessian_inverse;
 
   timer.start();
-  std::tie(energy_fit, derivative_fit, hessian_fit) = generate_position_energy_quadratic(bezier_control_points, optimized_control_points);
-  if (use_parametric_metric)
-  {
+  std::tie(energy_fit, derivative_fit, hessian_fit) =
+    generate_position_energy_quadratic(bezier_control_points,
+                                       optimized_control_points);
+  if (use_parametric_metric) {
     // TODO: remove factor of 2 once quadrature fixed
-    hessian_smooth = generate_laplace_beltrami_stiffness_matrix() / 2.; 
-    //hessian_smooth = generate_laplacian_stiffness_matrix();
-  }
-  else if (false)
-  {
-    std::tie(energy_smooth, derivative_smooth, hessian_smooth) = generate_autodiff_laplace_beltrami_stiffness_matrix(optimized_control_points);
-  }
-  else if (use_fixed_metric)
-  {
-    hessian_smooth = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+    hessian_smooth = generate_laplace_beltrami_stiffness_matrix() / 2.;
+    // hessian_smooth = generate_laplacian_stiffness_matrix();
+  } else if (false) {
+    std::tie(energy_smooth, derivative_smooth, hessian_smooth) =
+      generate_autodiff_laplace_beltrami_stiffness_matrix(
+        optimized_control_points);
+  } else if (use_fixed_metric) {
+    hessian_smooth =
+      generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
     derivative_smooth = hessian_smooth * p0;
     energy_smooth = 0.5 * p0.dot(derivative_smooth);
-  }
-  else
-  {
-    std::tie(energy_smooth, derivative_smooth) = generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
-    hessian_smooth = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+  } else {
+    std::tie(energy_smooth, derivative_smooth) =
+      generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
+    hessian_smooth =
+      generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
   }
   derivative = C.transpose() * (derivative_smooth + k * derivative_fit);
   hessian = C.transpose() * ((hessian_smooth + k * hessian_fit) * C);
@@ -357,8 +364,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   spdlog::info("initial fit energy: {}", energy_fit);
   spdlog::info("initial smoothness energy: {}", energy_smooth);
 
-  //ID.initial_energy = std::numeric_limits<double>::infinity();
-  //ID.initial_energy = evaluate_quadratic_energy(hessian, derivative, E0, N0);
+  // ID.initial_energy = std::numeric_limits<double>::infinity();
+  // ID.initial_energy = evaluate_quadratic_energy(hessian, derivative, E0, N0);
   ID.initial_energy = energy_smooth + k * energy_fit;
   spdlog::info("initial energy: {}", ID.initial_energy);
   double max_res_error = 10. * ID.solve_residual;
@@ -370,16 +377,15 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
     Eigen::VectorXd p1 = C * N1;
     Eigen::VectorXd res = (hessian * N1) + derivative;
     ID.solve_residual = res.cwiseAbs().maxCoeff();
-    //Eigen::VectorXd d = N1 - N0;
+    // Eigen::VectorXd d = N1 - N0;
     Eigen::VectorXd d = N1;
     spdlog::info("newton decr: {}", d.dot(derivative));
-
 
     spdlog::info(
       "iter {}: E={}, res={}", ID.iter, ID.initial_energy, ID.solve_residual);
 
     // do line search
-    //ID.step_size = (ID.iter == 1) ? 1.0 : 0.5;
+    // ID.step_size = (ID.iter == 1) ? 1.0 : 0.5;
     ID.step_size = std::min(2 * ID.step_size, step_size);
     ID.optimized_energy = ID.initial_energy;
     Eigen::VectorXd N, p;
@@ -388,27 +394,31 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
       N = N0 + (ID.step_size * d);
       p = C * N;
       optimized_control_points = build_control_points(p);
-      //spdlog::debug("energy in previous metric: {}", evaluate_quadratic_energy(hessian, derivative, E0, N)); 
+      // spdlog::debug("energy in previous metric: {}",
+      // evaluate_quadratic_energy(hessian, derivative, E0, N));
 
       // compute hessian
       timer.start();
-      std::tie(energy_fit, derivative_fit, hessian_fit) = generate_position_energy_quadratic(bezier_control_points, optimized_control_points);
-      //derivative_fit = k * (P * (p - p_init));
-      if (false)
-      {
-        //hessian_smooth = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
-        std::tie(energy_smooth, derivative_smooth, hessian_smooth) = generate_autodiff_laplace_beltrami_stiffness_matrix(optimized_control_points);
-      }
-      else if (use_fixed_metric)
-      {
-        hessian_smooth = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+      std::tie(energy_fit, derivative_fit, hessian_fit) =
+        generate_position_energy_quadratic(bezier_control_points,
+                                           optimized_control_points);
+      // derivative_fit = k * (P * (p - p_init));
+      if (false) {
+        // hessian_smooth =
+        // generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+        std::tie(energy_smooth, derivative_smooth, hessian_smooth) =
+          generate_autodiff_laplace_beltrami_stiffness_matrix(
+            optimized_control_points);
+      } else if (use_fixed_metric) {
+        hessian_smooth =
+          generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
         derivative_smooth = hessian_smooth * p;
         energy_smooth = 0.5 * p.dot(derivative_smooth);
-      }
-      else
-      {
-        std::tie(energy_smooth, derivative_smooth) = generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
-        hessian_smooth = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+      } else {
+        std::tie(energy_smooth, derivative_smooth) =
+          generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
+        hessian_smooth =
+          generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
       }
       derivative = C.transpose() * (derivative_smooth + k * derivative_fit);
       hessian = C.transpose() * ((hessian_smooth + k * hessian_fit) * C);
@@ -437,8 +447,7 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
       if ((!bound_energy || (ID.optimized_energy <= ID.initial_energy)) &&
           (!bound_residual || (ID.solve_residual <= max_res_error)))
         break;
-      if (ID.step_size < 1e-50)
-      {
+      if (ID.step_size < 1e-50) {
         spdlog::info("switching to gradient");
         d = g;
       }
@@ -477,8 +486,7 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
     // serialize if checkpoint iteration
     int checkpoint = 10;
-    if (((ID.iter % checkpoint) == 0) || (ID.iter < 0))
-    {
+    if (((ID.iter % checkpoint) == 0) || (ID.iter < 0)) {
       checkpoint_control_points(optimized_control_points, ID.iter);
     }
   }
@@ -511,7 +519,8 @@ CloughTocherOptimizer::gradient_descent_laplace_beltrami_energy(
   double E0 = 0.5 * k * p_init.dot(p_init);
 
   Eigen::VectorXd N0 = project_to_reduced_subspace(p_init);
-  std::vector<Eigen::Vector3d> optimized_control_points = build_control_points(C * N0);
+  std::vector<Eigen::Vector3d> optimized_control_points =
+    build_control_points(C * N0);
   Eigen::VectorXd p0 = C * N0;
 
   // get derivative
@@ -519,12 +528,14 @@ CloughTocherOptimizer::gradient_descent_laplace_beltrami_energy(
   Eigen::VectorXd d_fit = -k * (P * p_init);
   Eigen::VectorXd derivative_fit = k * (P * (p0 - p_init));
   Eigen::VectorXd derivative_smooth = Eigen::VectorXd::Zero(p_init.size());
-  Eigen::VectorXd derivative = C.transpose() * (derivative_fit + derivative_smooth);
+  Eigen::VectorXd derivative =
+    C.transpose() * (derivative_fit + derivative_smooth);
 
   for (ID.iter = 1; ID.iter < iterations + 1; ++ID.iter) {
     // solve for optimal solution
     derivative_fit = k * (P * (p0 - p_init));
-    std::tie(energy_smooth, derivative_smooth) = generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
+    std::tie(energy_smooth, derivative_smooth) =
+      generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
     derivative = C.transpose() * (derivative_smooth + derivative_fit);
 
     Eigen::VectorXd d = -derivative;
@@ -607,25 +618,29 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices()
   std::vector<int> independent_node_map(node_cnt * 3, -1);
   std::vector<bool> node_assigned(node_cnt, false);
 
-  std::cout << "compute cone constraints ..." << std::endl;
-  ct_surface.bezier_cone_constraints_expanded(
-    f2f_expanded, independent_node_map, node_assigned, v_normals);
+  if (!use_incenter) {
+    std::cout << "compute cone constraints ..." << std::endl;
+    ct_surface.bezier_cone_constraints_expanded(
+      f2f_expanded, independent_node_map, node_assigned, v_normals);
+  }
+
+  bool debug_isolate = false; // TODO: set to true only for debugging
 
   std::cout << "compute endpoint constraints ..." << std::endl;
   ct_surface.bezier_endpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, false);
+    f2f_expanded, independent_node_map, debug_isolate);
 
   std::cout << "compute interior 1 constraints ..." << std::endl;
-  ct_surface.bezier_internal_ind2dep_1_expanded(f2f_expanded,
-                                                independent_node_map);
+  ct_surface.bezier_internal_ind2dep_1_expanded(
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute midpoint constraints ..." << std::endl;
-  ct_surface.bezier_midpoint_ind2dep_expanded(f2f_expanded,
-                                              independent_node_map);
+  ct_surface.bezier_midpoint_ind2dep_expanded(
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute interior 2 constraints ..." << std::endl;
-  ct_surface.bezier_internal_ind2dep_2_expanded(f2f_expanded,
-                                                independent_node_map);
+  ct_surface.bezier_internal_ind2dep_2_expanded(
+    f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "done constraint computation" << std::endl;
 
@@ -664,8 +679,7 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices()
   }
 
   // TODO Make optional
-  if (false)
-  {
+  if (true) {
     Eigen::saveMarket(bezier_constraint_matrix,
                       "CT_bezier_constraints_expanded.txt");
   }
@@ -721,8 +735,7 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices()
   }
   m_ind2full.setFromTriplets(ind2full_trips.begin(), ind2full_trips.end());
 
-  if (false)
-  {
+  if (true) {
     Eigen::saveMarket(m_ind2full, "CT_bezier_r2f_expanded.txt");
   }
 
@@ -875,7 +888,7 @@ CloughTocherOptimizer::generate_autodiff_laplace_beltrami_gradient(
 }
 
 // TODO: Obtained from affine_manifold.cpp. Make standalone function
-const std::array<PlanarPoint, 19> CT_nodes = { {
+const std::array<PlanarPoint, 19> CT_nodes_uniform = { {
   PlanarPoint(1., 0.),           // b0    0
   PlanarPoint(0., 1.),           // b1    1
   PlanarPoint(0., 0.),           // b2    2
@@ -919,6 +932,39 @@ CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const
     Eigen::Vector3d Vk = { P[2][0], P[2][1], 0. };
     std::array<std::array<int64_t, 10>, 3> patch_indices =
       get_micro_triangle_nodes(fijk);
+
+    std::array<PlanarPoint, 19> CT_nodes;
+
+    if (m_use_incenter) {
+      const double& alpha = face_chart.alpha;
+      const double& beta = face_chart.beta;
+      const double& gamma = face_chart.gamma;
+
+      CT_nodes = { {
+        PlanarPoint(1., 0.),           // b0    0
+        PlanarPoint(0., 1.),           // b1    1
+        PlanarPoint(0., 0.),           // b2    2
+        PlanarPoint(2. / 3., 1. / 3.), // b01   3
+        PlanarPoint(1. / 3., 2. / 3.), // b10   4
+        PlanarPoint(0., 2. / 3.),      // b12   5
+        PlanarPoint(0., 1. / 3.),      // b21   6
+        PlanarPoint(1. / 3., 0.),      // b20   7
+        PlanarPoint(2. / 3., 0.),      // b02   8
+        PlanarPoint(1. / 3. + 1. / 3. * beta,
+                    1. / 3. + 1. / 3. * gamma),                 // b01^c 9
+        PlanarPoint(1. / 3. * beta, 1. / 3. + 1. / 3. * gamma), // b12^c 10
+        PlanarPoint(1. / 3. + 1. / 3. * beta, 1. / 3. * gamma), // b20^c 11
+        PlanarPoint(2. / 3. + 1. / 3. * beta, 1. / 3. * gamma), // b0c   12
+        PlanarPoint(1. / 3. + 2. / 3. * beta, 2. / 3. * gamma), // bc0   13
+        PlanarPoint(1. / 3. * beta, 2. / 3. + 1. / 3. * gamma), // b1c   14
+        PlanarPoint(2. / 3. * beta, 1. / 3. + 2. / 3. * gamma), // bc1   15
+        PlanarPoint(1. / 3. * beta, 1. / 3. * gamma),           // b2c   16
+        PlanarPoint(2. / 3. * beta, 2. / 3. * gamma),           // bc2   17
+        PlanarPoint(beta, gamma),                               // bc    18
+      } };
+    } else {
+      CT_nodes = CT_nodes_uniform;
+    }
 
     for (int n = 0; n < 3; ++n) {
       // subtri i
@@ -1046,14 +1092,15 @@ CloughTocherOptimizer::assemble_autodiff_laplace_beltrami_gradient(
         for (int d = 0; d < 3; d++) {
           energy_diff += cp_3d[i][d] * cp_3d[j][d] * A_diff[i][j];
         }
-        //spdlog::info("local matrix {}, {}: {}", i, j, A_diff[i][j].getValue());
+        // spdlog::info("local matrix {}, {}: {}", i, j,
+        // A_diff[i][j].getValue());
       }
     }
     energy_diff /= 2.;
     energy += energy_diff.getValue();
     Eigen::Matrix<double, 30, 1> g = energy_diff.getGradient();
-    //spdlog::info("local matrix:\n{}", A);
-    //spdlog::info("local gradient:\n{}", g);
+    // spdlog::info("local matrix:\n{}", A);
+    // spdlog::info("local gradient:\n{}", g);
 
     // build single dimension copy of the stiffness matrix
     for (int i = 0; i < 10; i++) {
@@ -1061,7 +1108,6 @@ CloughTocherOptimizer::assemble_autodiff_laplace_beltrami_gradient(
       for (int d = 0; d < 3; d++) {
         double gi = g[3 * i + d];
         gradient[3 * I + d] += gi;
-
       }
     }
   }
@@ -1075,7 +1121,10 @@ CloughTocherOptimizer::assemble_autodiff_laplace_beltrami_siffness_matrix(
   Eigen::VectorXd& gradient,
   std::vector<Triplet>& stiffness_matrix_trips) const
 {
-  typedef DScalar2<double, Eigen::Matrix<double, 30, 1>, Eigen::Matrix<double, 30, 30>> DiffScalar;
+  typedef DScalar2<double,
+                   Eigen::Matrix<double, 30, 1>,
+                   Eigen::Matrix<double, 30, 30>>
+    DiffScalar;
   DiffScalar::setVariableCount(30);
 
   // need to remap from indexing assumed by
@@ -1107,15 +1156,16 @@ CloughTocherOptimizer::assemble_autodiff_laplace_beltrami_siffness_matrix(
         for (int d = 0; d < 3; d++) {
           energy_diff += cp_3d[i][d] * cp_3d[j][d] * A_diff[i][j];
         }
-        //spdlog::info("local matrix {}, {}: {}", i, j, A_diff[i][j].getValue());
+        // spdlog::info("local matrix {}, {}: {}", i, j,
+        // A_diff[i][j].getValue());
       }
     }
     energy_diff /= 2.;
     energy += energy_diff.getValue();
     Eigen::Matrix<double, 30, 1> g = energy_diff.getGradient();
     Eigen::Matrix<double, 30, 30> A = energy_diff.getHessian();
-    //spdlog::info("local matrix:\n{}", A);
-    //spdlog::info("local gradient:\n{}", g);
+    // spdlog::info("local matrix:\n{}", A);
+    // spdlog::info("local gradient:\n{}", g);
 
     // build single dimension copy of the stiffness matrix
     for (int i = 0; i < 10; i++) {
@@ -1155,10 +1205,10 @@ CloughTocherOptimizer::generate_position_matrix(const Eigen::VectorXd& p) const
   for (int i = 0; i < num_nodes; ++i) {
     if (!is_vertex_node[i])
       continue;
-    for (int d = 0; d < 3; ++d)
-    {
+    for (int d = 0; d < 3; ++d) {
       int I = 3 * i + d;
-      position_matrix_trips.push_back(Triplet(I, I, power(std::abs(p[I]), p_norm - 2)));
+      position_matrix_trips.push_back(
+        Triplet(I, I, power(std::abs(p[I]), p_norm - 2)));
     }
   }
 

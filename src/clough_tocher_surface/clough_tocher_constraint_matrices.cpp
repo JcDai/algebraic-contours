@@ -1,5 +1,5 @@
 #include "clough_tocher_constraint_matrices.hpp"
-#include "clough_tocher_autogen_constraint_matrices.hpp"
+#include "autogen/clough_tocher_autogen_constraint_matrices.hpp"
 
 Eigen::Matrix<double, 12, 12> L_L2d_ind_m() {
   double L[12][12];

@@ -1,5 +1,5 @@
 #include "clough_tocher_matrices.hpp"
-#include "clough_tocher_autogen_matrix_coeffs.hpp"
+#include "autogen/clough_tocher_autogen_matrix_coeffs.hpp"
 
 std::array<Eigen::Matrix<double, 3, 3>, 3> CT_subtri_bound_matrices() {
   double bound_coeffs[3][3][3];
