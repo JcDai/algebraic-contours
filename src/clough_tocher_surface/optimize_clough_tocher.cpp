@@ -324,9 +324,11 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices(bool use_incenter)
       f2f_expanded, independent_node_map, node_assigned, v_normals);
   }
 
+  bool debug_isolate = false; // TODO: set to true only for debugging
+
   std::cout << "compute endpoint constraints ..." << std::endl;
   ct_surface.bezier_endpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, use_incenter);
+    f2f_expanded, independent_node_map, debug_isolate);
 
   std::cout << "compute interior 1 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_1_expanded(

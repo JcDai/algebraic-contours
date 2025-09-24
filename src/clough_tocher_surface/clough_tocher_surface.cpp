@@ -3835,6 +3835,15 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
       continue;
     }
 
+    // sharp features
+    if (v_chart.is_feature_cone || v_chart.is_feature_edge_endpoint ||
+        v_chart.is_feature_edge_interior ||
+        v_chart.is_feature_edge_intersection) {
+      // skip if the vertex is on a sharp feature
+      // handle this in normal cases
+      continue;
+    }
+
     // cone case
     // compute base on one ring edges
 
@@ -5015,9 +5024,14 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
   const auto& v_charts = m_affine_manifold.m_vertex_charts;
   // const auto &f_charts = m_affine_manifold.m_face_charts;
   const auto& F = m_affine_manifold.get_faces();
+  const auto& e_charts = m_affine_manifold.m_edge_charts;
 
   for (size_t v_id = 0; v_id < v_charts.size(); ++v_id) {
     int64_t vid = v_id;
+
+    if (vid == 523) {
+      std::cout << "523" << std::endl;
+    }
 
     const auto& v_chart = v_charts[vid];
     const auto& v_one_ring = v_chart.vertex_one_ring;
@@ -5029,6 +5043,317 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
       one_ring_uv_positions_map[v_one_ring[i]] =
         v_chart.one_ring_uv_positions.row(i);
     }
+
+    //////////////////////////////////////
+    ////////   sharp features  ///////////
+    //////////////////////////////////////
+
+    if (v_chart.is_feature_cone || v_chart.is_feature_edge_intersection) {
+      // TODO: mark all the adjacent control points to be independent
+      if (v_chart.is_feature_cone) {
+        std::cout << "in feature vertex " << v_chart.vertex_index << std::endl;
+      } else {
+        std::cout << "in intersection " << v_chart.vertex_index << std::endl;
+      }
+
+      for (const auto& e : v_chart.edge_one_ring) {
+        const int64_t node_id =
+          e_charts[e].left_vertex_index == v_chart.vertex_index
+            ? e_charts[e].lagrange_nodes[1]
+            : e_charts[e].lagrange_nodes[2]; // get control point adjacent to
+        // the vertex on the edge
+
+        if (independent_node_map[node_id * 3] != -1) {
+          // skip last one if is the same as the first one
+          continue;
+        }
+
+        std::cout << "assign node id " << node_id << std::endl;
+        for (int i = 0; i < 3; ++i) {
+          // set for xyz
+          m.insert(node_id * 3 + i, node_id * 3 + i) = 1;
+          independent_node_map[node_id * 3 + i] = 1;
+        }
+      }
+
+      // get vertex node id
+
+      const int64_t v_node_id =
+        e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
+            v_chart.vertex_index
+          ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
+          : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
+      std::cout << "assign v node id " << v_node_id << std::endl;
+
+      for (int i = 0; i < 3; ++i) {
+        // set for xyz for v
+        m.insert(v_node_id * 3 + i, v_node_id * 3 + i) = 1;
+        independent_node_map[v_node_id * 3 + i] = 1;
+      }
+
+      continue;
+
+    } else if (v_chart.is_feature_edge_endpoint) {
+      // TODO: consider special case: edge adjacent to a cone and one of the
+      // group predetermined basis
+      // TODO: use seperate constraint group to build constraint
+
+      assert(v_chart.separate_constraint_groups.size() == 1);
+      const auto& group = v_chart.separate_constraint_groups[0];
+      assert(group.size() > 1);
+      // const auto& v_node_id = v_chart.vertex_index; // node id for current v
+      const int64_t v_node_id =
+        e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
+            v_chart.vertex_index
+          ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
+          : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
+
+      for (int k = 0; k < 3; ++k) {
+        // set for xyz for v
+        m.insert(v_node_id * 3 + k, v_node_id * 3 + k) = 1;
+        independent_node_map[v_node_id * 3 + k] = 1;
+      }
+
+      // set control point on feature edge
+      for (const auto& e : v_chart.edge_one_ring) {
+        if (e_charts[e].is_feature_edge) {
+          const int64_t node_id =
+            e_charts[e].left_vertex_index == v_chart.vertex_index
+              ? e_charts[e].lagrange_nodes[1]
+              : e_charts[e].lagrange_nodes[2];
+          for (int k = 0; k < 3; ++k) {
+            m.insert(node_id * 3 + k, node_id * 3 + k) = 1;
+            independent_node_map[node_id * 3 + k] = 1;
+          }
+        }
+      }
+
+      // set control points for group
+
+      const auto& uij_node_id =
+        e_charts[group[0]].left_vertex_index == v_chart.vertex_index
+          ? e_charts[group[0]].lagrange_nodes[1]
+          : e_charts[group[0]].lagrange_nodes[2];
+      const auto& uik_node_id =
+        e_charts[group[1]].left_vertex_index == v_chart.vertex_index
+          ? e_charts[group[1]].lagrange_nodes[1]
+          : e_charts[group[1]].lagrange_nodes[2];
+
+      // set first two as independent
+      for (int i = 0; i < 2; ++i) {
+        const int64_t node_id =
+          e_charts[group[i]].left_vertex_index == v_chart.vertex_index
+            ? e_charts[group[i]].lagrange_nodes[1]
+            : e_charts[group[i]].lagrange_nodes[2];
+
+        // if (independent_node_map[node_id] == 1) {
+        //   // determined in the previous group
+        //   continue;
+        // }
+        for (int k = 0; k < 3; ++k) {
+          // set for xyz
+          m.insert(node_id * 3 + k, node_id * 3 + k) = 1;
+          independent_node_map[node_id * 3 + k] = 1;
+        }
+      }
+
+      // compute basis from first two
+      Eigen::Matrix2d U_ijik;
+      // Eigen::Vector2d u_ij = e_charts[group[0]].lagrange_nodes[0] ==
+      // v_node_id
+      //                          ? e_charts[group[0]].right_vertex_uv_position
+      //                          : e_charts[group[0]].left_vertex_uv_position;
+      // Eigen::Vector2d u_ik = e_charts[group[1]].lagrange_nodes[0] ==
+      // v_node_id
+      //                          ? e_charts[group[1]].right_vertex_uv_position
+      //                          : e_charts[group[1]].left_vertex_uv_position;
+
+      Eigen::Vector2d u_ij = v_chart.one_ring_uv_positions.row(
+        v_chart.edge_to_local_vid_map.at(group[0]));
+      Eigen::Vector2d u_ik = v_chart.one_ring_uv_positions.row(
+        v_chart.edge_to_local_vid_map.at(group[1]));
+      U_ijik << u_ij[0], u_ik[0], u_ij[1], u_ik[1];
+
+      Eigen::Matrix2d U_ijik_inv = inverse_2by2(U_ijik);
+
+      for (size_t i = 2; i < group.size(); ++i) {
+        // compute dependent for the rest
+        const int64_t node_id =
+          e_charts[group[i]].left_vertex_index == v_chart.vertex_index
+            ? e_charts[group[i]].lagrange_nodes[1]
+            : e_charts[group[i]].lagrange_nodes[2];
+        // Eigen::Vector2d u_im = e_charts[group[i]].lagrange_nodes[0] ==
+        // v_node_id
+        //                          ?
+        //                          e_charts[group[i]].right_vertex_uv_position
+        //                          :
+        //                          e_charts[group[i]].left_vertex_uv_position;
+
+        Eigen::Vector2d u_im = v_chart.one_ring_uv_positions.row(
+          v_chart.edge_to_local_vid_map.at(group[i]));
+
+        Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
+
+        std::array<Eigen::SparseVector<double>, 3> p_i, p_ij, p_ik; // for xyz
+        p_i = { { m.row(v_node_id * 3 + 0),
+                  m.row(v_node_id * 3 + 1),
+                  m.row(v_node_id * 3 + 2) } };
+        p_ij = { { m.row(uij_node_id * 3 + 0),
+                   m.row(uij_node_id * 3 + 1),
+                   m.row(uij_node_id * 3 + 2) } };
+        p_ik = { { m.row(uik_node_id * 3 + 0),
+                   m.row(uik_node_id * 3 + 1),
+                   m.row(uik_node_id * 3 + 2) } };
+
+        // p_im = (1-Umj-Umk)*pi + Umj*pij + Umk*pik
+        for (int k = 0; k < 3; ++k) {
+          // set for xyz
+          Eigen::SparseVector<double> p_m = (1 - U_ijm[0] - U_ijm[1]) * p_i[k] +
+                                            U_ijm[0] * p_ij[k] +
+                                            U_ijm[1] * p_ik[k];
+
+          assign_spvec_to_spmat_row(m, p_m, node_id * 3 + k);
+          independent_node_map[node_id * 3 + k] = 0; // set as dependent
+        }
+      }
+
+      continue;
+    } else if (v_chart.is_feature_edge_interior) {
+      // TODO: use separate constraint group to build constraint
+
+      assert(v_chart.separate_constraint_groups.size() > 1);
+
+      // const auto& v_node_id = v_chart.vertex_index; // node id for current v
+      const int64_t v_node_id =
+        e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
+            v_chart.vertex_index
+          ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
+          : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
+
+      for (int k = 0; k < 3; ++k) {
+        // set for xyz for v
+        m.insert(v_node_id * 3 + k, v_node_id * 3 + k) = 1;
+        independent_node_map[v_node_id * 3 + k] = 1;
+      }
+
+      // // set control point on feature edge
+      // for (const auto& e : v_chart.edge_one_ring) {
+      //   if (e_charts[e].is_feature_edge) {
+      //     const int64_t node_id = e_charts[e].lagrange_nodes[0] == v_node_id
+      //                               ? e_charts[e].lagrange_nodes[1]
+      //                               : e_charts[e].lagrange_nodes[2];
+      //     for (int k = 0; k < 3; ++k) {
+      //       m.insert(node_id * 3 + k, node_id * 3 + k) = 1;
+      //       independent_node_map[node_id * 3 + k] = 1;
+      //     }
+      //   }
+      // }
+
+      for (size_t g = 0; g < v_chart.separate_constraint_groups.size(); ++g) {
+        const auto& group = v_chart.separate_constraint_groups[g];
+        // iterate for each group
+        assert(group.size() > 1);
+        const auto& uij_node_id =
+          e_charts[group[0]].left_vertex_index == v_chart.vertex_index
+            ? e_charts[group[0]].lagrange_nodes[1]
+            : e_charts[group[0]].lagrange_nodes[2];
+        const auto& uik_node_id =
+          e_charts[group[1]].left_vertex_index == v_chart.vertex_index
+            ? e_charts[group[1]].lagrange_nodes[1]
+            : e_charts[group[1]].lagrange_nodes[2];
+
+        // set first two as independent
+        for (int i = 0; i < 2; ++i) {
+          const int64_t node_id =
+            e_charts[group[i]].left_vertex_index == v_chart.vertex_index
+              ? e_charts[group[i]].lagrange_nodes[1]
+              : e_charts[group[i]].lagrange_nodes[2];
+
+          std::cout << "node_id: " << node_id << std::endl;
+          std::cout << independent_node_map[node_id * 3] << std::endl;
+
+          if (independent_node_map[node_id * 3] != -1) {
+            // determined in the previous group
+            std::cout << "skipped node_id indep: " << node_id << std::endl;
+            continue;
+          }
+          for (int k = 0; k < 3; ++k) {
+            // set for xyz
+            m.insert(node_id * 3 + k, node_id * 3 + k) = 1;
+            independent_node_map[node_id * 3 + k] = 1;
+          }
+        }
+
+        // compute basis from first two
+        Eigen::Matrix2d U_ijik;
+
+        Eigen::Vector2d u_ij = v_chart.one_ring_uv_positions.row(
+          v_chart.edge_to_local_vid_map.at(group[0]));
+        Eigen::Vector2d u_ik = v_chart.one_ring_uv_positions.row(
+          v_chart.edge_to_local_vid_map.at(group[1]));
+
+        // std::cout << group[0] << ": " << u_ij << std::endl;
+        // std::cout << group[1] << ": " << u_ik << std::endl;
+        U_ijik << u_ij[0], u_ik[0], u_ij[1], u_ik[1];
+
+        Eigen::Matrix2d U_ijik_inv = inverse_2by2(U_ijik);
+
+        std::cout << "group id: " << g << std::endl;
+        // std::cout << U_ijik << std::endl;
+        // std::cout << U_ijik_inv << std::endl;
+
+        for (size_t i = 2; i < group.size(); ++i) {
+          // compute dependent for the rest
+          const int64_t node_id =
+            e_charts[group[i]].left_vertex_index == v_chart.vertex_index
+              ? e_charts[group[i]].lagrange_nodes[1]
+              : e_charts[group[i]].lagrange_nodes[2];
+
+          if (independent_node_map[node_id * 3] != -1) {
+            // skip the last one in last group special case
+            std::cout << "skipped node_id: " << node_id << std::endl;
+            continue;
+          }
+          // Eigen::Vector2d u_im =
+          //   e_charts[group[i]].lagrange_nodes[0] == v_node_id
+          //     ? e_charts[group[i]].right_vertex_uv_position
+          //     : e_charts[group[i]].left_vertex_uv_position;
+
+          Eigen::Vector2d u_im = v_chart.one_ring_uv_positions.row(
+            v_chart.edge_to_local_vid_map.at(group[i]));
+
+          Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
+
+          std::array<Eigen::SparseVector<double>, 3> p_i, p_ij, p_ik; // for xyz
+          p_i = { { m.row(v_node_id * 3 + 0),
+                    m.row(v_node_id * 3 + 1),
+                    m.row(v_node_id * 3 + 2) } };
+          p_ij = { { m.row(uij_node_id * 3 + 0),
+                     m.row(uij_node_id * 3 + 1),
+                     m.row(uij_node_id * 3 + 2) } };
+          p_ik = { { m.row(uik_node_id * 3 + 0),
+                     m.row(uik_node_id * 3 + 1),
+                     m.row(uik_node_id * 3 + 2) } };
+
+          // p_im = (1-Umj-Umk)*pi + Umj*pij + Umk*pik
+          for (int k = 0; k < 3; ++k) {
+            // set for xyz
+            Eigen::SparseVector<double> p_m =
+              (1 - U_ijm[0] - U_ijm[1]) * p_i[k] + U_ijm[0] * p_ij[k] +
+              U_ijm[1] * p_ik[k];
+
+            assign_spvec_to_spmat_row(m, p_m, node_id * 3 + k);
+            independent_node_map[node_id * 3 + k] = 0; // set as dependent
+          }
+        }
+      }
+
+      continue;
+    }
+
+    //////////////////////////////////////
+    ////////  sharp features end  ////////
+    //////////////////////////////////////
 
     std::map<int64_t, bool> processed_id; // vid processed, caution! not node id
 
@@ -5159,6 +5484,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
               1; // set node as independent
             independent_node_map[indep_node_ids[i] * 3 + 2] =
               1; // set node as independent
+
           } else {
             m.insert(indep_node_ids[i] * 3 + 0, indep_node_ids[0] * 3 + 0) = 1;
             m.insert(indep_node_ids[i] * 3 + 1, indep_node_ids[0] * 3 + 1) = 1;
@@ -5176,8 +5502,9 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 
     } else {
       // dont have cone case
-      if (!v_chart.is_cone_adjacent) {
-        // not cone
+      // if (!v_chart.is_cone_adjacent) {
+      if (!v_chart.base_decided) {
+        // not cone or cone being feature cone
         for (int i = 0; i < 3; ++i) {
           // set for xyz
           m.insert(indep_node_ids[i] * 3 + 0, indep_node_ids[i] * 3 + 0) = 1;
@@ -5192,17 +5519,17 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
             1; // set node as independent
         }
       } else if (v_chart.is_cone_adjacent) {
-        assert(independent_node_map[indep_node_ids[0] * 3 + 0] == 1); // pi
-        assert(independent_node_map[indep_node_ids[0] * 3 + 1] == 1); // pi
-        assert(independent_node_map[indep_node_ids[0] * 3 + 2] == 1); // pi
+        // assert(independent_node_map[indep_node_ids[0] * 3 + 0] == 1); // pi
+        // assert(independent_node_map[indep_node_ids[0] * 3 + 1] == 1); // pi
+        // assert(independent_node_map[indep_node_ids[0] * 3 + 2] == 1); // pi
 
-        assert(independent_node_map[indep_node_ids[1] * 3 + 0] == 0 ||
-               independent_node_map[indep_node_ids[1] * 3 + 1] == 0 ||
-               independent_node_map[indep_node_ids[1] * 3 + 2] == 0 ||
-               independent_node_map[indep_node_ids[2] * 3 + 0] == 0 ||
-               independent_node_map[indep_node_ids[2] * 3 + 1] == 0 ||
-               independent_node_map[indep_node_ids[2] * 3 + 2] ==
-                 0); // pik or pij
+        // assert(independent_node_map[indep_node_ids[1] * 3 + 0] == 0 ||
+        //        independent_node_map[indep_node_ids[1] * 3 + 1] == 0 ||
+        //        independent_node_map[indep_node_ids[1] * 3 + 2] == 0 ||
+        //        independent_node_map[indep_node_ids[2] * 3 + 0] == 0 ||
+        //        independent_node_map[indep_node_ids[2] * 3 + 1] == 0 ||
+        //        independent_node_map[indep_node_ids[2] * 3 + 2] ==
+        //          0); // pik or pij
       }
     }
 
@@ -5263,7 +5590,6 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
             // get node id
             auto dep_node_id =
               e_chart.lagrange_nodes[1]; // left is vid, so node is lag[1]
-
             Eigen::Vector2d u_im =
               one_ring_uv_positions_map[e_chart.right_vertex_index] -
               Eigen::Vector2d(0, 0);
@@ -5391,6 +5717,82 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
     if (e_chart.processed) {
       // processed in cone constraint
       continue;
+    } else if (e_chart.is_feature_edge) {
+
+      // std::cout << "in feature edge " << e_chart.left_vertex_index << " "
+      //           << e_chart.right_vertex_index << std::endl;
+      // add for sharp feature
+      // set both pij_c and pij_c' as independent
+      // top
+      const auto& fid_top = e_chart.top_face_index;
+      const auto& f_top = m_affine_manifold.m_face_charts[fid_top];
+
+      // get local indices in T
+      int lid1_top = -1;
+      int lid2_top = -1;
+      for (int i = 0; i < 3; ++i) {
+        if (F.row(fid_top)[i] == e_chart.left_vertex_index) {
+          lid1_top = i;
+        }
+        if (F.row(fid_top)[i] == e_chart.right_vertex_index) {
+          lid2_top = i;
+        }
+      }
+
+      assert(lid1_top > -1);
+      assert(lid2_top > -1);
+
+      // get N_full, N
+      const auto& node_ids_top = N_helper(lid1_top, lid2_top);
+
+      std::array<int64_t, 7> N;
+      for (int i = 0; i < 7; ++i) {
+        N[i] = f_top.lagrange_nodes[node_ids_top[i]];
+      }
+
+      for (int dim = 0; dim < 3; ++dim) {
+        m.insert(N[6] * 3 + dim, N[6] * 3 + dim) = 1;
+        independent_node_map[N[6] * 3 + dim] = 1; // set as independent
+      }
+
+      std::cout << "top mid control point id: " << N[6] << std::endl;
+
+      // bottom
+      const auto& fid_bot = e_chart.bottom_face_index;
+      const auto& f_bot = m_affine_manifold.m_face_charts[fid_bot];
+
+      // get local indices in T
+      int lid1_bot = -1;
+      int lid2_bot = -1;
+      for (int i = 0; i < 3; ++i) {
+        if (F.row(fid_bot)[i] == e_chart.right_vertex_index) {
+          lid1_bot = i;
+        }
+        if (F.row(fid_bot)[i] == e_chart.left_vertex_index) {
+          lid2_bot = i;
+        }
+      }
+
+      assert(lid1_bot > -1);
+      assert(lid2_bot > -1);
+
+      // get N_full, N
+      const auto& node_ids_bot = N_helper(lid1_bot, lid2_bot);
+
+      std::array<int64_t, 7> N_bot;
+      for (int i = 0; i < 7; ++i) {
+        N_bot[i] = f_bot.lagrange_nodes[node_ids_bot[i]];
+      }
+
+      for (int dim = 0; dim < 3; ++dim) {
+        m.insert(N_bot[6] * 3 + dim, N_bot[6] * 3 + dim) = 1;
+        independent_node_map[N_bot[6] * 3 + dim] = 1; // set as independent
+      }
+
+      std::cout << "bot mid control point id: " << N_bot[6] << std::endl;
+
+      continue;
+
     } else if (e_chart.is_boundary) {
       // TODO:
       // skip boundary edges
@@ -5453,7 +5855,7 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
     if (use_incenter) {
       v2_pos_prime = e_chart.bottom_incenter;
     } else {
-      (v0_pos_prime + v1_pos_prime + v2_pos_prime_macro) / 3.;
+      v2_pos_prime = (v0_pos_prime + v1_pos_prime + v2_pos_prime_macro) / 3.;
     }
 
     // u_ij and u_ij'
@@ -5527,6 +5929,16 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
     assert(N[2] == N_prime[3]);
     assert(N[3] == N_prime[2]);
 
+    // for (const auto& nn : N) {
+    //   std::cout << nn << " ";
+    // }
+    // std::cout << std::endl;
+
+    // for (const auto& nn : N_prime) {
+    //   std::cout << nn << " ";
+    // }
+    // std::cout << std::endl;
+
     for (int dim = 0; dim < 3; ++dim) {
       // loop x y z
       auto p_0 = m.row(N[0] * 3 + dim);
@@ -5549,6 +5961,15 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
       independent_node_map[N[6] * 3 + dim] = 1; // set as independent
 
       auto p_01_c = m.row(N[6] * 3 + dim);
+
+      // Eigen::SparseVector<double> p_01_c_prime =
+      //   (k_N_prime * (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10
+      //   +
+      //                 CM[4] * p_0c + CM[5] * p_1c + CM[6] * p_01_c) +
+      //    k_N * (CM_prime[0] * p_0_prime + CM_prime[1] * p_1_prime +
+      //           CM_prime[2] * p_01_prime + CM_prime[3] * p_10_prime +
+      //           CM_prime[4] * p_0c_prime + CM_prime[5] * p_1c_prime)) /
+      //   (-k_N * CM_prime[6]);
 
       Eigen::SparseVector<double> p_01_c_prime =
         (k_N_prime * (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10 +

@@ -32,6 +32,10 @@ main(int argc, char* argv[])
   double scale = 1.;
   bool visualize = false;
   bool use_incenter = false;
+
+  std::string feature_edge_file = "";
+  std::string feature_vertex_file = "";
+
   app.add_option("-i,--input", input_filename, "Mesh filepath")
     ->check(CLI::ExistingFile)
     ->required();
@@ -49,6 +53,9 @@ main(int argc, char* argv[])
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
   app.add_flag(
     "--use_incenter", use_incenter, "Use incenter instead of barycenter");
+
+  app.add_option("--feature_edge", feature_edge_file, "feature edges");
+  app.add_option("--feature_vertex", feature_vertex_file, "feature vertices");
   CLI11_PARSE(app, argc, argv);
 
   // Set logger level
@@ -72,6 +79,42 @@ main(int argc, char* argv[])
   }
   affine_manifold.generate_lagrange_nodes(use_incenter);
 
+  // code added for sharp feature
+  // call order cannot be changed
+  affine_manifold.compute_he_to_echart_id();
+  affine_manifold.compute_vchart_one_ring_echarts();
+
+  // mark sharp features
+  if (feature_vertex_file != "") {
+    std::ifstream fv(feature_edge_file);
+
+    std::vector<int64_t> feature_vids;
+    int64_t vid;
+    while (fv >> vid) {
+      feature_vids.push_back(vid);
+    }
+
+    fv.close();
+
+    affine_manifold.mark_feature_vertices(feature_vids);
+  }
+
+  if (feature_edge_file != "") {
+    std::ifstream fe(feature_edge_file);
+
+    std::vector<std::pair<int64_t, int64_t>> feature_edges;
+    int64_t e1, e2;
+    while (fe >> e1 >> e2) {
+      feature_edges.push_back(std::make_pair(e1, e2));
+    }
+
+    fe.close();
+
+    affine_manifold.mark_feature_edges(feature_edges);
+
+    affine_manifold.mark_separate_endpoint_constraint_group();
+  }
+
   // build initial surface
   spdlog::info("Computing spline surface");
   Eigen::SparseMatrix<double> fit_matrix;
@@ -94,6 +137,9 @@ main(int argc, char* argv[])
     generate_linear_clough_tocher_surface(ct_surface, V);
   write_mesh(
     ct_surface, bezier_control_points, join_path(output_name, "linear"));
+
+  // code added for sharp feature
+  ct_surface.write_connected_lagrange_nodes("test_control_points_optimize", V);
 
   // initialize optimizer
   CloughTocherOptimizer optimizer(V, F, affine_manifold, use_incenter);
