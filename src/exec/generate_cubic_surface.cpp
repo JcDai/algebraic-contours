@@ -112,6 +112,9 @@ main(int argc, char* argv[])
   Eigen::MatrixXi F, FT, FN;
   igl::readOBJ(input_filename, V, uv, N, F, FT, FN);
 
+  // std::cout << "F" << std::endl;
+  // std::cout << F << std::endl;
+
   // get boundary data
   bool have_external_boundary_data = false;
   std::vector<Eigen::Matrix<double, 12, 1>> ext_boundary_data;
@@ -210,11 +213,14 @@ main(int argc, char* argv[])
 
   // mark sharp features
   if (feature_vertex_file != "") {
-    std::ifstream fv(feature_edge_file);
+    std::cout << "loading feature vertex from " << feature_vertex_file
+              << std::endl;
+    std::ifstream fv(feature_vertex_file);
 
     std::vector<int64_t> feature_vids;
     int64_t vid;
     while (fv >> vid) {
+      // std::cout << vid << std::endl;
       feature_vids.push_back(vid);
     }
 
@@ -531,6 +537,8 @@ main(int argc, char* argv[])
 
   std::cout << "done constraint computation" << std::endl;
 
+  Eigen::saveMarket(f2f_expanded, output_name + "_bezier_f2f_expanded.txt");
+
   int64_t ind_cnt = 0;
   int64_t dep_cnt = 0;
   for (int64_t i = 0; i < node_cnt * 3; ++i) {
@@ -581,14 +589,14 @@ main(int argc, char* argv[])
       continue;
     }
 
+    assert(independent_node_map[i] == 0);
+
     const Eigen::SparseVector<double>& f2f_row = f2f_expanded.row(i);
     assign_spvec_to_spmat_row_main(bezier_constraint_matrix, f2f_row, row_id);
     bezier_constraint_matrix.coeffRef(row_id, i) -= 1;
 
     row_id++;
   }
-
-  Eigen::saveMarket(f2f_expanded, output_name + "_bezier_f2f_expanded.txt");
 
   Eigen::saveMarket(bezier_constraint_matrix,
                     output_name + "_bezier_constraints_expanded_old.txt");

@@ -31,7 +31,7 @@ AffineManifold::AffineManifold(const Eigen::MatrixXi& F,
   , m_global_uv(global_uv)
   , m_F_uv(F_uv)
 {
-  // Check the input
+// Check the input
 #if CHECK_VALIDITY
   if (!is_manifold(F)) {
     spdlog::error("Input mesh is not manifold");
@@ -49,8 +49,6 @@ AffineManifold::AffineManifold(const Eigen::MatrixXi& F,
     return;
   }
 #endif
-
-  // std::cout << "F shape: " << m_F.rows() << " " << m_F.cols() << std::endl;
 
   // Build halfedge
   m_halfedge = Halfedge(F, m_corner_to_he, m_he_to_corner);
@@ -1598,6 +1596,7 @@ void
 AffineManifold::mark_feature_vertices(const std::vector<int64_t>& feature_vids)
 {
   for (const auto& v : feature_vids) {
+    // std::cout << v << std::endl;
     m_vertex_charts[v].is_feature_cone = true;
   }
 }

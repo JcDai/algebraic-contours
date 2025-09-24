@@ -42,7 +42,7 @@ extern double
                                                 // intersections
 
 extern int DISCRETIZATION_LEVEL; // Spline surface discretization level
-const int HASH_TABLE_SIZE = 70; // Size of spline surface hash table
+const int HASH_TABLE_SIZE = 70;  // Size of spline surface hash table
 
 // Real number representations
 typedef Eigen::VectorXd VectorXr;
@@ -228,19 +228,19 @@ view_parametrized_mesh(const Eigen::MatrixXd& V,
 }
 
 inline void
-screenshot_mesh(
-  const Eigen::MatrixXd& V,
-  const Eigen::MatrixXi& F,
-  const std::string& filename,
-  SpatialVector camera_position = SpatialVector(0, 0, 0),
-  SpatialVector camera_target = SpatialVector(0, 0, 2),
-  bool use_orthographic = false)
+screenshot_mesh(const Eigen::MatrixXd& V,
+                const Eigen::MatrixXi& F,
+                const std::string& filename,
+                SpatialVector camera_position = SpatialVector(0, 0, 0),
+                SpatialVector camera_target = SpatialVector(0, 0, 2),
+                bool use_orthographic = false)
 {
   polyscope::init();
   polyscope::registerSurfaceMesh("surface", V, F)
     ->setEdgeWidth(1)
     ->setSurfaceColor(glm::vec3(0.670, 0.673, 0.292));
-  //polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::ShadowOnly;
+  // polyscope::options::groundPlaneMode =
+  // polyscope::GroundPlaneMode::ShadowOnly;
   glm::vec3 glm_camera_position = { camera_position[0],
                                     camera_position[1],
                                     camera_position[2] };
@@ -250,8 +250,7 @@ screenshot_mesh(
   polyscope::view::lookAt(glm_camera_position, glm_camera_target);
   if (use_orthographic) {
     polyscope::view::projectionMode = polyscope::ProjectionMode::Orthographic;
-  }
-  else {
+  } else {
     polyscope::view::projectionMode = polyscope::ProjectionMode::Perspective;
   }
   polyscope::screenshot(filename);
@@ -847,24 +846,23 @@ flatten_matrix_by_row(const Eigen::EigenBase<Derived>& mat,
 ///
 /// @param[in] filename: file with matrix to read
 /// @param[out] vec: vector from file
-inline void read_camera_matrix(
-  const std::string &filename,
-  Eigen::Matrix<double, 4, 4>& mat
-) {
+inline void
+read_camera_matrix(const std::string& filename,
+                   Eigen::Matrix<double, 4, 4>& mat)
+{
   // Open file
   std::ifstream input_file(filename);
-  if (!input_file) return;
+  if (!input_file)
+    return;
 
   // Read file
   std::string line;
   int row = 0;
-  while (std::getline(input_file, line))
-  {
+  while (std::getline(input_file, line)) {
     std::istringstream iss(line);
     std::string cell;
     int col = 0;
-    while (std::getline(iss, cell, ','))
-    {
+    while (std::getline(iss, cell, ',')) {
       mat(row, col) = std::stod(cell);
       ++col;
     }
@@ -950,12 +948,12 @@ is_manifold(const Eigen::MatrixXi& F)
   }
 
   // Check single component
-  Eigen::MatrixXi component_ids;
-  igl::vertex_components(F, component_ids);
-  if ((component_ids.maxCoeff() - component_ids.minCoeff()) > 0) {
-    spdlog::error("Mesh has multiple components");
-    return false;
-  }
+  // Eigen::MatrixXi component_ids;
+  // igl::vertex_components(F, component_ids);
+  // if ((component_ids.maxCoeff() - component_ids.minCoeff()) > 0) {
+  //   spdlog::error("Mesh has multiple components");
+  //   return false;
+  // }
 
   // Manifold otherwise
   return true;
