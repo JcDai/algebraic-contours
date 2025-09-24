@@ -113,6 +113,31 @@ main(int argc, char* argv[])
   app.add_option("-p, --p_norm", p_norm, "p norm for fitting term");
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
   app.add_flag(
+    "--invert_area", invert_area, "Use inverse area for fitting noramlization");
+  app.add_flag("--square_area", square_area, "Use squared area in laplacian");
+  app.add_flag("--normalize_count", normalize_count, "Normalize");
+  app.add_flag("--skip_energy_decrease",
+               skip_energy_decrease,
+               "skip energy bound in Laplace Beltrami optimization");
+  app.add_flag("--skip_residual",
+               skip_residual,
+               "skip residual bound in Laplace Beltrami optimization");
+  app.add_flag("--use_coordinate_projection",
+               use_coordinate_projection,
+               "use initial coordinate projection instead of orthogonal");
+  app.add_flag(
+    "--use_parametric_metric",
+    use_parametric_metric,
+    "use parameterization metric for first iteration of Laplace Beltrami");
+  app.add_flag("--use_fixed_metric",
+               use_fixed_metric,
+               "use fixed metric for gradient computation");
+  app.add_flag("--triangulate",
+               triangulate,
+               "triangulate the quadratic surface and save OBJ");
+  app.add_flag("--use_gradient", use_gradient, "use gradient descent");
+
+  app.add_flag(
     "--use_incenter", use_incenter, "Use incenter instead of barycenter");
 
   app.add_option("--feature_edge", feature_edge_file, "feature edges");

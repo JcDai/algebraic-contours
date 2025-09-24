@@ -600,7 +600,7 @@ assign_spvec_to_spmat_row_help(Eigen::SparseMatrix<double, 1>& mat,
 }
 
 void
-CloughTocherOptimizer::initialize_ind_to_full_matrices()
+CloughTocherOptimizer::initialize_ind_to_full_matrices(bool use_incenter)
 {
   const auto& V = get_vertices();
   const auto& F = get_faces();

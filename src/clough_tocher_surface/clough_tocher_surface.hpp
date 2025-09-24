@@ -192,12 +192,15 @@ public:
                                         bool debug_isolate);
   void bezier_internal_ind2dep_1_expanded(
     Eigen::SparseMatrix<double, 1>& m,
-    std::vector<int>& independent_node_map);
+    std::vector<int>& independent_node_map,
+    bool use_incenter);
   void bezier_midpoint_ind2dep_expanded(Eigen::SparseMatrix<double, 1>& m,
-                                        std::vector<int>& independent_node_map);
+                                        std::vector<int>& independent_node_map,
+                                        bool use_incenter);
   void bezier_internal_ind2dep_2_expanded(
     Eigen::SparseMatrix<double, 1>& m,
-    std::vector<int>& independent_node_map);
+    std::vector<int>& independent_node_map,
+    bool use_incenter);
 
   void write_external_point_values_with_conn(const std::string& filename,
                                              const Eigen::MatrixXd& vertices);
