@@ -426,7 +426,8 @@ CloughTocherSurface::discretize_patch_boundaries(
 
 void
 CloughTocherSurface::add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color,
-                                           int num_subdivisions) const
+                                           int num_subdivisions,
+                                           std::string meshname) const
 {
   // Generate mesh discretization
   Eigen::MatrixXd V;
@@ -435,8 +436,8 @@ CloughTocherSurface::add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color,
 
   // Add surface mesh
   polyscope::init();
-  polyscope::registerSurfaceMesh("surface", V, F)->setEdgeWidth(0);
-  polyscope::getSurfaceMesh("surface")->setSurfaceColor(
+  polyscope::registerSurfaceMesh(meshname, V, F)->setEdgeWidth(0);
+  polyscope::getSurfaceMesh(meshname)->setSurfaceColor(
     glm::vec3(color[0], color[1], color[2]));
 
   // Discretize patch boundaries

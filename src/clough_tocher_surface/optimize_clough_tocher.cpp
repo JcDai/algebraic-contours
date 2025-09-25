@@ -1,6 +1,6 @@
 #include "optimize_clough_tocher.hpp"
 #include "autogen/Clough_Tocher_Laplace_Beltrami.c"
-#include "autogen/Clough_Tocher_Laplace_Beltrami_old.c"
+#include "autogen/Clough_Tocher_Laplace_Beltrami_autodiff.c"
 #include "autogen/Clough_Tocher_Laplacian.c"
 #include "clough_tocher_constraint_matrices.hpp"
 #include "igl/doublearea.h"
@@ -16,6 +16,18 @@ CloughTocherOptimizer::CloughTocherOptimizer(
   , m_affine_manifold(affine_manifold)
   , m_use_incenter(use_incenter)
 {
+  // TODO: Would be better to avoid the uneccesary construction of a surface
+  Eigen::SparseMatrix<double> fit_matrix;
+  Eigen::SparseMatrix<double> energy_hessian;
+  Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>
+    energy_hessian_inverse;
+  OptimizationParameters optimization_params;
+  ct_surface = CloughTocherSurface(V,
+                                   affine_manifold,
+                                   optimization_params,
+                                   fit_matrix,
+                                   energy_hessian,
+                                   energy_hessian_inverse);
 
   // build constraint and projection matrices
   timer.start();
@@ -30,6 +42,87 @@ CloughTocherOptimizer::CloughTocherOptimizer(
   spdlog::info("energy matrix construction took {} s", timer.getElapsedTime());
 }
 
+Eigen::VectorXd
+CloughTocherOptimizer::project_to_reduced_subspace(
+  const Eigen::VectorXd& p0) const
+{
+  if (use_orthogonal_projection) {
+    // project to reduced space and up to satisfy constraints
+    const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
+    const Eigen::SparseMatrix<double>& M = C.transpose() * C;
+    Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> solver;
+    solver.compute(M);
+    return solver.solve(C.transpose() * p0);
+  } else {
+    const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
+    return F * p0;
+  }
+}
+
+std::vector<Eigen::Vector3d>
+CloughTocherOptimizer::project_to_constraints(
+  const std::vector<Eigen::Vector3d>& bezier_control_points) const
+{
+  // build initial position vector
+  Eigen::VectorXd p0 = build_node_vector(bezier_control_points);
+
+  // project to reduced space and back up to full space to satisfy constraints
+  const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
+  Eigen::VectorXd p = C * project_to_reduced_subspace(p0);
+
+  return build_control_points(p);
+}
+
+void
+CloughTocherOptimizer::initialize_data_log()
+{
+  // Generate data log path
+  std::filesystem::create_directory(output_dir);
+  std::string data_log_path;
+
+  // Open main logging file
+  data_log_path = join_path(output_dir, "iteration_log.csv");
+  spdlog::info("Writing log to {}", data_log_path);
+
+  log_file = std::ofstream(data_log_path, std::ios::out | std::ios::trunc);
+  log_file << "num_iter,";
+  log_file << "initial_energy,";
+  log_file << "energy_decrease,";
+  log_file << "step_size,";
+  log_file << "total_time,";
+  log_file << "assemble_time,";
+  log_file << "solve_time,";
+  log_file << "solve_residual,";
+  log_file << "constraint_error,";
+  log_file << std::endl;
+}
+
+// Write newton log iteration data to file
+void
+CloughTocherOptimizer::write_data_log_entry()
+{
+  log_file << ID.iter << ",";
+  log_file << std::fixed << std::setprecision(17) << ID.initial_energy << ",";
+  log_file << std::fixed << std::setprecision(17)
+           << ID.initial_energy - ID.optimized_energy << ",";
+  log_file << std::scientific << std::setprecision(6) << ID.step_size << ",";
+  log_file << std::fixed << std::setprecision(6) << ID.total_time << ",";
+  log_file << std::fixed << std::setprecision(6) << ID.assemble_time << ",";
+  log_file << std::fixed << std::setprecision(6) << ID.solve_time << ",";
+  log_file << std::scientific << std::setprecision(6) << ID.solve_residual
+           << ",";
+  log_file << std::scientific << std::setprecision(6) << ID.constraint_error
+           << ",";
+  log_file << std::endl;
+}
+
+// close the log file
+void
+CloughTocherOptimizer::close_logs()
+{
+  log_file.close();
+}
+
 std::vector<Eigen::Vector3d>
 CloughTocherOptimizer::optimize_laplacian_energy(
   const std::vector<Eigen::Vector3d>& bezier_control_points)
@@ -42,9 +135,10 @@ CloughTocherOptimizer::optimize_laplacian_energy(
   double k = compute_normalized_fitting_weight();
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
-  const Eigen::SparseMatrix<double>& A = get_stiffness_matrix();
+  const Eigen::SparseMatrix<double>& hessian_smooth = get_stiffness_matrix();
   const Eigen::SparseMatrix<double>& P = get_position_matrix();
-  Eigen::SparseMatrix<double> hessian = C.transpose() * ((A + k * P) * C);
+  Eigen::SparseMatrix<double> hessian =
+    C.transpose() * ((hessian_smooth + k * P) * C);
   spdlog::info("matrix construction took {} s", timer.getElapsedTime());
 
   // invert hessian
@@ -60,7 +154,14 @@ CloughTocherOptimizer::optimize_laplacian_energy(
   Eigen::VectorXd derivative = -k * C.transpose() * (P * p0);
 
   // print initial energy
-  Eigen::VectorXd N0 = F * p0;
+  // Eigen::VectorXd N0 = F * p0;
+  Eigen::VectorXd N0 = project_to_reduced_subspace(p0);
+  spdlog::info("initial fit energy: {}",
+               evaluate_quadratic_energy(
+                 C.transpose() * ((k * P) * C), derivative, E0, N0));
+  spdlog::info("initial smoothness energy: {}",
+               evaluate_quadratic_energy(
+                 C.transpose() * (hessian_smooth * C), 0 * derivative, 0., N0));
   spdlog::info("initial energy is {}",
                evaluate_quadratic_energy(hessian, derivative, E0, N0));
 
@@ -136,117 +237,329 @@ CloughTocherOptimizer::compute_normalized_fitting_weight() const
 {
   const auto& V = get_vertices();
   const auto& faces = get_faces();
+
+  // begin with just the base fitting weight
+  double normalized_fitting_weight = fitting_weight;
+
+  // normalize by area (inverted or not)
   Eigen::VectorXd double_area;
   igl::doublearea(V, faces, double_area);
-  // return fitting_weight;
   double area = double_area.sum() / 2.;
-  // return fitting_weight / area;
-  int num_vertices = V.rows();
-  // return (1. / num_vertices) * fitting_weight;
-  //  TODO: This is probably wrong; want to use 1/area.
-  return (area / num_vertices) * fitting_weight;
+  if (invert_area) {
+    normalized_fitting_weight /= area;
+  } else {
+    normalized_fitting_weight *= area;
+  }
+
+  // optionally normalize by the vertex count
+  if (normalize_count) {
+    int num_vertices = V.rows();
+    normalized_fitting_weight /= num_vertices;
+  }
+
+  return normalized_fitting_weight;
+}
+
+void
+CloughTocherOptimizer::checkpoint_control_points(
+  const std::vector<Eigen::Vector3d>& bezier_control_points,
+  int iter)
+{
+  polyscope::removeAllStructures();
+  std::filesystem::create_directory(output_dir);
+  set_bezier_control_points(ct_surface, bezier_control_points);
+  write_mesh(ct_surface,
+             bezier_control_points,
+             join_path(output_dir, "iter_" + std::to_string(iter)));
+  ct_surface.add_surface_to_viewer({ 0.1, 0.1, 0.8 }, 3, "laplace_beltrami");
+  polyscope::screenshot(
+    join_path(output_dir, "iter_" + std::to_string(iter) + ".png"));
+}
+
+std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
+CloughTocherOptimizer::generate_position_energy_quadratic(
+  const std::vector<Eigen::Vector3d>& bezier_control_points,
+  const std::vector<Eigen::Vector3d>& optimized_control_points) const
+{
+  Eigen::VectorXd p_init = build_node_vector(bezier_control_points);
+  Eigen::VectorXd p = build_node_vector(optimized_control_points);
+  Eigen::VectorXd d = p - p_init;
+
+  Eigen::SparseMatrix<double> P = generate_position_matrix(d);
+  Eigen::VectorXd g = P * d;
+  double energy = g.dot(d);
+  P *= p_norm * (p_norm - 1);
+  g *= p_norm;
+  return std::make_tuple(energy, g, P);
 }
 
 std::vector<Eigen::Vector3d>
 CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   const std::vector<Eigen::Vector3d>& bezier_control_points,
-  int iterations)
+  int iterations,
+  double step_size)
 {
+  total_timer.start();
+  initialize_data_log();
+
   // build initial position vector
-  Eigen::VectorXd p0 = build_node_vector(bezier_control_points);
+  Eigen::VectorXd p_init = build_node_vector(bezier_control_points);
 
   // get fixed matrices
   double k = compute_normalized_fitting_weight();
   spdlog::info("Using normalized fitting weight {}", k);
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
-  const Eigen::SparseMatrix<double>& P = get_position_matrix();
+  // Eigen::SparseMatrix<double> P = generate_position_matrix();
+
+  Eigen::VectorXd N0 = project_to_reduced_subspace(p_init);
+  std::vector<Eigen::Vector3d> optimized_control_points =
+    build_control_points(C * N0);
+  Eigen::VectorXd p0 = C * N0;
 
   // get base energy
-  double E0 = 0.5 * k * p0.dot(p0);
+  // P = generate_position_matrix(p0 - p_init);
+  // Eigen::VectorXd d_fit = -k * (P * p_init);
+  double energy_fit, energy_smooth;
+  Eigen::VectorXd derivative_fit, derivative_smooth, derivative;
+  Eigen::SparseMatrix<double> hessian_fit, hessian_smooth, hessian;
+  // energy_fit = 0.5 * k * p_init.dot(p_init);
+  // derivative_fit = k * (P * (p0 - p_init));
+  // derivative = C.transpose() * (derivative_fit + derivative_smooth);
 
-  // get derivative
-  Eigen::VectorXd derivative = -k * C.transpose() * (P * p0);
-
-  Eigen::SparseMatrix<double> A, hessian;
-  std::vector<Eigen::Vector3d> optimized_control_points = bezier_control_points;
   Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> hessian_inverse;
   // Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> hessian_inverse;
 
   timer.start();
-  bool use_parametric_metric = true;
-  if (use_parametric_metric)
-    A = generate_laplace_beltrami_stiffness_matrix() /
-        2.; // TODO: remove factor of 2 once quadrature fixed
-  else
-    A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
-  hessian = C.transpose() * ((A + k * P) * C);
+  std::tie(energy_fit, derivative_fit, hessian_fit) =
+    generate_position_energy_quadratic(bezier_control_points,
+                                       optimized_control_points);
+  if (use_parametric_metric) {
+    // TODO: remove factor of 2 once quadrature fixed
+    hessian_smooth = generate_laplace_beltrami_stiffness_matrix() / 2.;
+    // hessian_smooth = generate_laplacian_stiffness_matrix();
+  } else if (false) {
+    std::tie(energy_smooth, derivative_smooth, hessian_smooth) =
+      generate_autodiff_laplace_beltrami_stiffness_matrix(
+        optimized_control_points);
+  } else if (use_fixed_metric) {
+    hessian_smooth =
+      generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+    derivative_smooth = hessian_smooth * p0;
+    energy_smooth = 0.5 * p0.dot(derivative_smooth);
+  } else {
+    std::tie(energy_smooth, derivative_smooth) =
+      generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
+    hessian_smooth =
+      generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+  }
+  derivative = C.transpose() * (derivative_smooth + k * derivative_fit);
+  hessian = C.transpose() * ((hessian_smooth + k * hessian_fit) * C);
   hessian_inverse.compute(hessian);
-  double E_prev = std::numeric_limits<double>::infinity();
-  double max_res_error = std::numeric_limits<double>::infinity();
-  for (int i = 0; i < iterations; ++i) {
-    // print initial energy
-    Eigen::VectorXd N0 = F * p0;
-    spdlog::info("initial energy is {}", E_prev);
 
+  Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
+  Eigen::VectorXd res = (hessian * N1) + derivative;
+  ID.solve_residual = res.cwiseAbs().maxCoeff();
+
+  spdlog::info("initial fit energy: {}", energy_fit);
+  spdlog::info("initial smoothness energy: {}", energy_smooth);
+
+  // ID.initial_energy = std::numeric_limits<double>::infinity();
+  // ID.initial_energy = evaluate_quadratic_energy(hessian, derivative, E0, N0);
+  ID.initial_energy = energy_smooth + k * energy_fit;
+  spdlog::info("initial energy: {}", ID.initial_energy);
+  double max_res_error = 10. * ID.solve_residual;
+  ID.step_size = step_size;
+  for (ID.iter = 1; ID.iter < iterations + 1; ++ID.iter) {
     // solve for optimal solution
+    Eigen::VectorXd g = -derivative;
     Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
     Eigen::VectorXd p1 = C * N1;
     Eigen::VectorXd res = (hessian * N1) + derivative;
-    double res_error = res.cwiseAbs().maxCoeff();
-    spdlog::info("residual error is {}", res_error);
+    ID.solve_residual = res.cwiseAbs().maxCoeff();
+    // Eigen::VectorXd d = N1 - N0;
+    Eigen::VectorXd d = N1;
+    spdlog::info("newton decr: {}", d.dot(derivative));
 
-    double t = (i == 0) ? 1.0 : 0.5;
-    // double t = 1.0;
-    double E = E_prev;
+    spdlog::info(
+      "iter {}: E={}, res={}", ID.iter, ID.initial_energy, ID.solve_residual);
+
+    // do line search
+    // ID.step_size = (ID.iter == 1) ? 1.0 : 0.5;
+    ID.step_size = std::min(2 * ID.step_size, step_size);
+    ID.optimized_energy = ID.initial_energy;
     Eigen::VectorXd N, p;
-    while ((E >= E_prev) || (res_error > max_res_error)) {
-      N = t * N1 + (1 - t) * N0;
+    while (true) {
+      // interpolate in reduced space and project to full constrol points
+      N = N0 + (ID.step_size * d);
       p = C * N;
-      double interp_error = (p - (t * p1 + (1 - t) * p0)).cwiseAbs().maxCoeff();
-      spdlog::info(
-        "control points in range [{}, {}]", p.minCoeff(), p.maxCoeff());
-      spdlog::info("interpolation error is {}", interp_error);
       optimized_control_points = build_control_points(p);
+      // spdlog::debug("energy in previous metric: {}",
+      // evaluate_quadratic_energy(hessian, derivative, E0, N));
 
       // compute hessian
       timer.start();
-      A = generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
-      hessian = C.transpose() * ((A + k * P) * C);
-      spdlog::info("matrix construction took {} s", timer.getElapsedTime());
+      std::tie(energy_fit, derivative_fit, hessian_fit) =
+        generate_position_energy_quadratic(bezier_control_points,
+                                           optimized_control_points);
+      // derivative_fit = k * (P * (p - p_init));
+      if (false) {
+        // hessian_smooth =
+        // generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+        std::tie(energy_smooth, derivative_smooth, hessian_smooth) =
+          generate_autodiff_laplace_beltrami_stiffness_matrix(
+            optimized_control_points);
+      } else if (use_fixed_metric) {
+        hessian_smooth =
+          generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+        derivative_smooth = hessian_smooth * p;
+        energy_smooth = 0.5 * p.dot(derivative_smooth);
+      } else {
+        std::tie(energy_smooth, derivative_smooth) =
+          generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
+        hessian_smooth =
+          generate_laplace_beltrami_stiffness_matrix(optimized_control_points);
+      }
+      derivative = C.transpose() * (derivative_smooth + k * derivative_fit);
+      hessian = C.transpose() * ((hessian_smooth + k * hessian_fit) * C);
+      ID.assemble_time = timer.getElapsedTime();
+
+      // compute optimized energy
+      ID.optimized_energy = energy_smooth + k * energy_fit;
 
       // invert hessian
       timer.start();
       hessian_inverse.compute(hessian);
-      spdlog::info("matrix solve took {} s", timer.getElapsedTime());
+      ID.solve_time = timer.getElapsedTime();
 
-      E = evaluate_quadratic_energy(hessian, derivative, E0, N);
-      spdlog::info("optimized energy for step {} is {}", t, E);
-
+      // compute residual error in next step
       Eigen::VectorXd N_next = -hessian_inverse.solve(derivative);
       Eigen::VectorXd res = (hessian * N_next) + derivative;
-      res_error = res.cwiseAbs().maxCoeff();
-      spdlog::info("residual error is {}", res_error);
+      ID.solve_residual = res.cwiseAbs().maxCoeff();
 
-      t = t / 2.;
-      if (t < 1e-10)
+      // write log
+      spdlog::info("step {}: delta E={}, res={}",
+                   ID.step_size,
+                   ID.initial_energy - ID.optimized_energy,
+                   ID.solve_residual);
+
+      // check convergence criteria
+      if ((!bound_energy || (ID.optimized_energy <= ID.initial_energy)) &&
+          (!bound_residual || (ID.solve_residual <= max_res_error)))
         break;
+      if (ID.step_size < 1e-50) {
+        spdlog::info("switching to gradient");
+        d = g;
+      }
+      if (ID.step_size < 1e-10)
+        break;
+
+      // reduce step size and continue
+      ID.step_size = ID.step_size / 2.;
     }
 
     // check that solution satisfies constraints
     Eigen::VectorXd pr = C * (F * p);
-    spdlog::info("constraint reconstruction error is {}",
-                 (pr - p).cwiseAbs().maxCoeff());
+    ID.constraint_error = (pr - p).cwiseAbs().maxCoeff();
+    if (ID.constraint_error > 1e-10) {
+      spdlog::warn("constraint reconstruction error is {}",
+                   ID.constraint_error);
+    }
 
+    // end iteration log output
+    spdlog::info("matrix assembly took {} s, solve took {} s\n",
+                 ID.assemble_time,
+                 ID.solve_time);
+
+    ID.total_time = total_timer.getElapsedTime();
+    write_data_log_entry();
+
+    N0 = N;
     p0 = p;
-    E_prev = E;
+    ID.initial_energy = ID.optimized_energy;
     max_res_error =
-      std::max(1e-4, res_error * 10); // allow order of magnitude growth
+      std::max(1e-4, ID.solve_residual * 10); // allow order of magnitude growth
 
     // exit if done
-    if (t < 1e-10)
+    if (ID.step_size < 1e-10)
       break;
+
+    // serialize if checkpoint iteration
+    int checkpoint = 10;
+    if (((ID.iter % checkpoint) == 0) || (ID.iter < 0)) {
+      checkpoint_control_points(optimized_control_points, ID.iter);
+    }
   }
+
+  spdlog::info("final energy: {}", ID.optimized_energy);
+  close_logs();
+
+  return optimized_control_points;
+}
+
+std::vector<Eigen::Vector3d>
+CloughTocherOptimizer::gradient_descent_laplace_beltrami_energy(
+  const std::vector<Eigen::Vector3d>& bezier_control_points,
+  int iterations,
+  double step_size)
+{
+  total_timer.start();
+  initialize_data_log();
+
+  // build initial position vector
+  Eigen::VectorXd p_init = build_node_vector(bezier_control_points);
+
+  // get fixed matrices
+  double k = compute_normalized_fitting_weight();
+  spdlog::info("Using normalized fitting weight {}", k);
+  const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
+  const Eigen::SparseMatrix<double>& P = get_position_matrix();
+
+  // get base energy
+  double E0 = 0.5 * k * p_init.dot(p_init);
+
+  Eigen::VectorXd N0 = project_to_reduced_subspace(p_init);
+  std::vector<Eigen::Vector3d> optimized_control_points =
+    build_control_points(C * N0);
+  Eigen::VectorXd p0 = C * N0;
+
+  // get derivative
+  double energy_smooth = 0.;
+  Eigen::VectorXd d_fit = -k * (P * p_init);
+  Eigen::VectorXd derivative_fit = k * (P * (p0 - p_init));
+  Eigen::VectorXd derivative_smooth = Eigen::VectorXd::Zero(p_init.size());
+  Eigen::VectorXd derivative =
+    C.transpose() * (derivative_fit + derivative_smooth);
+
+  for (ID.iter = 1; ID.iter < iterations + 1; ++ID.iter) {
+    // solve for optimal solution
+    derivative_fit = k * (P * (p0 - p_init));
+    std::tie(energy_smooth, derivative_smooth) =
+      generate_autodiff_laplace_beltrami_gradient(optimized_control_points);
+    derivative = C.transpose() * (derivative_smooth + derivative_fit);
+
+    Eigen::VectorXd d = -derivative;
+    spdlog::info("iter {}: E={}", ID.iter, ID.initial_energy);
+    ID.step_size = step_size;
+    Eigen::VectorXd N, p;
+    N = N0 + (ID.step_size * d);
+    p = C * N;
+    optimized_control_points = build_control_points(p);
+
+    // compute optimized energy
+    ID.optimized_energy =
+      energy_smooth + evaluate_quadratic_energy(k * P, d_fit, E0, C * N);
+
+    ID.total_time = total_timer.getElapsedTime();
+    write_data_log_entry();
+
+    N0 = N;
+    p0 = p;
+    ID.initial_energy = ID.optimized_energy;
+  }
+
+  spdlog::info("final energy: {}", ID.optimized_energy);
+  close_logs();
 
   return optimized_control_points;
 }
@@ -289,21 +602,8 @@ assign_spvec_to_spmat_row_help(Eigen::SparseMatrix<double, 1>& mat,
 void
 CloughTocherOptimizer::initialize_ind_to_full_matrices(bool use_incenter)
 {
-  // TODO: Would be better to avoid the uneccesary construction of a surface
-  Eigen::SparseMatrix<double> fit_matrix;
-  Eigen::SparseMatrix<double> energy_hessian;
-  Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>
-    energy_hessian_inverse;
-  OptimizationParameters optimization_params;
   const auto& V = get_vertices();
   const auto& F = get_faces();
-  const auto& affine_manifold = get_affine_manifold();
-  CloughTocherSurface ct_surface(V,
-                                 affine_manifold,
-                                 optimization_params,
-                                 fit_matrix,
-                                 energy_hessian,
-                                 energy_hessian_inverse);
 
   // TODO: Add option to pass in
   Eigen::MatrixXd v_normals;
@@ -378,8 +678,11 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices(bool use_incenter)
     row_id++;
   }
 
-  Eigen::saveMarket(bezier_constraint_matrix,
-                    "CT_bezier_constraints_expanded.txt");
+  // TODO Make optional
+  if (true) {
+    Eigen::saveMarket(bezier_constraint_matrix,
+                      "CT_bezier_constraints_expanded.txt");
+  }
 
   m_ind2full.resize(node_cnt * 3, ind_cnt);
   m_ind2full.reserve(Eigen::VectorXi::Constant(ind_cnt, 40));
@@ -432,7 +735,9 @@ CloughTocherOptimizer::initialize_ind_to_full_matrices(bool use_incenter)
   }
   m_ind2full.setFromTriplets(ind2full_trips.begin(), ind2full_trips.end());
 
-  Eigen::saveMarket(m_ind2full, "CT_bezier_r2f_expanded.txt");
+  if (true) {
+    Eigen::saveMarket(m_ind2full, "CT_bezier_r2f_expanded.txt");
+  }
 
   // build projection from full to independent nodes
   std::vector<Triplet> full2ind_trips;
@@ -531,6 +836,55 @@ CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix(
                                    stiffness_matrix_trips.end());
 
   return triple_matrix(stiffness_matrix);
+}
+
+std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
+CloughTocherOptimizer::generate_autodiff_laplace_beltrami_stiffness_matrix(
+  const std::vector<Eigen::Vector3d>& bezier_control_points) const
+{
+  // assemble IJV matrix entries
+  const auto& affine_manifold = get_affine_manifold();
+  int node_cnt = affine_manifold.m_lagrange_nodes.size(); // TODO Replace
+  double energy = 0.;
+  Eigen::VectorXd gradient = Eigen::VectorXd::Zero(3 * node_cnt);
+  std::vector<Triplet> stiffness_matrix_trips;
+  int num_faces = affine_manifold.num_faces();
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    std::array<std::array<int64_t, 10>, 3> nodes =
+      get_micro_triangle_nodes(fijk);
+    assemble_autodiff_laplace_beltrami_siffness_matrix(
+      bezier_control_points, nodes, energy, gradient, stiffness_matrix_trips);
+  }
+
+  // build matrix
+  Eigen::SparseMatrix<double> stiffness_matrix;
+  stiffness_matrix.resize(3 * node_cnt, 3 * node_cnt);
+  stiffness_matrix.setFromTriplets(stiffness_matrix_trips.begin(),
+                                   stiffness_matrix_trips.end());
+
+  return std::make_tuple(energy, gradient, stiffness_matrix);
+}
+
+std::tuple<double, Eigen::VectorXd>
+CloughTocherOptimizer::generate_autodiff_laplace_beltrami_gradient(
+  const std::vector<Eigen::Vector3d>& bezier_control_points) const
+{
+  // assemble IJV matrix entries
+  const auto& affine_manifold = get_affine_manifold();
+  int node_cnt = affine_manifold.m_lagrange_nodes.size(); // TODO Replace
+  double energy = 0.;
+  Eigen::VectorXd gradient = Eigen::VectorXd::Zero(3 * node_cnt);
+  int num_faces = affine_manifold.num_faces();
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    std::array<std::array<int64_t, 10>, 3> nodes =
+      get_micro_triangle_nodes(fijk);
+    assemble_autodiff_laplace_beltrami_gradient(
+      bezier_control_points, nodes, energy, gradient);
+  }
+
+  return std::make_tuple(energy, gradient);
 }
 
 // TODO: Obtained from affine_manifold.cpp. Make standalone function
@@ -636,8 +990,6 @@ CloughTocherOptimizer::generate_laplace_beltrami_stiffness_matrix() const
 
       // compute 10x10 local stiffness matrix (same for all dimensions)
       compute_elem_matrix_C(cp_3d, QUAD_DIM, quad_pts, weights, A);
-      // compute_elem_matrix_C_old(
-      //   cp_3d, QUAD_DIM_OLD, quad_pts_old, weights_old, A);
 
       // build single dimension copy of the stiffness matrix
       for (int i = 0; i < 10; i++) {
@@ -688,8 +1040,6 @@ CloughTocherOptimizer::assemble_local_laplace_beltrami_siffness_matrix(
 
     // compute 10x10 local stiffness matrix (same for all dimensions)
     compute_elem_matrix_C(cp_3d, QUAD_DIM, quad_pts, weights, A);
-    // compute_elem_matrix_C_old(
-    //   cp_3d, QUAD_DIM_OLD, quad_pts_old, weights_old, A);
 
     // build single dimension copy of the stiffness matrix
     for (int i = 0; i < 10; i++) {
@@ -701,6 +1051,174 @@ CloughTocherOptimizer::assemble_local_laplace_beltrami_siffness_matrix(
       }
     }
   }
+}
+
+void
+CloughTocherOptimizer::assemble_autodiff_laplace_beltrami_gradient(
+  const std::vector<Eigen::Vector3d>& bezier_control_points,
+  const std::array<std::array<int64_t, 10>, 3>& patch_indices,
+  double& energy,
+  Eigen::VectorXd& gradient) const
+{
+  typedef DScalar1<double, Eigen::Matrix<double, 30, 1>> DiffScalar;
+  DiffScalar::setVariableCount(30);
+
+  // need to remap from indexing assumed by
+  // (a) Lagrange to Bezier conversion to (b) local stiffness matrix
+  // enumerate:        0   1   2   3   4   5   6   7   8   9
+  // original order: 003 300 030 102 201 210 120 021 012 111
+  // new order:      003 012 021 030 102 111 120 201 210 300
+  // permutation:      0   9   3   4   7   8   6   2   1   5
+  std::array<int64_t, 10> perm = { 0, 9, 3, 4, 7, 8, 6, 2, 1, 5 };
+
+  DiffScalar cp_3d[10][3];
+  DiffScalar A_diff[10][10];
+  for (int n = 0; n < 3; n++) {
+    // get 3D points
+    for (int i = 0; i < 10; i++) {
+      for (int d = 0; d < 3; d++) {
+        int64_t I = patch_indices[n][i];
+        cp_3d[perm[i]][d] = DiffScalar(3 * i + d, bezier_control_points[I][d]);
+      }
+    }
+
+    // compute 10x10 local stiffness matrix (same for all dimensions)
+    compute_elem_matrix_C(cp_3d, QUAD_DIM, quad_pts, weights, A_diff);
+
+    // compute energy as 0.5 x^T A x
+    DiffScalar energy_diff(0);
+    for (int i = 0; i < 10; i++) {
+      for (int j = 0; j < 10; j++) {
+        for (int d = 0; d < 3; d++) {
+          energy_diff += cp_3d[i][d] * cp_3d[j][d] * A_diff[i][j];
+        }
+        // spdlog::info("local matrix {}, {}: {}", i, j,
+        // A_diff[i][j].getValue());
+      }
+    }
+    energy_diff /= 2.;
+    energy += energy_diff.getValue();
+    Eigen::Matrix<double, 30, 1> g = energy_diff.getGradient();
+    // spdlog::info("local matrix:\n{}", A);
+    // spdlog::info("local gradient:\n{}", g);
+
+    // build single dimension copy of the stiffness matrix
+    for (int i = 0; i < 10; i++) {
+      int64_t I = patch_indices[n][i];
+      for (int d = 0; d < 3; d++) {
+        double gi = g[3 * i + d];
+        gradient[3 * I + d] += gi;
+      }
+    }
+  }
+}
+
+void
+CloughTocherOptimizer::assemble_autodiff_laplace_beltrami_siffness_matrix(
+  const std::vector<Eigen::Vector3d>& bezier_control_points,
+  const std::array<std::array<int64_t, 10>, 3>& patch_indices,
+  double& energy,
+  Eigen::VectorXd& gradient,
+  std::vector<Triplet>& stiffness_matrix_trips) const
+{
+  typedef DScalar2<double,
+                   Eigen::Matrix<double, 30, 1>,
+                   Eigen::Matrix<double, 30, 30>>
+    DiffScalar;
+  DiffScalar::setVariableCount(30);
+
+  // need to remap from indexing assumed by
+  // (a) Lagrange to Bezier conversion to (b) local stiffness matrix
+  // enumerate:        0   1   2   3   4   5   6   7   8   9
+  // original order: 003 300 030 102 201 210 120 021 012 111
+  // new order:      003 012 021 030 102 111 120 201 210 300
+  // permutation:      0   9   3   4   7   8   6   2   1   5
+  std::array<int64_t, 10> perm = { 0, 9, 3, 4, 7, 8, 6, 2, 1, 5 };
+
+  DiffScalar cp_3d[10][3];
+  DiffScalar A_diff[10][10];
+  for (int n = 0; n < 3; n++) {
+    // get 3D points
+    for (int i = 0; i < 10; i++) {
+      for (int d = 0; d < 3; d++) {
+        int64_t I = patch_indices[n][i];
+        cp_3d[perm[i]][d] = DiffScalar(3 * i + d, bezier_control_points[I][d]);
+      }
+    }
+
+    // compute 10x10 local stiffness matrix (same for all dimensions)
+    compute_elem_matrix_C(cp_3d, QUAD_DIM, quad_pts, weights, A_diff);
+
+    // compute energy as 0.5 x^T A x
+    DiffScalar energy_diff(0);
+    for (int i = 0; i < 10; i++) {
+      for (int j = 0; j < 10; j++) {
+        for (int d = 0; d < 3; d++) {
+          energy_diff += cp_3d[i][d] * cp_3d[j][d] * A_diff[i][j];
+        }
+        // spdlog::info("local matrix {}, {}: {}", i, j,
+        // A_diff[i][j].getValue());
+      }
+    }
+    energy_diff /= 2.;
+    energy += energy_diff.getValue();
+    Eigen::Matrix<double, 30, 1> g = energy_diff.getGradient();
+    Eigen::Matrix<double, 30, 30> A = energy_diff.getHessian();
+    // spdlog::info("local matrix:\n{}", A);
+    // spdlog::info("local gradient:\n{}", g);
+
+    // build single dimension copy of the stiffness matrix
+    for (int i = 0; i < 10; i++) {
+      int64_t I = patch_indices[n][i];
+      for (int d = 0; d < 3; d++) {
+        double gi = g[3 * i + d];
+        gradient[3 * I + d] += gi;
+
+        for (int j = 0; j < 10; j++) {
+          int64_t J = patch_indices[n][j];
+          double V = A(3 * i + d, 3 * j + d);
+          stiffness_matrix_trips.push_back(Triplet(3 * I + d, 3 * J + d, V));
+        }
+      }
+    }
+  }
+}
+
+Eigen::SparseMatrix<double>
+CloughTocherOptimizer::generate_position_matrix(const Eigen::VectorXd& p) const
+{
+  // get list of position vertex indices
+  const auto& affine_manifold = get_affine_manifold();
+  int num_faces = affine_manifold.num_faces();
+  int num_nodes = affine_manifold.m_lagrange_nodes.size(); // TODO Replace
+  std::vector<bool> is_vertex_node(num_nodes, false);
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    const auto& nodes = face_chart.lagrange_nodes;
+    is_vertex_node[nodes[0]] = true;
+    is_vertex_node[nodes[1]] = true;
+    is_vertex_node[nodes[2]] = true;
+  }
+
+  // assemble IJV matrix entries
+  std::vector<Triplet> position_matrix_trips;
+  for (int i = 0; i < num_nodes; ++i) {
+    if (!is_vertex_node[i])
+      continue;
+    for (int d = 0; d < 3; ++d) {
+      int I = 3 * i + d;
+      position_matrix_trips.push_back(
+        Triplet(I, I, power(std::abs(p[I]), p_norm - 2)));
+    }
+  }
+
+  // build matrix
+  Eigen::SparseMatrix<double> position_matrix;
+  position_matrix.resize(3 * num_nodes, 3 * num_nodes);
+  position_matrix.setFromTriplets(position_matrix_trips.begin(),
+                                  position_matrix_trips.end());
+
+  return position_matrix;
 }
 
 Eigen::SparseMatrix<double>
@@ -778,7 +1296,7 @@ CloughTocherOptimizer::triple_matrix(
 
 Eigen::VectorXd
 CloughTocherOptimizer::build_node_vector(
-  const std::vector<Eigen::Vector3d>& bezier_control_points)
+  const std::vector<Eigen::Vector3d>& bezier_control_points) const
 {
   int num_nodes = bezier_control_points.size();
   Eigen::VectorXd p(3 * num_nodes);
@@ -792,7 +1310,7 @@ CloughTocherOptimizer::build_node_vector(
 }
 
 std::vector<Eigen::Vector3d>
-CloughTocherOptimizer::build_control_points(const Eigen::VectorXd& p)
+CloughTocherOptimizer::build_control_points(const Eigen::VectorXd& p) const
 {
   int num_nodes = p.size() / 3;
   std::vector<Eigen::Vector3d> bezier_control_points(num_nodes);
@@ -855,6 +1373,8 @@ CloughTocherOptimizer::assemble_local_laplacian_siffness_matrix(
         int64_t I = patch_indices[n][i];
         int64_t J = patch_indices[n][j];
         double V = AT[n][perm[i]][perm[j]] / detT[n];
+        if (double_area)
+          V = AT[n][perm[i]][perm[j]];
         stiffness_matrix_trips.push_back(Triplet(I, J, V));
       }
     }
@@ -876,174 +1396,6 @@ CloughTocherOptimizer::assemble_patch_coefficients(
     }
   }
 }
-
-// DEBUG SCRATCH: to be removed
-/*
-void CloughTocherOptimizer::initialize_ind_to_full_matrices()
-{
-                                // TODO: Would be better to avoid the
-uneccesary construction of a surface Eigen::SparseMatrix<double> fit_matrix;
-Eigen::SparseMatrix<double> energy_hessian;
-Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>
-energy_hessian_inverse; OptimizationParameters optimization_params;
-                                CloughTocherSurface ct_surface(V,
-affine_manifold, optimization_params, fit_matrix, energy_hessian,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                energy_hessian_inverse);
-                                //ct_surface.m_affine_manifold.generate_lagrange_nodes();
-
-
-                                // TODO: Add option to pass in
-                                Eigen::MatrixXd v_normals;
-                                igl::per_vertex_normals(V, F,
-igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_AREA, v_normals);
-
-                                // build cone constraint system
-                                int64_t node_cnt =
-ct_surface.m_affine_manifold.m_lagrange_nodes.size();
-                                Eigen::SparseMatrix<double, Eigen::RowMajor>
-f2f_expanded(node_cnt * 3, node_cnt * 3);
-                                f2f_expanded.reserve(Eigen::VectorXi::Constant(node_cnt
-* 3, 40)); std::vector<int> independent_node_map(node_cnt * 3, -1);
-                                std::vector<bool> node_assigned(node_cnt,
-false);
-
-                                std::cout << "compute cone constraints ..." <<
-std::endl; ct_surface.bezier_cone_constraints_expanded( f2f_expanded,
-independent_node_map, node_assigned, v_normals);
-
-                                std::cout << "compute endpoint constraints
-..."
-<< std::endl; ct_surface.bezier_endpoint_ind2dep_expanded(f2f_expanded,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                independent_node_map, false);
-
-                                std::cout << "compute interior 1 constraints
-..." << std::endl; ct_surface.bezier_internal_ind2dep_1_expanded(f2f_expanded,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                independent_node_map);
-
-                                std::cout << "compute midpoint constraints
-..."
-<< std::endl; ct_surface.bezier_midpoint_ind2dep_expanded(f2f_expanded,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                independent_node_map);
-
-                                std::cout << "compute interior 2 constraints
-..." << std::endl; ct_surface.bezier_internal_ind2dep_2_expanded(f2f_expanded,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                independent_node_map);
-
-                                std::cout << "done constraint computation" <<
-std::endl;
-
-                                ct_surface.bezier_cone_constraints_expanded(
-                                                                                                f2f_expanded, independent_node_map, node_assigned,
-v_normals);
-
-                                // count independent variables
-                                int64_t dep_cnt = 0;
-                                int64_t ind_cnt = 0;
-                                for (int64_t i = 0; i < node_cnt * 3; ++i)
-                                {
-                                                                if
-(independent_node_map[i] == 0) { dep_cnt++; } else if (independent_node_map[i]
-== 1) { ind_cnt++;
-                                                                }
-                                }
-
-                                std::cout << "node cnt: " << node_cnt * 3 <<
-std::endl; std::cout << "dep cnt: " << dep_cnt << std::endl; std::cout << "ind
-cnt: " << ind_cnt << std::endl;
-
-                                ind2full.resize(node_cnt * 3, ind_cnt);
-                                ind2full.reserve(Eigen::VectorXi::Constant(ind_cnt,
-40)); std::vector<int64_t> col2nid_map; std::vector<int64_t>
-ind2col_map(f2f_expanded.cols(), -1);
-col2nid_map.reserve(f2f_expanded.cols());
-// preallocate space int64_t col_cnt = 0; for (int64_t i = 0; i <
-f2f_expanded.cols(); ++i)
-                                {
-                                                                if
-(independent_node_map[i] == 1)
-                                                                {
-                                                                                                const Eigen::SparseVector<double> &c =
-f2f_expanded.col(i); ind2full.col(col_cnt) = c; col2nid_map.push_back(i);
-                                                                                                ind2col_map[i] = col_cnt; // map full to independent
-                                                                                                col_cnt++;
-                                                                }
-                                }
-
-                                f2f_expanded.prune(1e-12);
-                                f2f_expanded.makeCompressed();
-                                std::vector<Triplet> ind2full_trips;
-                                int count = 0;
-                                std::vector<bool>
-diag_seen(f2f_expanded.rows(), false); std::vector<std::map<int, int>>
-seen_indices(f2f_expanded.rows()); for (int k = 0; k <
-f2f_expanded.outerSize(); ++k)
-                                {
-                                                                for
-(Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(f2f_expanded,
-k); it; ++it)
-                                                                {
-                                                                                                // check if dependent node
-                                                                                                int j = it.col();
-                                                                                                if (independent_node_map[j] == 1)
-                                                                                                {
-                                                                                                                                if (ind2col_map[j] < 0)
-spdlog::error("independent column index missing for {}", j);
-
-                                                                                                                                // add triplet
-                                                                                                                                int i = it.row();
-                                                                                                                                double v = it.value();
-
-                                                                                                                                if (i == j)
-                                                                                                                                {
-                                                                                                                                                                if (diag_seen[i]) continue;
-                                                                                                                                                                diag_seen[i] = true;
-                                                                                                                                }
-                                                                                                                                if (seen_indices[i][j] > 0)
-                                                                                                                                {
-                                                                                                                                                                spdlog::info("Seen {} {} {} already", i,
-j, v);
-                                                                                                                                }
-                                                                                                                                else {
-                                                                                                                                                                seen_indices[i][j] = 1;
-                                                                                                                                }
-
-                                                                                                                                if (ind2col_map[j] == 153) spdlog::info("{} {}
-{} {}", count, i, j, v); ind2full_trips.push_back(Triplet(i, ind2col_map[j],
-v));
-                                                                                                }
-                                                                                                count++;
-                                                                }
-                                }
-                                Eigen::SparseMatrix<double> _ind2full;
-                                _ind2full.resize(node_cnt * 3, ind_cnt);
-                                _ind2full.setFromTriplets(ind2full_trips.begin(),
-ind2full_trips.end()); Eigen::SparseMatrix<double>  diff = _ind2full -
-ind2full; spdlog::info("Matrix error is {}", diff.norm()); for (int i = 0; i <
-diff.cols(); ++i)
-                                {
-                                                                if
-(diff.col(i).norm() > 1e-10)
-                                                                {
-                                                                                                spdlog::info("Matrix error col {} is {}", i,
-diff.col(i).norm()); break;
-                                                                }
-                                }
-                                spdlog::info("Matrix error col 0 is {}",
-diff.col(0).norm()); spdlog::info("Matrix error row 1 is {}",
-diff.row(1).norm()); spdlog::info("Matrix entries are {} and {}",
-_ind2full.coeffRef(153, 153), ind2full.coeffRef(153, 153));
-
-                                // build projection from full to independent
-nodes std::vector<Triplet> full2ind_trips; for (int i = 0; i < ind_cnt; ++i)
-                                {
-                                                                int j =
-col2nid_map[i]; full2ind_trips.push_back(Triplet(i, j, 1.));
-                                }
-                                full2ind.resize(ind_cnt, node_cnt * 3);
-                                full2ind.setFromTriplets(full2ind_trips.begin(),
-full2ind_trips.end());
-}
-*/
 
 std::vector<Eigen::Vector3d>
 generate_linear_clough_tocher_surface(CloughTocherSurface& ct_surface,

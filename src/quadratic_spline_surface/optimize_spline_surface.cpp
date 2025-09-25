@@ -33,7 +33,7 @@ build_local_fit_hessian(const std::array<bool, 3> &is_cone,
       H_f(vi, vi) = optimization_params.cone_position_difference_factor;
 
       // Add cone gradient fitting term
-      spdlog::info("Weighting cone gradients by {}",
+      spdlog::debug("Weighting cone gradients by {}",
                    optimization_params.cone_vertex_gradient_difference_factor);
       size_t g1i = generate_local_vertex_gradient_variable_index(
           i, 0, 0, 1); // local first gradient index
