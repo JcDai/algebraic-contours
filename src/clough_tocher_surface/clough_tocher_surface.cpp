@@ -21,14 +21,14 @@ generate_linear_clough_tocher_surface(ct_surface, V);
 */
 
 CloughTocherSurface::CloughTocherSurface(
-  const Eigen::MatrixXd& V,
-  const AffineManifold& affine_manifold,
-  const OptimizationParameters& optimization_params,
-  Eigen::SparseMatrix<double>& fit_matrix,
-  Eigen::SparseMatrix<double>& energy_hessian,
-  Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
-    energy_hessian_inverse)
-  : m_affine_manifold(affine_manifold)
+    const Eigen::MatrixXd& V,
+    const AffineManifold& affine_manifold,
+    const OptimizationParameters& optimization_params,
+    Eigen::SparseMatrix<double>& fit_matrix,
+    Eigen::SparseMatrix<double>& energy_hessian,
+    Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
+        energy_hessian_inverse)
+    : m_affine_manifold(affine_manifold)
 {
 
   // Generate normals
@@ -104,12 +104,13 @@ CloughTocherSurface::CloughTocherSurface(
     // fix edge 01
     const auto& e01_chart = m_affine_manifold.get_edge_chart(i, 2);
     const auto& m01 =
-      (e01_chart.top_face_index == int64_t(i))
-        ? e01_chart.top_vertex_uv_position
-        : e01_chart.bottom_vertex_uv_position; // vector start point is (0,0)
+        (e01_chart.top_face_index == int64_t(i))
+            ? e01_chart.top_vertex_uv_position
+            : e01_chart
+                  .bottom_vertex_uv_position; // vector start point is (0,0)
     const auto e01 = (e01_chart.top_face_index == int64_t(i))
-                       ? Eigen::Vector2d(1, 0)
-                       : Eigen::Vector2d(-1, 0);
+                         ? Eigen::Vector2d(1, 0)
+                         : Eigen::Vector2d(-1, 0);
     const auto dfde_01_q = 2 * (p1 - p0) + 0.5 * (d10 - d01);
     const auto dfde_01_c = 1.5 * (p1 - p0) + 0.25 * (d10 - d01);
     h01_c = h01_q - dfde_01_q * (e01.dot(m01)) + dfde_01_c * (e01.dot(m01));
@@ -117,12 +118,13 @@ CloughTocherSurface::CloughTocherSurface(
     // fix edge 12
     const auto& e12_chart = m_affine_manifold.get_edge_chart(i, 0);
     const auto& m12 =
-      (e12_chart.top_face_index == int64_t(i))
-        ? e12_chart.top_vertex_uv_position
-        : e12_chart.bottom_vertex_uv_position; // vector start point is (0,0)
+        (e12_chart.top_face_index == int64_t(i))
+            ? e12_chart.top_vertex_uv_position
+            : e12_chart
+                  .bottom_vertex_uv_position; // vector start point is (0,0)
     const auto e12 = (e12_chart.top_face_index == int64_t(i))
-                       ? Eigen::Vector2d(1, 0)
-                       : Eigen::Vector2d(-1, 0);
+                         ? Eigen::Vector2d(1, 0)
+                         : Eigen::Vector2d(-1, 0);
     const auto dfde_12_q = 2 * (p2 - p1) + 0.5 * (d21 - d12);
     const auto dfde_12_c = 1.5 * (p2 - p1) + 0.25 * (d21 - d12);
     h12_c = h12_q - dfde_12_q * (e12.dot(m12)) + dfde_12_c * (e12.dot(m12));
@@ -130,12 +132,13 @@ CloughTocherSurface::CloughTocherSurface(
     // fix edge 20
     const auto& e20_chart = m_affine_manifold.get_edge_chart(i, 1);
     const auto& m20 =
-      (e20_chart.top_face_index == int64_t(i))
-        ? e20_chart.top_vertex_uv_position
-        : e20_chart.bottom_vertex_uv_position; // vector start point is (0,0)
+        (e20_chart.top_face_index == int64_t(i))
+            ? e20_chart.top_vertex_uv_position
+            : e20_chart
+                  .bottom_vertex_uv_position; // vector start point is (0,0)
     const auto e20 = (e20_chart.top_face_index == int64_t(i))
-                       ? Eigen::Vector2d(1, 0)
-                       : Eigen::Vector2d(-1, 0);
+                         ? Eigen::Vector2d(1, 0)
+                         : Eigen::Vector2d(-1, 0);
     const auto dfde_20_q = 2 * (p0 - p2) + 0.5 * (d02 - d20);
     const auto dfde_20_c = 1.5 * (p0 - p2) + 0.25 * (d02 - d20);
     h20_c = h20_q - dfde_20_q * (e20.dot(m20)) + dfde_20_c * (e20.dot(m20));
@@ -168,9 +171,9 @@ CloughTocherSurface::evaluate_patch(const PatchIndex& patch_index,
 
 void
 CloughTocherSurface::generate_face_normals(
-  const Eigen::MatrixXd& V,
-  const AffineManifold& affine_manifold,
-  Eigen::MatrixXd& N)
+    const Eigen::MatrixXd& V,
+    const AffineManifold& affine_manifold,
+    Eigen::MatrixXd& N)
 {
   Eigen::MatrixXi const& F = affine_manifold.get_faces();
 
@@ -372,8 +375,8 @@ CloughTocherSurface::discretize(int num_subdivisions,
       int F_start_index = num_patch_faces * (3 * patch_index + n);
       V.block(V_start_index, 0, num_patch_vertices, V.cols()) = V_patch[n];
       F.block(F_start_index, 0, num_patch_faces, F.cols()) =
-        F_patch[n] +
-        Eigen::MatrixXi::Constant(num_patch_faces, F.cols(), V_start_index);
+          F_patch[n] +
+          Eigen::MatrixXi::Constant(num_patch_faces, F.cols(), V_start_index);
     }
   }
 
@@ -383,10 +386,10 @@ CloughTocherSurface::discretize(int num_subdivisions,
 
 void
 CloughTocherSurface::discretize_patch_boundaries(
-  int num_subdivision,
-  std::vector<SpatialVector>& points,
-  std::vector<std::vector<int>>& polylines,
-  bool only_exterior) const
+    int num_subdivision,
+    std::vector<SpatialVector>& points,
+    std::vector<std::vector<int>>& polylines,
+    bool only_exterior) const
 {
   points.clear();
   polylines.clear();
@@ -438,23 +441,23 @@ CloughTocherSurface::add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color,
   polyscope::init();
   polyscope::registerSurfaceMesh(meshname, V, F)->setEdgeWidth(0);
   polyscope::getSurfaceMesh(meshname)->setSurfaceColor(
-    glm::vec3(color[0], color[1], color[2]));
+      glm::vec3(color[0], color[1], color[2]));
 
   // Discretize patch boundaries
   std::vector<SpatialVector> boundary_points;
   std::vector<std::vector<int>> boundary_polylines;
   discretize_patch_boundaries(
-    num_subdivisions, boundary_points, boundary_polylines, true);
+      num_subdivisions, boundary_points, boundary_polylines, true);
 
   // View contour curve network
   MatrixXr boundary_points_mat =
-    convert_nested_vector_to_matrix(boundary_points);
+      convert_nested_vector_to_matrix(boundary_points);
   std::vector<std::array<int, 2>> boundary_edges =
-    convert_polylines_to_edges(boundary_polylines);
+      convert_polylines_to_edges(boundary_polylines);
   polyscope::registerCurveNetwork(
-    "patch_boundaries", boundary_points_mat, boundary_edges);
+      "patch_boundaries", boundary_points_mat, boundary_edges);
   polyscope::getCurveNetwork("patch_boundaries")
-    ->setColor(glm::vec3(0.670, 0.673, 0.292));
+      ->setColor(glm::vec3(0.670, 0.673, 0.292));
   polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
   polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
   polyscope::getCurveNetwork("patch_boundaries")->setEnabled(false);
@@ -483,21 +486,21 @@ CloughTocherSurface::write_cubic_surface_to_msh_with_conn(std::string filename)
   */
 
   const std::array<PlanarPoint, 19> CT_nodes = { {
-    PlanarPoint(0., 0.),           PlanarPoint(1., 0.),
-    PlanarPoint(0., 1.),           PlanarPoint(1. / 3., 1. / 3.),
-    PlanarPoint(1. / 3., 0.),      PlanarPoint(2. / 3., 0.),
-    PlanarPoint(2. / 3., 1. / 3.), PlanarPoint(1. / 3., 2. / 3.),
-    PlanarPoint(0., 2. / 3.),      PlanarPoint(0., 1. / 3.),
-    PlanarPoint(1. / 9., 1. / 9.), PlanarPoint(2. / 9., 2. / 9.),
-    PlanarPoint(7. / 9., 1. / 9.), PlanarPoint(5. / 9., 2. / 9.),
-    PlanarPoint(1. / 9., 7. / 9.), PlanarPoint(2. / 9., 5. / 9.),
-    PlanarPoint(4. / 9., 1. / 9.), PlanarPoint(4. / 9., 4. / 9.),
-    PlanarPoint(1. / 9., 4. / 9.),
+      PlanarPoint(0., 0.),           PlanarPoint(1., 0.),
+      PlanarPoint(0., 1.),           PlanarPoint(1. / 3., 1. / 3.),
+      PlanarPoint(1. / 3., 0.),      PlanarPoint(2. / 3., 0.),
+      PlanarPoint(2. / 3., 1. / 3.), PlanarPoint(1. / 3., 2. / 3.),
+      PlanarPoint(0., 2. / 3.),      PlanarPoint(0., 1. / 3.),
+      PlanarPoint(1. / 9., 1. / 9.), PlanarPoint(2. / 9., 2. / 9.),
+      PlanarPoint(7. / 9., 1. / 9.), PlanarPoint(5. / 9., 2. / 9.),
+      PlanarPoint(1. / 9., 7. / 9.), PlanarPoint(2. / 9., 5. / 9.),
+      PlanarPoint(4. / 9., 1. / 9.), PlanarPoint(4. / 9., 4. / 9.),
+      PlanarPoint(1. / 9., 4. / 9.),
   } };
 
   // std::vector<Eigen::Vector3d> vertices;
   std::map<std::pair<int64_t, int64_t>, std::array<int64_t, 4>>
-    boundary_edge_to_v_map;
+      boundary_edge_to_v_map;
   std::vector<std::array<int64_t, 10>> faces;
   std::map<int64_t, int64_t> v_to_v_map;
   std::vector<Eigen::Vector3d> vertices;
@@ -569,15 +572,15 @@ CloughTocherSurface::write_cubic_surface_to_msh_with_conn(std::string filename)
           boundary_edge_to_v_map.end()) {
         // this edge is processed in some other patch
         const auto& vs =
-          boundary_edge_to_v_map[std::make_pair(Fv[(i + 1) % 3], Fv[i])];
+            boundary_edge_to_v_map[std::make_pair(Fv[(i + 1) % 3], Fv[i])];
         l_vids[4 + i * 2 + 0] = vs[1];
         l_vids[4 + i * 2 + 1] = vs[0];
       } else {
         // eval new vertices
-        auto z0 =
-          patch.CT_eval(CT_nodes[4 + i * 2 + 0][0], CT_nodes[4 + i * 2 + 0][1]);
-        auto z1 =
-          patch.CT_eval(CT_nodes[4 + i * 2 + 1][0], CT_nodes[4 + i * 2 + 1][1]);
+        auto z0 = patch.CT_eval(CT_nodes[4 + i * 2 + 0][0],
+                                CT_nodes[4 + i * 2 + 0][1]);
+        auto z1 = patch.CT_eval(CT_nodes[4 + i * 2 + 1][0],
+                                CT_nodes[4 + i * 2 + 1][1]);
         l_vids[4 + i * 2 + 0] = vertices.size();
         vertices.push_back(z0);
         l_vids[4 + i * 2 + 1] = vertices.size();
@@ -700,8 +703,8 @@ CloughTocherSurface::write_cubic_surface_to_msh_with_conn(std::string filename)
 
 void
 CloughTocherSurface::write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
-  std::string filename,
-  bool write_bezier)
+    std::string filename,
+    bool write_bezier)
 {
   std::ofstream file(filename + ".msh");
 
@@ -899,19 +902,19 @@ midpoint_degenerate_helper(const EdgeManifoldChart& e_chart, const int64_t fid)
   // r1: pijm r2: pij r3: pji r4: pijm'  r is uv pos
   if (e_chart.top_face_index == fid) {
     const Eigen::Vector2d r1 =
-      (1. / 3. + 1. / 3. * top_beta) * right_pos +
-      (1. / 3. * top_gamma) * top_pos +
-      (1 - (1. / 3. + 1. / 3. * top_beta) - (1. / 3. * top_gamma)) *
-        left_pos; // (4/9, 1/9)
+        (1. / 3. + 1. / 3. * top_beta) * right_pos +
+        (1. / 3. * top_gamma) * top_pos +
+        (1 - (1. / 3. + 1. / 3. * top_beta) - (1. / 3. * top_gamma)) *
+            left_pos; // (4/9, 1/9)
     const Eigen::Vector2d r2 =
-      1. / 3. * right_pos + 0 * top_pos + 2. / 3. * left_pos; // (1/3, 0)
+        1. / 3. * right_pos + 0 * top_pos + 2. / 3. * left_pos; // (1/3, 0)
     const Eigen::Vector2d r3 =
-      2. / 3. * right_pos + 0 * top_pos + 1. / 3. * left_pos; // (2/3, 0)
+        2. / 3. * right_pos + 0 * top_pos + 1. / 3. * left_pos; // (2/3, 0)
     const Eigen::Vector2d r4 =
-      (1. / 3. + 1. / 3. * bottom_beta) * left_pos +
-      (1. / 3. * bottom_gamma) * bot_pos +
-      (1 - (1. / 3. + 1. / 3. * bottom_beta) - (1. / 3. * bottom_gamma)) *
-        right_pos; // (4/9, 1/9) in other tri
+        (1. / 3. + 1. / 3. * bottom_beta) * left_pos +
+        (1. / 3. * bottom_gamma) * bot_pos +
+        (1 - (1. / 3. + 1. / 3. * bottom_beta) - (1. / 3. * bottom_gamma)) *
+            right_pos; // (4/9, 1/9) in other tri
     Eigen::Matrix3d r2r1r4, r1r3r4;
     r2r1r4 << r2[0], r2[1], 1, r1[0], r1[1], 1, r4[0], r4[1], 1;
     r1r3r4 << r1[0], r1[1], 1, r3[0], r3[1], 1, r4[0], r4[1], 1;
@@ -923,19 +926,19 @@ midpoint_degenerate_helper(const EdgeManifoldChart& e_chart, const int64_t fid)
 
   } else {
     const Eigen::Vector2d r1 =
-      (1. / 3. + 1. / 3. * bottom_beta) * left_pos +
-      (1. / 3. * bottom_gamma) * bot_pos +
-      (1 - (1. / 3. + 1. / 3. * bottom_beta) - (1. / 3. * bottom_gamma)) *
-        right_pos; // (4/9, 1/9)
+        (1. / 3. + 1. / 3. * bottom_beta) * left_pos +
+        (1. / 3. * bottom_gamma) * bot_pos +
+        (1 - (1. / 3. + 1. / 3. * bottom_beta) - (1. / 3. * bottom_gamma)) *
+            right_pos; // (4/9, 1/9)
     const Eigen::Vector2d r2 =
-      1. / 3. * left_pos + 0 * bot_pos + 2. / 3. * right_pos; // (1/3, 0)
+        1. / 3. * left_pos + 0 * bot_pos + 2. / 3. * right_pos; // (1/3, 0)
     const Eigen::Vector2d r3 =
-      2. / 3. * left_pos + 0 * bot_pos + 1. / 3. * right_pos; // (2/3, 0)
+        2. / 3. * left_pos + 0 * bot_pos + 1. / 3. * right_pos; // (2/3, 0)
     const Eigen::Vector2d r4 =
-      (1. / 3. + 1. / 3. * top_beta) * right_pos +
-      (1. / 3. * top_gamma) * top_pos +
-      (1 - (1. / 3. + 1. / 3. * top_beta) - (1. / 3. * top_gamma)) *
-        left_pos; // (4/9, 1/9) in other tri
+        (1. / 3. + 1. / 3. * top_beta) * right_pos +
+        (1. / 3. * top_gamma) * top_pos +
+        (1 - (1. / 3. + 1. / 3. * top_beta) - (1. / 3. * top_gamma)) *
+            left_pos; // (4/9, 1/9) in other tri
     Eigen::Matrix3d r2r1r4, r1r3r4;
     r2r1r4 << r2[0], r2[1], 1, r1[0], r1[1], 1, r4[0], r4[1], 1;
     r1r3r4 << r1[0], r1[1], 1, r3[0], r3[1], 1, r4[0], r4[1], 1;
@@ -956,8 +959,8 @@ midpoint_degenerate_helper(const EdgeManifoldChart& e_chart, const int64_t fid)
 
 void
 CloughTocherSurface::compute_degenerate_bezier_control_points_special_midpoint(
-  const Eigen::MatrixXd& V,
-  const Eigen::MatrixXi& F)
+    const Eigen::MatrixXd& V,
+    const Eigen::MatrixXi& F)
 {
   m_degenerated_bc_special.resize(m_affine_manifold.m_lagrange_nodes.size());
   std::cout << m_degenerated_bc_special.size() << std::endl;
@@ -986,60 +989,60 @@ CloughTocherSurface::compute_degenerate_bezier_control_points_special_midpoint(
     const auto& e01 = m_affine_manifold.get_edge_chart(patch_id, 2);
     double a01m = midpoint_degenerate_helper(e01, patch_id);
     m_degenerated_bc_special[l_nodes[9]] =
-      (1 - a01m) * m_degenerated_bc_special[l_nodes[0]] +
-      a01m * m_degenerated_bc_special[l_nodes[1]];
+        (1 - a01m) * m_degenerated_bc_special[l_nodes[0]] +
+        a01m * m_degenerated_bc_special[l_nodes[1]];
 
     const auto& e12 = m_affine_manifold.get_edge_chart(patch_id, 0);
     double a12m = midpoint_degenerate_helper(e12, patch_id);
     m_degenerated_bc_special[l_nodes[10]] =
-      (1 - a12m) * m_degenerated_bc_special[l_nodes[1]] +
-      a12m * m_degenerated_bc_special[l_nodes[2]];
+        (1 - a12m) * m_degenerated_bc_special[l_nodes[1]] +
+        a12m * m_degenerated_bc_special[l_nodes[2]];
 
     const auto& e20 = m_affine_manifold.get_edge_chart(patch_id, 1);
     double a20m = midpoint_degenerate_helper(e20, patch_id);
     m_degenerated_bc_special[l_nodes[11]] =
-      (1 - a20m) * m_degenerated_bc_special[l_nodes[2]] +
-      a20m * m_degenerated_bc_special[l_nodes[0]];
+        (1 - a20m) * m_degenerated_bc_special[l_nodes[2]] +
+        a20m * m_degenerated_bc_special[l_nodes[0]];
 
     // interior 1
     const double alpha = f_chart.alpha;
     const double beta = f_chart.beta;
     const double gamma = f_chart.gamma;
     m_degenerated_bc_special[l_nodes[12]] =
-      alpha * m_degenerated_bc_special[l_nodes[0]] +
-      beta * m_degenerated_bc_special[l_nodes[3]] +
-      gamma * m_degenerated_bc_special[l_nodes[8]];
+        alpha * m_degenerated_bc_special[l_nodes[0]] +
+        beta * m_degenerated_bc_special[l_nodes[3]] +
+        gamma * m_degenerated_bc_special[l_nodes[8]];
 
     m_degenerated_bc_special[l_nodes[14]] =
-      alpha * m_degenerated_bc_special[l_nodes[4]] +
-      beta * m_degenerated_bc_special[l_nodes[1]] +
-      gamma * m_degenerated_bc_special[l_nodes[5]];
+        alpha * m_degenerated_bc_special[l_nodes[4]] +
+        beta * m_degenerated_bc_special[l_nodes[1]] +
+        gamma * m_degenerated_bc_special[l_nodes[5]];
 
     m_degenerated_bc_special[l_nodes[16]] =
-      alpha * m_degenerated_bc_special[l_nodes[7]] +
-      beta * m_degenerated_bc_special[l_nodes[6]] +
-      gamma * m_degenerated_bc_special[l_nodes[2]];
+        alpha * m_degenerated_bc_special[l_nodes[7]] +
+        beta * m_degenerated_bc_special[l_nodes[6]] +
+        gamma * m_degenerated_bc_special[l_nodes[2]];
 
     // interior 2
     m_degenerated_bc_special[l_nodes[13]] =
-      alpha * m_degenerated_bc_special[l_nodes[12]] +
-      beta * m_degenerated_bc_special[l_nodes[9]] +
-      gamma * m_degenerated_bc_special[l_nodes[11]];
+        alpha * m_degenerated_bc_special[l_nodes[12]] +
+        beta * m_degenerated_bc_special[l_nodes[9]] +
+        gamma * m_degenerated_bc_special[l_nodes[11]];
 
     m_degenerated_bc_special[l_nodes[15]] =
-      alpha * m_degenerated_bc_special[l_nodes[9]] +
-      beta * m_degenerated_bc_special[l_nodes[14]] +
-      gamma * m_degenerated_bc_special[l_nodes[10]];
+        alpha * m_degenerated_bc_special[l_nodes[9]] +
+        beta * m_degenerated_bc_special[l_nodes[14]] +
+        gamma * m_degenerated_bc_special[l_nodes[10]];
 
     m_degenerated_bc_special[l_nodes[17]] =
-      alpha * m_degenerated_bc_special[l_nodes[11]] +
-      beta * m_degenerated_bc_special[l_nodes[10]] +
-      gamma * m_degenerated_bc_special[l_nodes[16]];
+        alpha * m_degenerated_bc_special[l_nodes[11]] +
+        beta * m_degenerated_bc_special[l_nodes[10]] +
+        gamma * m_degenerated_bc_special[l_nodes[16]];
     // center
     m_degenerated_bc_special[l_nodes[18]] =
-      alpha * m_degenerated_bc_special[l_nodes[13]] +
-      beta * m_degenerated_bc_special[l_nodes[15]] +
-      gamma * m_degenerated_bc_special[l_nodes[17]];
+        alpha * m_degenerated_bc_special[l_nodes[13]] +
+        beta * m_degenerated_bc_special[l_nodes[15]] +
+        gamma * m_degenerated_bc_special[l_nodes[17]];
   }
 }
 
@@ -1143,10 +1146,10 @@ CloughTocherSurface::write_special_bc_to_msh(const std::string& filename)
 
 void
 CloughTocherSurface::compute_degenerate_bezier_control_points(
-  const Eigen::SparseMatrix<double>& f2f_matrix,
-  const std::vector<int>& independent_node_map,
-  const Eigen::MatrixXd& V,
-  const Eigen::MatrixXi& F)
+    const Eigen::SparseMatrix<double>& f2f_matrix,
+    const std::vector<int>& independent_node_map,
+    const Eigen::MatrixXd& V,
+    const Eigen::MatrixXi& F)
 {
   Eigen::VectorXd degenerated_bc_expanded(independent_node_map.size());
   degenerated_bc_expanded.setZero();
@@ -1166,66 +1169,66 @@ CloughTocherSurface::compute_degenerate_bezier_control_points(
       // assign edge point position if independent
       if (independent_node_map[l_nodes[3] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[3] * 3 + i] =
-          degenerated_bc_expanded[l_nodes[0] * 3 + i];
+            degenerated_bc_expanded[l_nodes[0] * 3 + i];
       }
       if (independent_node_map[l_nodes[4] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[4] * 3 + i] =
-          degenerated_bc_expanded[l_nodes[1] * 3 + i];
+            degenerated_bc_expanded[l_nodes[1] * 3 + i];
       }
       if (independent_node_map[l_nodes[5] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[5] * 3 + i] =
-          degenerated_bc_expanded[l_nodes[1] * 3 + i];
+            degenerated_bc_expanded[l_nodes[1] * 3 + i];
       }
       if (independent_node_map[l_nodes[6] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[6] * 3 + i] =
-          degenerated_bc_expanded[l_nodes[2] * 3 + i];
+            degenerated_bc_expanded[l_nodes[2] * 3 + i];
       }
       if (independent_node_map[l_nodes[7] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[7] * 3 + i] =
-          degenerated_bc_expanded[l_nodes[2] * 3 + i];
+            degenerated_bc_expanded[l_nodes[2] * 3 + i];
       }
       if (independent_node_map[l_nodes[8] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[8] * 3 + i] =
-          degenerated_bc_expanded[l_nodes[0] * 3 + i];
+            degenerated_bc_expanded[l_nodes[0] * 3 + i];
       }
 
       // assign midpoint if independent
       if (independent_node_map[l_nodes[9] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[9] * 3 + i] =
-          (degenerated_bc_expanded[l_nodes[0] * 3 + i] +
-           degenerated_bc_expanded[l_nodes[1] * 3 + i]) /
-          2.;
+            (degenerated_bc_expanded[l_nodes[0] * 3 + i] +
+             degenerated_bc_expanded[l_nodes[1] * 3 + i]) /
+            2.;
       }
       if (independent_node_map[l_nodes[10] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[10] * 3 + i] =
-          (degenerated_bc_expanded[l_nodes[1] * 3 + i] +
-           degenerated_bc_expanded[l_nodes[2] * 3 + i]) /
-          2.;
+            (degenerated_bc_expanded[l_nodes[1] * 3 + i] +
+             degenerated_bc_expanded[l_nodes[2] * 3 + i]) /
+            2.;
       }
       if (independent_node_map[l_nodes[11] * 3 + i] == 1) {
         degenerated_bc_expanded[l_nodes[11] * 3 + i] =
-          (degenerated_bc_expanded[l_nodes[2] * 3 + i] +
-           degenerated_bc_expanded[l_nodes[0] * 3 + i]) /
-          2.;
+            (degenerated_bc_expanded[l_nodes[2] * 3 + i] +
+             degenerated_bc_expanded[l_nodes[0] * 3 + i]) /
+            2.;
       }
     }
   }
 
   m_degenerated_bezier_control_points_expanded =
-    f2f_matrix * degenerated_bc_expanded;
+      f2f_matrix * degenerated_bc_expanded;
 }
 
 void
 CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
-  std::string filename)
+    std::string filename)
 {
   std::ofstream file(filename + ".msh");
 
   for (size_t i = 0; i < m_affine_manifold.m_lagrange_nodes.size(); ++i) {
-    m_degenerated_bezier_control_points.push_back(
-      Eigen::Vector3d(m_degenerated_bezier_control_points_expanded[i * 3 + 0],
-                      m_degenerated_bezier_control_points_expanded[i * 3 + 1],
-                      m_degenerated_bezier_control_points_expanded[i * 3 + 2]));
+    m_degenerated_bezier_control_points.push_back(Eigen::Vector3d(
+        m_degenerated_bezier_control_points_expanded[i * 3 + 0],
+        m_degenerated_bezier_control_points_expanded[i * 3 + 1],
+        m_degenerated_bezier_control_points_expanded[i * 3 + 2]));
   }
 
   /*
@@ -1323,9 +1326,9 @@ CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
 
 void
 CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
-  std::string filename,
-  const Eigen::MatrixXd& V,
-  const Eigen::MatrixXi& F)
+    std::string filename,
+    const Eigen::MatrixXd& V,
+    const Eigen::MatrixXi& F)
 {
   std::ofstream file(filename + ".msh");
 
@@ -1388,7 +1391,7 @@ CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
 
   // compute degenerated bezier control points
   std::vector<Eigen::Vector3d> degenerated_bezier_control_points(
-    m_affine_manifold.m_lagrange_nodes.size());
+      m_affine_manifold.m_lagrange_nodes.size());
 
   for (const auto& f_chart : m_affine_manifold.m_face_charts) {
     const auto& l_nodes = f_chart.lagrange_nodes;
@@ -1416,17 +1419,17 @@ CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
 
     // edges
     degenerated_bezier_control_points[l_nodes[3]] =
-      degenerated_bezier_control_points[l_nodes[0]];
+        degenerated_bezier_control_points[l_nodes[0]];
     degenerated_bezier_control_points[l_nodes[4]] =
-      degenerated_bezier_control_points[l_nodes[1]];
+        degenerated_bezier_control_points[l_nodes[1]];
     degenerated_bezier_control_points[l_nodes[5]] =
-      degenerated_bezier_control_points[l_nodes[1]];
+        degenerated_bezier_control_points[l_nodes[1]];
     degenerated_bezier_control_points[l_nodes[6]] =
-      degenerated_bezier_control_points[l_nodes[2]];
+        degenerated_bezier_control_points[l_nodes[2]];
     degenerated_bezier_control_points[l_nodes[7]] =
-      degenerated_bezier_control_points[l_nodes[2]];
+        degenerated_bezier_control_points[l_nodes[2]];
     degenerated_bezier_control_points[l_nodes[8]] =
-      degenerated_bezier_control_points[l_nodes[0]];
+        degenerated_bezier_control_points[l_nodes[0]];
 
     // if (v_charts[l_nodes[0]].is_cone) {
     //   degenerated_bezier_control_points[l_nodes[4]] =
@@ -1447,17 +1450,17 @@ CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
 
     // midpoint
     degenerated_bezier_control_points[l_nodes[9]] =
-      (degenerated_bezier_control_points[l_nodes[0]] +
-       degenerated_bezier_control_points[l_nodes[1]]) /
-      2.;
+        (degenerated_bezier_control_points[l_nodes[0]] +
+         degenerated_bezier_control_points[l_nodes[1]]) /
+        2.;
     degenerated_bezier_control_points[l_nodes[10]] =
-      (degenerated_bezier_control_points[l_nodes[1]] +
-       degenerated_bezier_control_points[l_nodes[2]]) /
-      2.;
+        (degenerated_bezier_control_points[l_nodes[1]] +
+         degenerated_bezier_control_points[l_nodes[2]]) /
+        2.;
     degenerated_bezier_control_points[l_nodes[11]] =
-      (degenerated_bezier_control_points[l_nodes[2]] +
-       degenerated_bezier_control_points[l_nodes[0]]) /
-      2.;
+        (degenerated_bezier_control_points[l_nodes[2]] +
+         degenerated_bezier_control_points[l_nodes[0]]) /
+        2.;
 
     // if (v_charts[l_nodes[0]].is_cone) {
     //   degenerated_bezier_control_points[l_nodes[11]] =
@@ -1477,47 +1480,47 @@ CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
     // }
     // interior 1
     degenerated_bezier_control_points[l_nodes[12]] =
-      (degenerated_bezier_control_points[l_nodes[0]] +
-       degenerated_bezier_control_points[l_nodes[3]] +
-       degenerated_bezier_control_points[l_nodes[8]]) /
-      3.;
+        (degenerated_bezier_control_points[l_nodes[0]] +
+         degenerated_bezier_control_points[l_nodes[3]] +
+         degenerated_bezier_control_points[l_nodes[8]]) /
+        3.;
 
     degenerated_bezier_control_points[l_nodes[14]] =
-      (degenerated_bezier_control_points[l_nodes[1]] +
-       degenerated_bezier_control_points[l_nodes[5]] +
-       degenerated_bezier_control_points[l_nodes[4]]) /
-      3.;
+        (degenerated_bezier_control_points[l_nodes[1]] +
+         degenerated_bezier_control_points[l_nodes[5]] +
+         degenerated_bezier_control_points[l_nodes[4]]) /
+        3.;
 
     degenerated_bezier_control_points[l_nodes[16]] =
-      (degenerated_bezier_control_points[l_nodes[2]] +
-       degenerated_bezier_control_points[l_nodes[7]] +
-       degenerated_bezier_control_points[l_nodes[6]]) /
-      3.;
+        (degenerated_bezier_control_points[l_nodes[2]] +
+         degenerated_bezier_control_points[l_nodes[7]] +
+         degenerated_bezier_control_points[l_nodes[6]]) /
+        3.;
 
     // interior 2
     degenerated_bezier_control_points[l_nodes[13]] =
-      (degenerated_bezier_control_points[l_nodes[9]] +
-       degenerated_bezier_control_points[l_nodes[11]] +
-       degenerated_bezier_control_points[l_nodes[12]]) /
-      3.;
+        (degenerated_bezier_control_points[l_nodes[9]] +
+         degenerated_bezier_control_points[l_nodes[11]] +
+         degenerated_bezier_control_points[l_nodes[12]]) /
+        3.;
 
     degenerated_bezier_control_points[l_nodes[15]] =
-      (degenerated_bezier_control_points[l_nodes[10]] +
-       degenerated_bezier_control_points[l_nodes[9]] +
-       degenerated_bezier_control_points[l_nodes[14]]) /
-      3.;
+        (degenerated_bezier_control_points[l_nodes[10]] +
+         degenerated_bezier_control_points[l_nodes[9]] +
+         degenerated_bezier_control_points[l_nodes[14]]) /
+        3.;
 
     degenerated_bezier_control_points[l_nodes[17]] =
-      (degenerated_bezier_control_points[l_nodes[11]] +
-       degenerated_bezier_control_points[l_nodes[10]] +
-       degenerated_bezier_control_points[l_nodes[16]]) /
-      3.;
+        (degenerated_bezier_control_points[l_nodes[11]] +
+         degenerated_bezier_control_points[l_nodes[10]] +
+         degenerated_bezier_control_points[l_nodes[16]]) /
+        3.;
     // center
     degenerated_bezier_control_points[l_nodes[18]] =
-      (degenerated_bezier_control_points[l_nodes[13]] +
-       degenerated_bezier_control_points[l_nodes[15]] +
-       degenerated_bezier_control_points[l_nodes[17]]) /
-      3.;
+        (degenerated_bezier_control_points[l_nodes[13]] +
+         degenerated_bezier_control_points[l_nodes[15]] +
+         degenerated_bezier_control_points[l_nodes[17]]) /
+        3.;
   }
 
   const auto& vertices = degenerated_bezier_control_points;
@@ -1559,8 +1562,8 @@ CloughTocherSurface::write_degenerate_cubic_surface_to_msh_with_conn(
 
 void
 CloughTocherSurface::write_external_point_values_with_conn(
-  const std::string& filename,
-  const Eigen::MatrixXd& vertices)
+    const std::string& filename,
+    const Eigen::MatrixXd& vertices)
 {
   std::ofstream file(filename + ".msh");
 
@@ -1655,6 +1658,420 @@ CloughTocherSurface::write_external_point_values_with_conn(
 }
 
 void
+CloughTocherSurface::write_external_point_values_as_tracked_vertices_info(
+    const std::string& filename,
+    const Eigen::MatrixXd& vertices)
+{
+  std::ofstream file(filename);
+
+  // build faces
+  std::vector<std::array<int64_t, 10>> faces;
+  std::vector<std::array<Eigen::Vector2d, 3>> faces_uv;
+  for (const auto& f_chart : m_affine_manifold.m_face_charts) {
+    const auto& l_nodes = f_chart.lagrange_nodes;
+    faces.push_back({ { l_nodes[0],
+                        l_nodes[1],
+                        l_nodes[18],
+                        l_nodes[3],
+                        l_nodes[4],
+                        l_nodes[14],
+                        l_nodes[15],
+                        l_nodes[13],
+                        l_nodes[12],
+                        l_nodes[9] } });
+    faces.push_back({ { l_nodes[1],
+                        l_nodes[2],
+                        l_nodes[18],
+                        l_nodes[5],
+                        l_nodes[6],
+                        l_nodes[16],
+                        l_nodes[17],
+                        l_nodes[15],
+                        l_nodes[14],
+                        l_nodes[10] } });
+    faces.push_back({ { l_nodes[2],
+                        l_nodes[0],
+                        l_nodes[18],
+                        l_nodes[7],
+                        l_nodes[8],
+                        l_nodes[12],
+                        l_nodes[13],
+                        l_nodes[17],
+                        l_nodes[16],
+                        l_nodes[11] } });
+
+    const auto& center = f_chart.alpha * f_chart.face_uv_positions[0] +
+                         f_chart.beta * f_chart.face_uv_positions[1] +
+                         f_chart.gamma * f_chart.face_uv_positions[2];
+    faces_uv.push_back({ { f_chart.face_uv_positions[0],
+                           f_chart.face_uv_positions[1],
+                           center } });
+    faces_uv.push_back({ { f_chart.face_uv_positions[1],
+                           f_chart.face_uv_positions[2],
+                           center } });
+    faces_uv.push_back({ { f_chart.face_uv_positions[2],
+                           f_chart.face_uv_positions[0],
+                           center } });
+  }
+
+  std::unordered_map<size_t, bool> visited;
+  const std::array<std::array<double, 2>, 10> uvs = { {
+      { { 1, 0 } },
+      { { 0, 1 } },
+      { { 0, 0 } },
+      { { 2. / 3., 1. / 3. } },
+      { { 1. / 3., 2. / 3. } },
+      { { 0, 2. / 3. } },
+      { { 0, 1. / 3. } },
+      { { 1. / 3., 0 } },
+      { { 2. / 3., 0 } },
+      { { 1. / 3., 1. / 3. } },
+  } };
+
+  for (size_t i = 0; i < faces.size(); ++i) {
+    for (int j = 0; j < 10; ++j) {
+      const auto& pos = vertices.row(faces[i][j]);
+      if (visited.find(faces[i][j]) != visited.end()) {
+        continue;
+      } else {
+        visited[faces[i][j]] = true;
+
+        auto uv_pos = uvs[j][0] * faces_uv[i][0] + uvs[j][1] * faces_uv[i][1] +
+                      (1 - uvs[j][0] - uvs[j][1]) * faces_uv[i][2];
+
+        int fid = i / 3;
+        // fid px py pz u v area
+        file << std::setprecision(16) << fid << " " << pos[0] << " " << pos[1]
+             << " " << pos[2] << " " << uv_pos[0] << " " << uv_pos[1] << " 1"
+             << std::endl;
+      }
+    }
+  }
+}
+
+Eigen::Vector3d
+evaluate_cubic_triangle(const std::array<Eigen::Vector3d, 10>& cp,
+                        double u,
+                        double v)
+{
+  double w = 1.0 - u - v;
+  Eigen::Vector3d eval;
+  eval = u * u * u * cp[0] + v * v * v * cp[1] + w * w * w * cp[2] +
+         3 * u * u * v * cp[3] + 3 * u * v * v * cp[4] + 3 * v * v * w * cp[5] +
+         3 * v * w * w * cp[6] + 3 * w * w * u * cp[7] + 3 * w * u * u * cp[8] +
+         6 * u * v * w * cp[9];
+
+  return eval;
+}
+
+std::array<Eigen::Vector3d, 2>
+evaluate_cubic_triangle_tangents(const std::array<Eigen::Vector3d, 10>& cp,
+                                 double u,
+                                 double v)
+{
+  Eigen::Vector3d dfdu, dfdv;
+
+  dfdu =
+      3 * u * u * cp[0] + 0 * cp[1] - 3 * (u + v - 1) * (u + v - 1) * cp[2] +
+      6 * u * v * cp[3] + 3 * v * v * cp[4] - 3 * v * v * cp[5] +
+      6 * v * (u + v - 1) * cp[6] + 3 * (u + v - 1) * (3 * u + v - 1) * cp[7] +
+      3 * u * (-3 * u - 2 * v + 2) * cp[8] + 6 * v * (-2 * u - v + 1) * cp[9];
+
+  dfdv = 0 * cp[0] + 3 * v * v * cp[1] - 3 * (u + v - 1) * (u + v - 1) * cp[2] +
+         3 * u * u * cp[3] + 6 * u * v * cp[4] +
+         3 * v * (-2 * u - 3 * v + 2) * cp[5] +
+         3 * (u + v - 1) * (u + 3 * v - 1) * cp[6] +
+         6 * u * (u + v - 1) * cp[7] - 3 * u * u * cp[8] +
+         6 * u * (-u - 2 * v + 1) * cp[9];
+
+  return { { dfdu, dfdv } };
+}
+
+Eigen::Vector3d
+evaluate_cubic_function(double u, double v)
+{
+  return Eigen::Vector3d(u, v, u * u * u + v * v * v);
+}
+
+Eigen::Vector2d
+bary_coord_in_tri(const Eigen::Vector2d& p,
+                  const Eigen::Vector2d& a,
+                  const Eigen::Vector2d& b,
+                  const Eigen::Vector2d& c)
+{
+  Eigen::Vector2d vec0 = c - a;
+  Eigen::Vector2d vec1 = b - a;
+  Eigen::Vector2d vec2 = p - a;
+
+  double d00 = vec0.dot(vec0);
+  double d01 = vec0.dot(vec1);
+  double d11 = vec1.dot(vec1);
+  double d20 = vec2.dot(vec0);
+  double d21 = vec2.dot(vec1);
+
+  double denom = d00 * d11 - d01 * d01;
+
+  double w = (d11 * d20 - d01 * d21) / denom;
+  double v = (d00 * d21 - d01 * d20) / denom;
+  double u = 1.0 - v - w;
+
+  return Eigen::Vector2d(u, v);
+}
+
+void
+CloughTocherSurface::write_tracked_vertices_info(
+    const std::string& filename,
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    int subdivision_level)
+{
+  const auto& face_charts = m_affine_manifold.m_face_charts;
+
+  std::map<int64_t, bool> visited_vertices;
+  std::map<std::pair<int64_t, int64_t>, bool> visited_edges;
+
+  std::ofstream file(filename);
+  std::cout << "in here" << std::endl;
+  std::ofstream file_func("cubic_function_tracked_info.txt");
+  std::ofstream file_tangent("tracked_tangents_info.txt");
+
+  std::array<Eigen::Vector2d, 3> v_uvs = {
+    { Eigen::Vector2d(1, 0), Eigen::Vector2d(0, 1), Eigen::Vector2d(0, 0) }
+  };
+
+  const double step = 1.0 / subdivision_level;
+
+  for (size_t fid = 0; fid < face_charts.size(); fid++) {
+    const auto& f_chart = face_charts[fid];
+    const auto& nodes = f_chart.lagrange_nodes;
+    const auto& f_uvs = f_chart.face_uv_positions;
+
+    const auto center_uv_pos = f_chart.alpha * f_uvs[0] +
+                               f_chart.beta * f_uvs[1] +
+                               f_chart.gamma * f_uvs[2];
+
+    std::array<std::array<int64_t, 10>, 3> micro_nodes = {
+      { { { nodes[0],
+            nodes[1],
+            nodes[18],
+            nodes[3],
+            nodes[4],
+            nodes[14],
+            nodes[15],
+            nodes[13],
+            nodes[12],
+            nodes[9] } },
+        { { nodes[1],
+            nodes[2],
+            nodes[18],
+            nodes[5],
+            nodes[6],
+            nodes[16],
+            nodes[17],
+            nodes[15],
+            nodes[14],
+            nodes[10] } },
+        { { nodes[2],
+            nodes[0],
+            nodes[18],
+            nodes[7],
+            nodes[8],
+            nodes[12],
+            nodes[13],
+            nodes[17],
+            nodes[16],
+            nodes[11] } } }
+    };
+
+    std::array<std::array<Eigen::Vector3d, 10>, 3> micro_cp = {
+      { { { bezier_control_points[nodes[0]],
+            bezier_control_points[nodes[1]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[3]],
+            bezier_control_points[nodes[4]],
+            bezier_control_points[nodes[14]],
+            bezier_control_points[nodes[15]],
+            bezier_control_points[nodes[13]],
+            bezier_control_points[nodes[12]],
+            bezier_control_points[nodes[9]] } },
+        { { bezier_control_points[nodes[1]],
+            bezier_control_points[nodes[2]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[5]],
+            bezier_control_points[nodes[6]],
+            bezier_control_points[nodes[16]],
+            bezier_control_points[nodes[17]],
+            bezier_control_points[nodes[15]],
+            bezier_control_points[nodes[14]],
+            bezier_control_points[nodes[10]] } },
+        { { bezier_control_points[nodes[2]],
+            bezier_control_points[nodes[0]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[7]],
+            bezier_control_points[nodes[8]],
+            bezier_control_points[nodes[12]],
+            bezier_control_points[nodes[13]],
+            bezier_control_points[nodes[17]],
+            bezier_control_points[nodes[16]],
+            bezier_control_points[nodes[11]] } } }
+    };
+
+    // write vertices
+    for (int i = 0; i < 3; ++i) {
+      if (visited_vertices.find(nodes[i]) != visited_vertices.end()) {
+        // already write in another triangle, skip
+        continue;
+      } else {
+        auto uv_pos = f_uvs[i];
+        auto pos = evaluate_cubic_triangle(micro_cp[i], 1, 0);
+
+        file << std::setprecision(16) << fid << " " << pos[0] << " " << pos[1]
+             << " " << pos[2] << " " << uv_pos[0] << " " << uv_pos[1] << " 1"
+             << std::endl;
+
+        // TODO: test only
+        auto function_value = evaluate_cubic_function(uv_pos[0], uv_pos[1]);
+        file_func << std::setprecision(16) << fid << " " << function_value[0]
+                  << " " << function_value[1] << " " << function_value[2] << " "
+                  << uv_pos[0] << " " << uv_pos[1] << " 1" << std::endl;
+
+        auto macro_uv = bary_coord_in_tri(uv_pos, f_uvs[0], f_uvs[1], f_uvs[2]);
+        auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], 1, 0);
+        file_tangent << std::setprecision(16) << " " << fid * 3 + i << " " << 1
+                     << " " << 0 << " " << tangents[0][0] << " "
+                     << tangents[0][1] << " " << tangents[0][2] << " "
+                     << tangents[1][0] << " " << tangents[1][1] << " "
+                     << tangents[1][2] << std::endl;
+
+        visited_vertices[nodes[i]] = true;
+      }
+    }
+
+    // write center v
+    auto center_pos = evaluate_cubic_triangle(micro_cp[0], 0, 0);
+    file << std::setprecision(16) << fid << " " << center_pos[0] << " "
+         << center_pos[1] << " " << center_pos[2] << " " << center_uv_pos[0]
+         << " " << center_uv_pos[1] << " 1" << std::endl;
+
+    // TODO: test only
+    auto center_func_value =
+        evaluate_cubic_function(center_uv_pos[0], center_uv_pos[1]);
+    file_func << std::setprecision(16) << fid << " " << center_func_value[0]
+              << " " << center_func_value[1] << " " << center_func_value[2]
+              << " " << center_uv_pos[0] << " " << center_uv_pos[1] << " 1"
+              << std::endl;
+
+    auto center_macro_uv =
+        bary_coord_in_tri(center_uv_pos, f_uvs[0], f_uvs[1], f_uvs[2]);
+    auto center_tangents = evaluate_cubic_triangle_tangents(micro_cp[0], 0, 0);
+    file_tangent << std::setprecision(16) << " " << fid * 3 + 0 << " " << 0
+                 << " " << 0 << " " << center_tangents[0][0] << " "
+                 << center_tangents[0][1] << " " << center_tangents[0][2] << " "
+                 << center_tangents[1][0] << " " << center_tangents[1][1] << " "
+                 << center_tangents[1][2] << std::endl;
+
+    // write edges
+    for (int i = 0; i < 3; ++i) {
+      if (visited_edges.find(std::make_pair(
+              micro_nodes[i][0], micro_nodes[i][1])) == visited_edges.end() &&
+          visited_edges.find(std::make_pair(
+              micro_nodes[i][1], micro_nodes[i][0])) == visited_edges.end()) {
+        // external edge
+        for (int k = 1; k < subdivision_level; ++k) {
+          double u = 1.0 - k * step;
+          double v = 1.0 - u;
+          auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                        (1.0 - u - v) * center_uv_pos;
+          auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+          file << std::setprecision(16) << fid << " " << pos[0] << " " << pos[1]
+               << " " << pos[2] << " " << uv_pos[0] << " " << uv_pos[1] << " 1"
+               << std::endl;
+
+          // TODO: test only
+          auto func_value = evaluate_cubic_function(uv_pos[0], uv_pos[1]);
+          file_func << std::setprecision(16) << fid << " " << func_value[0]
+                    << " " << func_value[1] << " " << func_value[2] << " "
+                    << uv_pos[0] << " " << uv_pos[1] << " 1" << std::endl;
+
+          auto macro_uv =
+              bary_coord_in_tri(uv_pos, f_uvs[0], f_uvs[1], f_uvs[2]);
+          auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u, v);
+          file_tangent << std::setprecision(16) << " " << fid * 3 + i << " "
+                       << u << " " << v << " " << tangents[0][0] << " "
+                       << tangents[0][1] << " " << tangents[0][2] << " "
+                       << tangents[1][0] << " " << tangents[1][1] << " "
+                       << tangents[1][2] << std::endl;
+        }
+
+        visited_edges[std::make_pair(micro_nodes[i][0], micro_nodes[i][1])] =
+            true;
+        visited_edges[std::make_pair(micro_nodes[i][1], micro_nodes[i][0])] =
+            true;
+      }
+
+      // right internal edge
+      for (int k = 1; k < subdivision_level; ++k) {
+        double u = 0;
+        double v = 1.0 - k * step;
+        auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                      (1.0 - u - v) * center_uv_pos;
+        auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+        file << std::setprecision(16) << fid << " " << pos[0] << " " << pos[1]
+             << " " << pos[2] << " " << uv_pos[0] << " " << uv_pos[1] << " 1"
+             << std::endl;
+
+        // TODO: test only
+        auto func_value = evaluate_cubic_function(uv_pos[0], uv_pos[1]);
+        file_func << std::setprecision(16) << fid << " " << func_value[0] << " "
+                  << func_value[1] << " " << func_value[2] << " " << uv_pos[0]
+                  << " " << uv_pos[1] << " 1" << std::endl;
+
+        auto macro_uv = bary_coord_in_tri(uv_pos, f_uvs[0], f_uvs[1], f_uvs[2]);
+        auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u, v);
+        file_tangent << std::setprecision(16) << " " << fid * 3 + i << " " << u
+                     << " " << v << " " << tangents[0][0] << " "
+                     << tangents[0][1] << " " << tangents[0][2] << " "
+                     << tangents[1][0] << " " << tangents[1][1] << " "
+                     << tangents[1][2] << std::endl;
+      }
+    }
+
+    // write internal nodes
+    for (int i = 0; i < 3; ++i) {
+      for (int k = 1; k < subdivision_level; ++k) {
+        double u = 1.0 - k * step;
+        for (int h = 1; h < k; ++h) {
+          double v = h * step;
+          auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                        (1.0 - u - v) * center_uv_pos;
+          auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+          file << std::setprecision(16) << fid << " " << pos[0] << " " << pos[1]
+               << " " << pos[2] << " " << uv_pos[0] << " " << uv_pos[1] << " 1"
+               << std::endl;
+
+          // TODO: test only
+          auto func_value = evaluate_cubic_function(uv_pos[0], uv_pos[1]);
+          file_func << std::setprecision(16) << fid << " " << func_value[0]
+                    << " " << func_value[1] << " " << func_value[2] << " "
+                    << uv_pos[0] << " " << uv_pos[1] << " 1" << std::endl;
+
+          auto macro_uv =
+              bary_coord_in_tri(uv_pos, f_uvs[0], f_uvs[1], f_uvs[2]);
+          auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u, v);
+          file_tangent << std::setprecision(16) << " " << fid * 3 + i << " "
+                       << u << " " << v << " " << tangents[0][0] << " "
+                       << tangents[0][1] << " " << tangents[0][2] << " "
+                       << tangents[1][0] << " " << tangents[1][1] << " "
+                       << tangents[1][2] << std::endl;
+        }
+      }
+    }
+  }
+
+  file.close();
+  file_func.close();
+}
+
+void
 CloughTocherSurface::bezier2lag_full_mat(Eigen::SparseMatrix<double, 1>& m)
 {
   Eigen::Matrix<double, 10, 10> p3_bezier2lag_matrix = p3_bezier2lag_m();
@@ -1706,7 +2123,7 @@ CloughTocherSurface::bezier2lag_full_mat(Eigen::SparseMatrix<double, 1>& m)
         if (!processed[indices_sub[i][j]])
           for (int k = 0; k < 10; ++k) {
             m.insert(indices_sub[i][j], indices_sub[i][k]) =
-              p3_bezier2lag_matrix(j, k);
+                p3_bezier2lag_matrix(j, k);
           }
         processed[indices_sub[i][j]] = true;
       }
@@ -1767,7 +2184,7 @@ CloughTocherSurface::lag2bezier_full_mat(Eigen::SparseMatrix<double, 1>& m)
         if (!processed[indices_sub[i][j]])
           for (int k = 0; k < 10; ++k) {
             m.insert(indices_sub[i][j], indices_sub[i][k]) =
-              p3_lag2bezier_matrix(j, k);
+                p3_lag2bezier_matrix(j, k);
           }
         processed[indices_sub[i][j]] = true;
       }
@@ -1878,21 +2295,21 @@ CloughTocherSurface::write_connected_lagrange_nodes_values(std::string filename)
 
     if (f_chart.is_cone_adjacent) {
       if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[0]]
-            .is_cone) {
+              .is_cone) {
         for (int i = 0; i < 19; ++i) {
           if (i != 1 && i != 2 && i != 5 && i != 6 && i != 10)
             v_around_cone.push_back(l_nodes[i]);
         }
       }
       if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[1]]
-            .is_cone) {
+              .is_cone) {
         for (int i = 0; i < 19; ++i) {
           if (i != 0 && i != 2 && i != 7 && i != 8 && i != 11)
             v_around_cone.push_back(l_nodes[i]);
         }
       }
       if (m_affine_manifold.m_vertex_charts[F.row(f_chart.face_index)[2]]
-            .is_cone) {
+              .is_cone) {
         for (int i = 0; i < 19; ++i) {
           if (i != 0 && i != 1 && i != 3 && i != 4 && i != 9)
             v_around_cone.push_back(l_nodes[i]);
@@ -1965,9 +2382,9 @@ CloughTocherSurface::write_connected_lagrange_nodes_values(std::string filename)
 
 void
 CloughTocherSurface::
-  write_external_bd_interpolated_function_values_from_lagrange_nodes(
-    std::string filename,
-    std::vector<Eigen::Matrix<double, 12, 1>>& external_boundary_data)
+    write_external_bd_interpolated_function_values_from_lagrange_nodes(
+        std::string filename,
+        std::vector<Eigen::Matrix<double, 12, 1>>& external_boundary_data)
 {
   std::ofstream file(filename + ".txt");
   std::ofstream file_uv(filename + "_uvs.txt");
@@ -1981,7 +2398,7 @@ CloughTocherSurface::
     const auto patch_idx = lagrange_nodes[i].first;
     const auto bc = lagrange_nodes[i].second;
     auto z = m_patches[patch_idx].external_boundary_data_eval(
-      bc[0], bc[1], external_boundary_data[patch_idx]);
+        bc[0], bc[1], external_boundary_data[patch_idx]);
     values.push_back(z);
 
     const auto& tri_coords = f_charts[patch_idx].face_uv_positions;
@@ -2089,14 +2506,14 @@ CloughTocherSurface::P_G2E(Eigen::SparseMatrix<double>& m)
     const auto& bottom_face_idx = e_charts[i].bottom_face_index;
     for (int j = 0; j < 12; ++j) {
       triplets.emplace_back(
-        i * 24 + j, f_charts[top_face_idx].lagrange_nodes[j], 1);
+          i * 24 + j, f_charts[top_face_idx].lagrange_nodes[j], 1);
       // std::cout << f_charts[top_face_idx].lagrange_nodes[j] << " ";
     }
     // std::cout << " / ";
     if (bottom_face_idx > -1) {
       for (int j = 0; j < 12; ++j) {
         triplets.emplace_back(
-          i * 24 + 12 + j, f_charts[bottom_face_idx].lagrange_nodes[j], 1);
+            i * 24 + 12 + j, f_charts[bottom_face_idx].lagrange_nodes[j], 1);
         // std::cout << f_charts[bottom_face_idx].lagrange_nodes[j] << " ";
       }
     }
@@ -2369,17 +2786,17 @@ CloughTocherSurface::C_E_end(Eigen::SparseMatrix<double>& m,
 
     // g0_prime g1_prime
     Eigen::Matrix<double, 1, 2> g0_prime =
-      u_01_prep.transpose() * inverse_2by2(D0_prime);
+        u_01_prep.transpose() * inverse_2by2(D0_prime);
     Eigen::Matrix<double, 1, 2> g1_prime =
-      u_01_prep.transpose() * inverse_2by2(D1_prime);
+        u_01_prep.transpose() * inverse_2by2(D1_prime);
 
     // C_dE(e)
     Eigen::Matrix<double, 2, 8> C_dE;
     C_dE.row(0) << g0(0, 0), g0(0, 1), -g1_prime(0, 0), -g1_prime(0, 1), 0, 0,
-      0,
-      0; // v0
+        0,
+        0; // v0
     C_dE.row(1) << 0, 0, 0, 0, g1(0, 0), g1(0, 1), -g0_prime(0, 0),
-      -g0_prime(0, 1); // v1
+        -g0_prime(0, 1); // v1
 
     // check cones and modify C_dE(e)
     if (v_charts[e.left_vertex_index].is_cone) {
@@ -2615,14 +3032,14 @@ CloughTocherSurface::C_E_mid(Eigen::SparseMatrix<double>& m)
     // g_M and g_M_prime
     Eigen::Matrix<double, 1, 5> g_M;
     g_M =
-      (c_h - (m_01.dot(u_01.normalized()) / u_01.norm()) * c_e).transpose() /
-      (m_01.dot(u_01_prep.normalized()));
+        (c_h - (m_01.dot(u_01.normalized()) / u_01.norm()) * c_e).transpose() /
+        (m_01.dot(u_01_prep.normalized()));
     Eigen::Matrix<double, 1, 5> g_M_prime;
     g_M_prime =
-      (c_h -
-       (m_01_prime.dot(u_01_prime.normalized()) / u_01_prime.norm()) * c_e)
-        .transpose() /
-      (m_01_prime.dot(u_01_prep_prime.normalized()));
+        (c_h -
+         (m_01_prime.dot(u_01_prime.normalized()) / u_01_prime.norm()) * c_e)
+            .transpose() /
+        (m_01_prime.dot(u_01_prep_prime.normalized()));
 
     // C_dM
     Eigen::Matrix<double, 1, 10> C_dM;
@@ -2889,7 +3306,7 @@ CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double>& m,
     cone_vids.push_back(vid);
 
     const Eigen::Vector3d v_normal =
-      v_normals.row(vid); // normal of this cone vertex
+        v_normals.row(vid); // normal of this cone vertex
     const double nx = v_normal[0];
     const double ny = v_normal[1];
     const double nz = v_normal[2];
@@ -2938,7 +3355,7 @@ CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double>& m,
       // add an identity block for P_C_1
       for (int i = 0; i < 57; ++i) { // 57 = 19 * 3 = all x, y, z of a face
         P_C_1_triplets.emplace_back(
-          cone_adj_face_cnt * 57 + i, fid * 57 + i, 1);
+            cone_adj_face_cnt * 57 + i, fid * 57 + i, 1);
       }
 
       // add a permutation 57 * 57 block for local v index for P_C_2
@@ -2946,7 +3363,7 @@ CloughTocherSurface::C_F_cone(Eigen::SparseMatrix<double>& m,
       for (int i = 0; i < 57; ++i) {
         P_C_2_triplets.emplace_back(cone_adj_face_cnt * 57 + i,
                                     cone_adj_face_cnt * 57 +
-                                      p_c_2_local_row_col[i],
+                                        p_c_2_local_row_col[i],
                                     1);
       }
 
@@ -3067,9 +3484,9 @@ assign_spvec_to_spmat_row(Eigen::SparseMatrix<double, 1>& mat,
 
 void
 CloughTocherSurface::Ci_endpoint_ind2dep(
-  Eigen::SparseMatrix<double>& m,
-  std::vector<int64_t>& constrained_row_ids,
-  std::map<int64_t, int>& independent_node_map)
+    Eigen::SparseMatrix<double>& m,
+    std::vector<int64_t>& constrained_row_ids,
+    std::map<int64_t, int>& independent_node_map)
 {
   const auto& v_charts = m_affine_manifold.m_vertex_charts;
   // const auto &f_charts = m_affine_manifold.m_face_charts;
@@ -3086,7 +3503,7 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
     std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_map;
     for (int i = 0; i < v_chart.one_ring_uv_positions.rows(); ++i) {
       one_ring_uv_positions_map[v_one_ring[i]] =
-        v_chart.one_ring_uv_positions.row(i);
+          v_chart.one_ring_uv_positions.row(i);
     }
 
     std::map<int64_t, bool> processed_id; // vid processed, caution! not node id
@@ -3100,9 +3517,9 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
     // const auto &first_f_chart = f_charts[first_fid];
 
     std::vector<int64_t>
-      indep_node_ids; // pi pij pik (need to be size 3 after push)
+        indep_node_ids; // pi pij pik (need to be size 3 after push)
     std::vector<Eigen::Vector2d>
-      u_ijik; // uij uik (need to be size 2 after push)
+        u_ijik; // uij uik (need to be size 2 after push)
 
     // find the node id of vid and push it into indep node ids
     for (int i = 0; i < 3; ++i) {
@@ -3130,8 +3547,8 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
         if (e_chart.left_vertex_index == vid) {
           indep_node_ids.push_back(e_chart.lagrange_nodes[1]);
           Eigen::Vector2d uij =
-            one_ring_uv_positions_map[e_chart.right_vertex_index] -
-            Eigen::Vector2d(0, 0);
+              one_ring_uv_positions_map[e_chart.right_vertex_index] -
+              Eigen::Vector2d(0, 0);
           // Eigen::Vector2d uij = e_chart.right_global_uv_position -
           //                       e_chart.left_global_uv_position;
           u_ijik.push_back(uij);
@@ -3139,8 +3556,8 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
         } else {
           indep_node_ids.push_back(e_chart.lagrange_nodes[2]);
           Eigen::Vector2d uij =
-            one_ring_uv_positions_map[e_chart.left_vertex_index] -
-            Eigen::Vector2d(0, 0);
+              one_ring_uv_positions_map[e_chart.left_vertex_index] -
+              Eigen::Vector2d(0, 0);
           // Eigen::Vector2d uij = e_chart.left_global_uv_position -
           //                       e_chart.right_global_uv_position;
           u_ijik.push_back(uij);
@@ -3174,10 +3591,10 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
         constrained_row_ids.push_back(indep_node_ids[i]);
         if (i == 0) {
           independent_node_map[indep_node_ids[i]] =
-            1; // only set the first node as independent
+              1; // only set the first node as independent
         } else {
           independent_node_map[indep_node_ids[i]] =
-            0; // set the other two as dependent
+              0; // set the other two as dependent
         }
       }
     }
@@ -3191,11 +3608,11 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
           // find a unprocessed vertex to process
           if (e_chart.left_vertex_index != vid &&
               processed_id.find(e_chart.left_vertex_index) ==
-                processed_id.end()) {
+                  processed_id.end()) {
 
             // get node id
             auto dep_node_id =
-              e_chart.lagrange_nodes[2]; // right is vid, so node is lag[2]
+                e_chart.lagrange_nodes[2]; // right is vid, so node is lag[2]
 
             if (v_chart.is_cone) {
               // cone case
@@ -3204,15 +3621,15 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
               independent_node_map[dep_node_id] = 0; // set as dependent
             } else {
               Eigen::Vector2d u_im =
-                one_ring_uv_positions_map[e_chart.left_vertex_index] -
-                Eigen::Vector2d(0, 0);
+                  one_ring_uv_positions_map[e_chart.left_vertex_index] -
+                  Eigen::Vector2d(0, 0);
               // Eigen::Vector2d u_im = e_chart.left_global_uv_position -
               //                        e_chart.right_global_uv_position;
               Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
 
               // p_im = (1-Umj-Umk)*pi + Umj*pij + Umk*pik
               m.insert(dep_node_id, indep_node_ids[0]) =
-                1 - U_ijm[0] - U_ijm[1];
+                  1 - U_ijm[0] - U_ijm[1];
               m.insert(dep_node_id, indep_node_ids[1]) = U_ijm[0];
               m.insert(dep_node_id, indep_node_ids[2]) = U_ijm[1];
               constrained_row_ids.push_back(dep_node_id);
@@ -3222,11 +3639,11 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
           }
           if (e_chart.right_vertex_index != vid &&
               processed_id.find(e_chart.right_vertex_index) ==
-                processed_id.end()) {
+                  processed_id.end()) {
 
             // get node id
             auto dep_node_id =
-              e_chart.lagrange_nodes[1]; // left is vid, so node is lag[1]
+                e_chart.lagrange_nodes[1]; // left is vid, so node is lag[1]
 
             if (v_chart.is_cone) {
               // cone case
@@ -3235,15 +3652,15 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
               independent_node_map[dep_node_id] = 0; // set as dependent
             } else {
               Eigen::Vector2d u_im =
-                one_ring_uv_positions_map[e_chart.right_vertex_index] -
-                Eigen::Vector2d(0, 0);
+                  one_ring_uv_positions_map[e_chart.right_vertex_index] -
+                  Eigen::Vector2d(0, 0);
               // Eigen::Vector2d u_im = e_chart.right_global_uv_position -
               //                        e_chart.left_global_uv_position;
               Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
 
               // p_im = (1-Umj-Umk)*pi + Umj*pij + Umk*pik
               m.insert(dep_node_id, indep_node_ids[0]) =
-                1 - U_ijm[0] - U_ijm[1];
+                  1 - U_ijm[0] - U_ijm[1];
               m.insert(dep_node_id, indep_node_ids[1]) = U_ijm[0];
               m.insert(dep_node_id, indep_node_ids[2]) = U_ijm[1];
               constrained_row_ids.push_back(dep_node_id);
@@ -3265,9 +3682,9 @@ CloughTocherSurface::Ci_endpoint_ind2dep(
 
 void
 CloughTocherSurface::Ci_internal_ind2dep_1(
-  Eigen::SparseMatrix<double>& m,
-  std::vector<int64_t>& constrained_row_ids,
-  std::map<int64_t, int>& independent_node_map)
+    Eigen::SparseMatrix<double>& m,
+    std::vector<int64_t>& constrained_row_ids,
+    std::map<int64_t, int>& independent_node_map)
 {
   const auto& f_charts = m_affine_manifold.m_face_charts;
 
@@ -3342,17 +3759,17 @@ N_helper(const int lid1, const int lid2)
 
 void
 CloughTocherSurface::Ci_midpoint_ind2dep(
-  Eigen::SparseMatrix<double>& m,
-  std::vector<int64_t>& constrained_row_ids,
-  std::map<int64_t, int>& independent_node_map)
+    Eigen::SparseMatrix<double>& m,
+    std::vector<int64_t>& constrained_row_ids,
+    std::map<int64_t, int>& independent_node_map)
 {
   Eigen::Matrix<double, 5, 7> K_N;
   K_N << 1, 0, 0, 0, 0, 0, 0, // p0
-    0, 1, 0, 0, 0, 0, 0,      // p1
-    -3, 0, 3, 0, 0, 0, 0,     // d01
-    0, -3, 0, 3, 0, 0, 0,     // d10
-    -3. / 8., -3. / 8., -9. / 8., -9. / 8., 3. / 4., 3. / 4.,
-    3. / 2.; // h01 redundant
+      0, 1, 0, 0, 0, 0, 0,    // p1
+      -3, 0, 3, 0, 0, 0, 0,   // d01
+      0, -3, 0, 3, 0, 0, 0,   // d10
+      -3. / 8., -3. / 8., -9. / 8., -9. / 8., 3. / 4., 3. / 4.,
+      3. / 2.; // h01 redundant
 
   // std::cout << "K_N: " << std::endl << K_N << std::endl;
 
@@ -3414,9 +3831,9 @@ CloughTocherSurface::Ci_midpoint_ind2dep(
     const Eigen::Vector2d& v0_pos_prime = e_chart.right_vertex_uv_position;
     const Eigen::Vector2d& v1_pos_prime = e_chart.left_vertex_uv_position;
     const Eigen::Vector2d& v2_pos_prime_macro =
-      e_chart.bottom_vertex_uv_position;
+        e_chart.bottom_vertex_uv_position;
     const Eigen::Vector2d& v2_pos_prime =
-      (v0_pos_prime + v1_pos_prime + v2_pos_prime_macro) / 3.;
+        (v0_pos_prime + v1_pos_prime + v2_pos_prime_macro) / 3.;
 
     // u_ij and u_ij'
     const Eigen::Vector2d u_01 = v1_pos - v0_pos;
@@ -3437,11 +3854,11 @@ CloughTocherSurface::Ci_midpoint_ind2dep(
 
     // compute M_N and k_N
     Eigen::Matrix<double, 1, 7> M_N =
-      (m_01.dot(u_01.normalized())) / u_01.norm() * c_e.transpose() * K_N;
+        (m_01.dot(u_01.normalized())) / u_01.norm() * c_e.transpose() * K_N;
     auto k_N = m_01.dot(u_01_prep.normalized());
     Eigen::Matrix<double, 1, 7> M_N_prime =
-      (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
-      c_e.transpose() * K_N;
+        (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
+        c_e.transpose() * K_N;
     auto k_N_prime = m_01_prime.dot(u_01_prep_prime.normalized());
 
     // compute CM
@@ -3512,12 +3929,12 @@ CloughTocherSurface::Ci_midpoint_ind2dep(
     auto p_01_c = m.row(N[6]);
 
     Eigen::SparseVector<double> p_01_c_prime =
-      (k_N_prime * (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10 +
-                    CM[4] * p_0c + CM[5] * p_1c + CM[6] * p_01_c) +
-       k_N * (CM_prime[0] * p_0_prime + CM_prime[1] * p_1_prime +
-              CM_prime[2] * p_01_prime + CM_prime[3] * p_10_prime +
-              CM_prime[4] * p_0c_prime + CM_prime[5] * p_1c_prime)) /
-      (-k_N * CM_prime[6]);
+        (k_N_prime * (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10 +
+                      CM[4] * p_0c + CM[5] * p_1c + CM[6] * p_01_c) +
+         k_N * (CM_prime[0] * p_0_prime + CM_prime[1] * p_1_prime +
+                CM_prime[2] * p_01_prime + CM_prime[3] * p_10_prime +
+                CM_prime[4] * p_0c_prime + CM_prime[5] * p_1c_prime)) /
+        (-k_N * CM_prime[6]);
 
     assign_spvec_to_spmat_row(m, p_01_c_prime, N_prime[6]);
     constrained_row_ids.push_back(N_prime[6]);
@@ -3527,9 +3944,9 @@ CloughTocherSurface::Ci_midpoint_ind2dep(
 
 void
 CloughTocherSurface::Ci_internal_ind2dep_2(
-  Eigen::SparseMatrix<double>& m,
-  std::vector<int64_t>& constrained_row_ids,
-  std::map<int64_t, int>& independent_node_map)
+    Eigen::SparseMatrix<double>& m,
+    std::vector<int64_t>& constrained_row_ids,
+    std::map<int64_t, int>& independent_node_map)
 {
   const auto& f_charts = m_affine_manifold.m_face_charts;
 
@@ -3630,7 +4047,7 @@ CloughTocherSurface::Ci_cone_bezier(const Eigen::SparseMatrix<double>& m,
 
   m_cone.resize(m_cone_rows * 4 * 3,
                 node_cnt *
-                  3); // 4 cons per marcro tri, each cones has 3 rows for xyz
+                    3); // 4 cons per marcro tri, each cones has 3 rows for xyz
 
   // compute matrix
   for (size_t v_id = 0; v_id < v_charts.size(); ++v_id) {
@@ -3662,13 +4079,13 @@ CloughTocherSurface::Ci_cone_bezier(const Eigen::SparseMatrix<double>& m,
       // get p20 pc0 p10
       const std::array<int64_t, 6>& Cone_N = Cone_N_helper(lvid);
       Eigen::SparseVector<double> p20 =
-        m.row(f_chart.lagrange_nodes[Cone_N[1]]);
+          m.row(f_chart.lagrange_nodes[Cone_N[1]]);
       Eigen::SparseVector<double> p20m0 =
-        m.row(f_chart.lagrange_nodes[Cone_N[2]]);
+          m.row(f_chart.lagrange_nodes[Cone_N[2]]);
       Eigen::SparseVector<double> pc0 =
-        m.row(f_chart.lagrange_nodes[Cone_N[3]]);
+          m.row(f_chart.lagrange_nodes[Cone_N[3]]);
       Eigen::SparseVector<double> p01m0 =
-        m.row(f_chart.lagrange_nodes[Cone_N[4]]);
+          m.row(f_chart.lagrange_nodes[Cone_N[4]]);
       // Eigen::SparseVector<double> p10 =
       //     m.row(f_chart.lagrange_nodes[Cone_N[3]]); // redundant
 
@@ -3776,19 +4193,19 @@ Cone_face_node_helper(const int lid1, const int lid2)
 
 void
 CloughTocherSurface::bezier_cone_constraints_expanded(
-  Eigen::SparseMatrix<double, 1>& m,
-  std::vector<int>& independent_node_map,
-  std::vector<bool>& node_assigned,
-  const Eigen::MatrixXd& v_normals)
+    Eigen::SparseMatrix<double, 1>& m,
+    std::vector<int>& independent_node_map,
+    std::vector<bool>& node_assigned,
+    const Eigen::MatrixXd& v_normals)
 {
 
   Eigen::Matrix<double, 5, 7> K_N_p;
   K_N_p << 1, 0, 0, 0, 0, 0, 0, // p0
-    0, 1, 0, 0, 0, 0, 0,        // p1
-    -3, 0, 3, 0, 0, 0, 0,       // d01
-    0, -3, 0, 3, 0, 0, 0,       // d10
-    -1. / 8., -1. / 8., -7. / 8., -7. / 8., 1. / 4., 1. / 4.,
-    3. / 2.; // h01 redundant
+      0, 1, 0, 0, 0, 0, 0,      // p1
+      -3, 0, 3, 0, 0, 0, 0,     // d01
+      0, -3, 0, 3, 0, 0, 0,     // d10
+      -1. / 8., -1. / 8., -7. / 8., -7. / 8., 1. / 4., 1. / 4.,
+      3. / 2.; // h01 redundant
 
   Eigen::Matrix<double, 7, 1> c_hij_p;
   c_hij_p << -1. / 8., -1. / 8., -7. / 8., -7. / 8., 1. / 4., 1. / 4., 3. / 2.;
@@ -3829,8 +4246,8 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
       } else if (cone_cnt > 1) {
         // assert(false);
         throw std::runtime_error(
-          "non-cone vertex is adjacent to more than one cone, cannot setup "
-          "cone constraint! Try moving the cones or denser meshes!");
+            "non-cone vertex is adjacent to more than one cone, cannot setup "
+            "cone constraint! Try moving the cones or denser meshes!");
       }
 
       continue;
@@ -3929,9 +4346,9 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
 
           // get node local ids
           const auto& node_local_ids_top =
-            Cone_face_node_helper(lid1_top, lid2_top);
+              Cone_face_node_helper(lid1_top, lid2_top);
           const auto& node_local_ids_bot =
-            Cone_face_node_helper(lid1_bot, lid2_bot);
+              Cone_face_node_helper(lid1_bot, lid2_bot);
 
           // get all node ids (top: ev0 ev1 ev2, bot: ev1 ev0 ev2')
           std::array<int64_t, 19> N_ids_top, N_ids_bot;
@@ -3969,12 +4386,12 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
           const Eigen::Vector2d& v2_pos = (v0_pos + v1_pos + v2_pos_macro) / 3.;
 
           const Eigen::Vector2d& v0_pos_prime =
-            e_chart.right_vertex_uv_position;
+              e_chart.right_vertex_uv_position;
           const Eigen::Vector2d& v1_pos_prime = e_chart.left_vertex_uv_position;
           const Eigen::Vector2d& v2_pos_prime_macro =
-            e_chart.bottom_vertex_uv_position;
+              e_chart.bottom_vertex_uv_position;
           const Eigen::Vector2d& v2_pos_prime =
-            (v0_pos_prime + v1_pos_prime + v2_pos_prime_macro) / 3.;
+              (v0_pos_prime + v1_pos_prime + v2_pos_prime_macro) / 3.;
 
           // u_ij and u_ij'
           const Eigen::Vector2d u_01 = v1_pos - v0_pos;
@@ -3999,28 +4416,28 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
                                             K_N_p;
           auto k_N = m_01.dot(u_01_prep.normalized());
           Eigen::Matrix<double, 1, 7> M_N_prime =
-            (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
-            c_e.transpose() * K_N_p;
+              (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
+              c_e.transpose() * K_N_p;
           auto k_N_prime = m_01_prime.dot(u_01_prep_prime.normalized());
 
           // compute CM
           Eigen::Matrix<double, 1, 7> CM =
-            (c_hij_p - M_N.transpose()) / k_N; // 7 x 1
+              (c_hij_p - M_N.transpose()) / k_N; // 7 x 1
           Eigen::Matrix<double, 1, 7> CM_prime =
-            (c_hij_p - M_N_prime.transpose()) / k_N_prime;
+              (c_hij_p - M_N_prime.transpose()) / k_N_prime;
 
           // compute ag[1] wrt pijm' = ag * [pi pj pij pji pik pjk pik' pjk'
           // pijm]
           Eigen::Matrix<double, 9, 1> ag;
           ag << CM[0] + CM_prime[1], // pi
-            CM[1] + CM_prime[0],     // pj
-            CM[2] + CM_prime[3],     // pij
-            CM[3] + CM_prime[2],     // pji
-            CM[4],                   // pik
-            CM[5],                   // pjk
-            CM_prime[5],             // pik'
-            CM_prime[4],             // pjk'
-            CM[6];                   // pijm
+              CM[1] + CM_prime[0],   // pj
+              CM[2] + CM_prime[3],   // pij
+              CM[3] + CM_prime[2],   // pji
+              CM[4],                 // pik
+              CM[5],                 // pjk
+              CM_prime[5],           // pik'
+              CM_prime[4],           // pjk'
+              CM[6];                 // pijm
 
           ag = -ag / CM_prime[6];
 
@@ -4039,19 +4456,18 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
             std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_pj;
             const auto& v_one_ring_pj = v_charts[ev1].vertex_one_ring;
             const auto& uv_pos_one_ring_pj =
-              v_charts[ev1].one_ring_uv_positions;
+                v_charts[ev1].one_ring_uv_positions;
             for (int i = 0; i < uv_pos_one_ring_pj.rows(); ++i) {
               one_ring_uv_positions_pj[v_one_ring_pj[i]] =
-                uv_pos_one_ring_pj.row(i);
+                  uv_pos_one_ring_pj.row(i);
             }
 
             Eigen::Matrix2d U_jijk, U_jijk_inv;
             Eigen::Vector2d u_ji, u_jk;
             u_ji = one_ring_uv_positions_pj[ev0]; // pi - pj/(0,0)
-            u_jk =
-              one_ring_uv_positions_pj[e_chart
-                                         .top_vertex_index]; // pk/pos(e_top)
-                                                             // - pi
+            u_jk = one_ring_uv_positions_pj
+                [e_chart.top_vertex_index]; // pk/pos(e_top)
+                                            // - pi
             U_jijk << u_ji[0], u_jk[0], u_ji[1], u_jk[1];
             U_jijk_inv = inverse_2by2(U_jijk);
 
@@ -4064,8 +4480,8 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
 
             // compute ac
             Eigen::Vector2d u_jk_p =
-              one_ring_uv_positions_pj[e_chart.bottom_vertex_index]; // pos
-                                                                     // pk'
+                one_ring_uv_positions_pj[e_chart.bottom_vertex_index]; // pos
+                                                                       // pk'
             Eigen::Vector2d U_jkp = U_jijk_inv * u_jk_p;
 
             std::array<double, 3> ac = {
@@ -4076,12 +4492,12 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
             // from ag for [pi pj pij pji pik pjk pik' pjk' pijm]
             // pi == pij == pik == pik'
             std::array<double, 6> am = { {
-              ag[0] + ag[2] + ag[4] + ag[6], // pi + pij + pik + pik'
-              ag[1],                         // pj
-              ag[3],                         // pji
-              ag[5],                         // pjk
-              ag[7],                         // pjk'
-              ag[8]                          // pijm
+                ag[0] + ag[2] + ag[4] + ag[6], // pi + pij + pik + pik'
+                ag[1],                         // pj
+                ag[3],                         // pji
+                ag[5],                         // pjk
+                ag[7],                         // pjk'
+                ag[8]                          // pijm
             } };
 
             // // debug code
@@ -4229,7 +4645,7 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
               // [x_ji, x_ij_m, x_ij_m_p, y_ij_m_p, z_ij_m_p, x_jk, x_jk_p,
               // y_jk_p, z_jk_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
-                pi_cone_x_max_deps(ac, am, ni);
+                  pi_cone_x_max_deps(ac, am, ni);
 
               // compute dep vecs
               std::vector<Eigen::SparseVector<double>> dep_vecs;
@@ -4344,7 +4760,7 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
               // [y_ji, y_ij_m, x_ij_m_p, y_ij_m_p, z_ij_m_p, y_jk, x_jk_p,
               // y_jk_p, z_jk_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
-                pi_cone_y_max_deps(ac, am, ni);
+                  pi_cone_y_max_deps(ac, am, ni);
 
               // std::cout << "here7" << std::endl;
 
@@ -4464,7 +4880,7 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
               // [z_ji, z_ij_m, x_ij_m_p, y_ij_m_p, z_ij_m_p, z_jk, x_jk_p,
               // y_jk_p, z_jk_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
-                pi_cone_z_max_deps(ac, am, ni);
+                  pi_cone_z_max_deps(ac, am, ni);
 
               // compute dep vecs
               std::vector<Eigen::SparseVector<double>> dep_vecs;
@@ -4536,17 +4952,17 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
             std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_pi;
             const auto& v_one_ring_pi = v_charts[ev0].vertex_one_ring;
             const auto& uv_pos_one_ring_pi =
-              v_charts[ev0].one_ring_uv_positions;
+                v_charts[ev0].one_ring_uv_positions;
             for (int i = 0; i < uv_pos_one_ring_pi.rows(); ++i) {
               one_ring_uv_positions_pi[v_one_ring_pi[i]] =
-                uv_pos_one_ring_pi.row(i);
+                  uv_pos_one_ring_pi.row(i);
             }
 
             Eigen::Matrix2d U_ijik, U_ijik_inv;
             Eigen::Vector2d u_ij, u_ik;
             u_ij = one_ring_uv_positions_pi[ev1]; // pj - pi
             u_ik =
-              one_ring_uv_positions_pi[e_chart.top_vertex_index]; // pk - pi
+                one_ring_uv_positions_pi[e_chart.top_vertex_index]; // pk - pi
 
             U_ijik << u_ij[0], u_ik[0], u_ij[1], u_ik[1];
             U_ijik_inv = inverse_2by2(U_ijik);
@@ -4560,7 +4976,7 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
 
             // compute ac
             Eigen::Vector2d u_ik_p =
-              one_ring_uv_positions_pi[e_chart.bottom_vertex_index]; // pk'
+                one_ring_uv_positions_pi[e_chart.bottom_vertex_index]; // pk'
 
             Eigen::Vector2d U_ikp = U_ijik_inv * u_ik_p;
 
@@ -4572,12 +4988,12 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
             // from ag for [pi pj pij pji pik pjk pik' pjk' pijm]
             // pj == pji == pjk == pjk'
             std::array<double, 6> am = { {
-              ag[0],                         // pi
-              ag[1] + ag[3] + ag[5] + ag[7], // pj
-              ag[2],                         // pij
-              ag[4],                         // pik
-              ag[6],                         // pik'
-              ag[8]                          // pijm
+                ag[0],                         // pi
+                ag[1] + ag[3] + ag[5] + ag[7], // pj
+                ag[2],                         // pij
+                ag[4],                         // pik
+                ag[6],                         // pik'
+                ag[8]                          // pijm
             } };
 
             // // debug code
@@ -4723,7 +5139,7 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
               // [x_ij, x_mij, x_mij_p, y_mij_p, z_mij_p, x_ik, x_ik_p, y_ik_p,
               // z_ik_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
-                pj_cone_x_max_deps(ac, am, ni);
+                  pj_cone_x_max_deps(ac, am, ni);
 
               // compute dep vecs
               std::vector<Eigen::SparseVector<double>> dep_vecs;
@@ -4829,7 +5245,7 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
               // [y_ij, y_mij, x_mij_p, y_mij_p, z_mij_p, y_ik, x_ik_p, y_ik_p,
               // z_ik_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
-                pj_cone_y_max_deps(ac, am, ni);
+                  pj_cone_y_max_deps(ac, am, ni);
 
               // // debug output
               // for (int i = 0; i < 8; ++i) {
@@ -4944,7 +5360,7 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
               // [z_ij, z_mij, x_mij_p, y_mij_p, z_mij_p, z_ik, x_ik_p, y_ik_p,
               // z_ik_p]
               std::array<std::array<double, 13>, 8> dep_coeffs =
-                pj_cone_z_max_deps(ac, am, ni);
+                  pj_cone_z_max_deps(ac, am, ni);
 
               // // debug output
               // for (int i = 0; i < 8; ++i) {
@@ -5018,9 +5434,9 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
 
 void
 CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
-  Eigen::SparseMatrix<double, 1>& m,
-  std::vector<int>& independent_node_map,
-  bool debug_isolate)
+    Eigen::SparseMatrix<double, 1>& m,
+    std::vector<int>& independent_node_map,
+    bool debug_isolate)
 {
   const auto& v_charts = m_affine_manifold.m_vertex_charts;
   // const auto &f_charts = m_affine_manifold.m_face_charts;
@@ -5042,7 +5458,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
     std::map<int64_t, Eigen::Vector2d> one_ring_uv_positions_map;
     for (int i = 0; i < v_chart.one_ring_uv_positions.rows(); ++i) {
       one_ring_uv_positions_map[v_one_ring[i]] =
-        v_chart.one_ring_uv_positions.row(i);
+          v_chart.one_ring_uv_positions.row(i);
     }
 
     //////////////////////////////////////
@@ -5059,9 +5475,10 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 
       for (const auto& e : v_chart.edge_one_ring) {
         const int64_t node_id =
-          e_charts[e].left_vertex_index == v_chart.vertex_index
-            ? e_charts[e].lagrange_nodes[1]
-            : e_charts[e].lagrange_nodes[2]; // get control point adjacent to
+            e_charts[e].left_vertex_index == v_chart.vertex_index
+                ? e_charts[e].lagrange_nodes[1]
+                : e_charts[e]
+                      .lagrange_nodes[2]; // get control point adjacent to
         // the vertex on the edge
 
         if (independent_node_map[node_id * 3] != -1) {
@@ -5080,10 +5497,10 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
       // get vertex node id
 
       const int64_t v_node_id =
-        e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
-            v_chart.vertex_index
-          ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
-          : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
+          e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
+                  v_chart.vertex_index
+              ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
+              : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
       std::cout << "assign v node id " << v_node_id << std::endl;
 
       for (int i = 0; i < 3; ++i) {
@@ -5104,10 +5521,10 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
       assert(group.size() > 1);
       // const auto& v_node_id = v_chart.vertex_index; // node id for current v
       const int64_t v_node_id =
-        e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
-            v_chart.vertex_index
-          ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
-          : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
+          e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
+                  v_chart.vertex_index
+              ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
+              : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
 
       for (int k = 0; k < 3; ++k) {
         // set for xyz for v
@@ -5119,9 +5536,9 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
       for (const auto& e : v_chart.edge_one_ring) {
         if (e_charts[e].is_feature_edge) {
           const int64_t node_id =
-            e_charts[e].left_vertex_index == v_chart.vertex_index
-              ? e_charts[e].lagrange_nodes[1]
-              : e_charts[e].lagrange_nodes[2];
+              e_charts[e].left_vertex_index == v_chart.vertex_index
+                  ? e_charts[e].lagrange_nodes[1]
+                  : e_charts[e].lagrange_nodes[2];
           for (int k = 0; k < 3; ++k) {
             m.insert(node_id * 3 + k, node_id * 3 + k) = 1;
             independent_node_map[node_id * 3 + k] = 1;
@@ -5132,20 +5549,20 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
       // set control points for group
 
       const auto& uij_node_id =
-        e_charts[group[0]].left_vertex_index == v_chart.vertex_index
-          ? e_charts[group[0]].lagrange_nodes[1]
-          : e_charts[group[0]].lagrange_nodes[2];
+          e_charts[group[0]].left_vertex_index == v_chart.vertex_index
+              ? e_charts[group[0]].lagrange_nodes[1]
+              : e_charts[group[0]].lagrange_nodes[2];
       const auto& uik_node_id =
-        e_charts[group[1]].left_vertex_index == v_chart.vertex_index
-          ? e_charts[group[1]].lagrange_nodes[1]
-          : e_charts[group[1]].lagrange_nodes[2];
+          e_charts[group[1]].left_vertex_index == v_chart.vertex_index
+              ? e_charts[group[1]].lagrange_nodes[1]
+              : e_charts[group[1]].lagrange_nodes[2];
 
       // set first two as independent
       for (int i = 0; i < 2; ++i) {
         const int64_t node_id =
-          e_charts[group[i]].left_vertex_index == v_chart.vertex_index
-            ? e_charts[group[i]].lagrange_nodes[1]
-            : e_charts[group[i]].lagrange_nodes[2];
+            e_charts[group[i]].left_vertex_index == v_chart.vertex_index
+                ? e_charts[group[i]].lagrange_nodes[1]
+                : e_charts[group[i]].lagrange_nodes[2];
 
         // if (independent_node_map[node_id] == 1) {
         //   // determined in the previous group
@@ -5160,19 +5577,11 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 
       // compute basis from first two
       Eigen::Matrix2d U_ijik;
-      // Eigen::Vector2d u_ij = e_charts[group[0]].lagrange_nodes[0] ==
-      // v_node_id
-      //                          ? e_charts[group[0]].right_vertex_uv_position
-      //                          : e_charts[group[0]].left_vertex_uv_position;
-      // Eigen::Vector2d u_ik = e_charts[group[1]].lagrange_nodes[0] ==
-      // v_node_id
-      //                          ? e_charts[group[1]].right_vertex_uv_position
-      //                          : e_charts[group[1]].left_vertex_uv_position;
 
       Eigen::Vector2d u_ij = v_chart.one_ring_uv_positions.row(
-        v_chart.edge_to_local_vid_map.at(group[0]));
+          v_chart.edge_to_local_vid_map.at(group[0]));
       Eigen::Vector2d u_ik = v_chart.one_ring_uv_positions.row(
-        v_chart.edge_to_local_vid_map.at(group[1]));
+          v_chart.edge_to_local_vid_map.at(group[1]));
       U_ijik << u_ij[0], u_ik[0], u_ij[1], u_ik[1];
 
       Eigen::Matrix2d U_ijik_inv = inverse_2by2(U_ijik);
@@ -5180,9 +5589,9 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
       for (size_t i = 2; i < group.size(); ++i) {
         // compute dependent for the rest
         const int64_t node_id =
-          e_charts[group[i]].left_vertex_index == v_chart.vertex_index
-            ? e_charts[group[i]].lagrange_nodes[1]
-            : e_charts[group[i]].lagrange_nodes[2];
+            e_charts[group[i]].left_vertex_index == v_chart.vertex_index
+                ? e_charts[group[i]].lagrange_nodes[1]
+                : e_charts[group[i]].lagrange_nodes[2];
         // Eigen::Vector2d u_im = e_charts[group[i]].lagrange_nodes[0] ==
         // v_node_id
         //                          ?
@@ -5191,7 +5600,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
         //                          e_charts[group[i]].left_vertex_uv_position;
 
         Eigen::Vector2d u_im = v_chart.one_ring_uv_positions.row(
-          v_chart.edge_to_local_vid_map.at(group[i]));
+            v_chart.edge_to_local_vid_map.at(group[i]));
 
         Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
 
@@ -5226,10 +5635,10 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 
       // const auto& v_node_id = v_chart.vertex_index; // node id for current v
       const int64_t v_node_id =
-        e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
-            v_chart.vertex_index
-          ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
-          : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
+          e_charts[v_chart.edge_one_ring[0]].left_vertex_index ==
+                  v_chart.vertex_index
+              ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
+              : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
 
       for (int k = 0; k < 3; ++k) {
         // set for xyz for v
@@ -5255,20 +5664,20 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
         // iterate for each group
         assert(group.size() > 1);
         const auto& uij_node_id =
-          e_charts[group[0]].left_vertex_index == v_chart.vertex_index
-            ? e_charts[group[0]].lagrange_nodes[1]
-            : e_charts[group[0]].lagrange_nodes[2];
+            e_charts[group[0]].left_vertex_index == v_chart.vertex_index
+                ? e_charts[group[0]].lagrange_nodes[1]
+                : e_charts[group[0]].lagrange_nodes[2];
         const auto& uik_node_id =
-          e_charts[group[1]].left_vertex_index == v_chart.vertex_index
-            ? e_charts[group[1]].lagrange_nodes[1]
-            : e_charts[group[1]].lagrange_nodes[2];
+            e_charts[group[1]].left_vertex_index == v_chart.vertex_index
+                ? e_charts[group[1]].lagrange_nodes[1]
+                : e_charts[group[1]].lagrange_nodes[2];
 
         // set first two as independent
         for (int i = 0; i < 2; ++i) {
           const int64_t node_id =
-            e_charts[group[i]].left_vertex_index == v_chart.vertex_index
-              ? e_charts[group[i]].lagrange_nodes[1]
-              : e_charts[group[i]].lagrange_nodes[2];
+              e_charts[group[i]].left_vertex_index == v_chart.vertex_index
+                  ? e_charts[group[i]].lagrange_nodes[1]
+                  : e_charts[group[i]].lagrange_nodes[2];
 
           std::cout << "node_id: " << node_id << std::endl;
           std::cout << independent_node_map[node_id * 3] << std::endl;
@@ -5289,9 +5698,9 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
         Eigen::Matrix2d U_ijik;
 
         Eigen::Vector2d u_ij = v_chart.one_ring_uv_positions.row(
-          v_chart.edge_to_local_vid_map.at(group[0]));
+            v_chart.edge_to_local_vid_map.at(group[0]));
         Eigen::Vector2d u_ik = v_chart.one_ring_uv_positions.row(
-          v_chart.edge_to_local_vid_map.at(group[1]));
+            v_chart.edge_to_local_vid_map.at(group[1]));
 
         // std::cout << group[0] << ": " << u_ij << std::endl;
         // std::cout << group[1] << ": " << u_ik << std::endl;
@@ -5306,9 +5715,9 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
         for (size_t i = 2; i < group.size(); ++i) {
           // compute dependent for the rest
           const int64_t node_id =
-            e_charts[group[i]].left_vertex_index == v_chart.vertex_index
-              ? e_charts[group[i]].lagrange_nodes[1]
-              : e_charts[group[i]].lagrange_nodes[2];
+              e_charts[group[i]].left_vertex_index == v_chart.vertex_index
+                  ? e_charts[group[i]].lagrange_nodes[1]
+                  : e_charts[group[i]].lagrange_nodes[2];
 
           if (independent_node_map[node_id * 3] != -1) {
             // skip the last one in last group special case
@@ -5321,7 +5730,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           //     : e_charts[group[i]].left_vertex_uv_position;
 
           Eigen::Vector2d u_im = v_chart.one_ring_uv_positions.row(
-            v_chart.edge_to_local_vid_map.at(group[i]));
+              v_chart.edge_to_local_vid_map.at(group[i]));
 
           Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
 
@@ -5340,8 +5749,8 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           for (int k = 0; k < 3; ++k) {
             // set for xyz
             Eigen::SparseVector<double> p_m =
-              (1 - U_ijm[0] - U_ijm[1]) * p_i[k] + U_ijm[0] * p_ij[k] +
-              U_ijm[1] * p_ik[k];
+                (1 - U_ijm[0] - U_ijm[1]) * p_i[k] + U_ijm[0] * p_ij[k] +
+                U_ijm[1] * p_ik[k];
 
             assign_spvec_to_spmat_row(m, p_m, node_id * 3 + k);
             independent_node_map[node_id * 3 + k] = 0; // set as dependent
@@ -5362,7 +5771,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 
     Eigen::Matrix2d U_ijik_inv;
     std::vector<int64_t>
-      indep_node_ids; // pi pij pik (need to be size 3 after push)
+        indep_node_ids; // pi pij pik (need to be size 3 after push)
 
     if (v_chart.is_cone && !debug_isolate) {
       // cone already processed, skip
@@ -5395,7 +5804,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
       // const auto &first_f_chart = f_charts[first_fid];
 
       std::vector<Eigen::Vector2d>
-        u_ijik; // uij uik (need to be size 2 after push)
+          u_ijik; // uij uik (need to be size 2 after push)
 
       // find the node id of vid and push it into indep node ids
       for (int i = 0; i < 3; ++i) {
@@ -5423,8 +5832,8 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           if (e_chart.left_vertex_index == vid) {
             indep_node_ids.push_back(e_chart.lagrange_nodes[1]);
             Eigen::Vector2d uij =
-              one_ring_uv_positions_map[e_chart.right_vertex_index] -
-              Eigen::Vector2d(0, 0);
+                one_ring_uv_positions_map[e_chart.right_vertex_index] -
+                Eigen::Vector2d(0, 0);
             // Eigen::Vector2d uij = e_chart.right_global_uv_position -
             //                       e_chart.left_global_uv_position;
             u_ijik.push_back(uij);
@@ -5432,8 +5841,8 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           } else {
             indep_node_ids.push_back(e_chart.lagrange_nodes[2]);
             Eigen::Vector2d uij =
-              one_ring_uv_positions_map[e_chart.left_vertex_index] -
-              Eigen::Vector2d(0, 0);
+                one_ring_uv_positions_map[e_chart.left_vertex_index] -
+                Eigen::Vector2d(0, 0);
             // Eigen::Vector2d uij = e_chart.left_global_uv_position -
             //                       e_chart.right_global_uv_position;
             u_ijik.push_back(uij);
@@ -5464,11 +5873,11 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           m.insert(indep_node_ids[i] * 3 + 2, indep_node_ids[i] * 3 + 2) = 1;
           // constrained_row_ids.push_back(indep_node_ids[i]);
           independent_node_map[indep_node_ids[i] * 3 + 0] =
-            1; // set node as independent
+              1; // set node as independent
           independent_node_map[indep_node_ids[i] * 3 + 1] =
-            1; // set node as independent
+              1; // set node as independent
           independent_node_map[indep_node_ids[i] * 3 + 2] =
-            1; // set node as independent
+              1; // set node as independent
         }
       } else {
         // is cone
@@ -5480,11 +5889,11 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
             m.insert(indep_node_ids[i] * 3 + 2, indep_node_ids[0] * 3 + 2) = 1;
             // constrained_row_ids.push_back(indep_node_ids[i]);
             independent_node_map[indep_node_ids[i] * 3 + 0] =
-              1; // set node as independent
+                1; // set node as independent
             independent_node_map[indep_node_ids[i] * 3 + 1] =
-              1; // set node as independent
+                1; // set node as independent
             independent_node_map[indep_node_ids[i] * 3 + 2] =
-              1; // set node as independent
+                1; // set node as independent
 
           } else {
             m.insert(indep_node_ids[i] * 3 + 0, indep_node_ids[0] * 3 + 0) = 1;
@@ -5492,11 +5901,11 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
             m.insert(indep_node_ids[i] * 3 + 2, indep_node_ids[0] * 3 + 2) = 1;
             // constrained_row_ids.push_back(indep_node_ids[i]);
             independent_node_map[indep_node_ids[i] * 3 + 0] =
-              0; // set node as dependent
+                0; // set node as dependent
             independent_node_map[indep_node_ids[i] * 3 + 1] =
-              0; // set node as dependent
+                0; // set node as dependent
             independent_node_map[indep_node_ids[i] * 3 + 2] =
-              0; // set node as dependent
+                0; // set node as dependent
           }
         }
       }
@@ -5513,11 +5922,11 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           m.insert(indep_node_ids[i] * 3 + 2, indep_node_ids[i] * 3 + 2) = 1;
           // constrained_row_ids.push_back(indep_node_ids[i]);
           independent_node_map[indep_node_ids[i] * 3 + 0] =
-            1; // set node as independent
+              1; // set node as independent
           independent_node_map[indep_node_ids[i] * 3 + 1] =
-            1; // set node as independent
+              1; // set node as independent
           independent_node_map[indep_node_ids[i] * 3 + 2] =
-            1; // set node as independent
+              1; // set node as independent
         }
       } else if (v_chart.is_cone_adjacent) {
         // assert(independent_node_map[indep_node_ids[0] * 3 + 0] == 1); // pi
@@ -5553,15 +5962,15 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           // find a unprocessed vertex to process
           if (e_chart.left_vertex_index != vid &&
               processed_id.find(e_chart.left_vertex_index) ==
-                processed_id.end()) {
+                  processed_id.end()) {
 
             // get node id
             auto dep_node_id =
-              e_chart.lagrange_nodes[2]; // right is vid, so node is lag[2]
+                e_chart.lagrange_nodes[2]; // right is vid, so node is lag[2]
 
             Eigen::Vector2d u_im =
-              one_ring_uv_positions_map[e_chart.left_vertex_index] -
-              Eigen::Vector2d(0, 0);
+                one_ring_uv_positions_map[e_chart.left_vertex_index] -
+                Eigen::Vector2d(0, 0);
             // Eigen::Vector2d u_im = e_chart.left_global_uv_position -
             //                        e_chart.right_global_uv_position;
             Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
@@ -5586,14 +5995,14 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           }
           if (e_chart.right_vertex_index != vid &&
               processed_id.find(e_chart.right_vertex_index) ==
-                processed_id.end()) {
+                  processed_id.end()) {
 
             // get node id
             auto dep_node_id =
-              e_chart.lagrange_nodes[1]; // left is vid, so node is lag[1]
+                e_chart.lagrange_nodes[1]; // left is vid, so node is lag[1]
             Eigen::Vector2d u_im =
-              one_ring_uv_positions_map[e_chart.right_vertex_index] -
-              Eigen::Vector2d(0, 0);
+                one_ring_uv_positions_map[e_chart.right_vertex_index] -
+                Eigen::Vector2d(0, 0);
             // Eigen::Vector2d u_im = e_chart.right_global_uv_position -
             //                        e_chart.left_global_uv_position;
             Eigen::Vector2d U_ijm = U_ijik_inv * u_im;
@@ -5629,9 +6038,9 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 
 void
 CloughTocherSurface::bezier_internal_ind2dep_1_expanded(
-  Eigen::SparseMatrix<double, 1>& m,
-  std::vector<int>& independent_node_map,
-  bool use_incenter)
+    Eigen::SparseMatrix<double, 1>& m,
+    std::vector<int>& independent_node_map,
+    bool use_incenter)
 {
   const auto& f_charts = m_affine_manifold.m_face_charts;
 
@@ -5693,17 +6102,17 @@ CloughTocherSurface::bezier_internal_ind2dep_1_expanded(
 
 void
 CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
-  Eigen::SparseMatrix<double, 1>& m,
-  std::vector<int>& independent_node_map,
-  bool use_incenter)
+    Eigen::SparseMatrix<double, 1>& m,
+    std::vector<int>& independent_node_map,
+    bool use_incenter)
 {
   Eigen::Matrix<double, 5, 7> K_N;
   K_N << 1, 0, 0, 0, 0, 0, 0, // p0
-    0, 1, 0, 0, 0, 0, 0,      // p1
-    -3, 0, 3, 0, 0, 0, 0,     // d01
-    0, -3, 0, 3, 0, 0, 0,     // d10
-    -3. / 8., -3. / 8., -9. / 8., -9. / 8., 3. / 4., 3. / 4.,
-    3. / 2.; // h01 redundant
+      0, 1, 0, 0, 0, 0, 0,    // p1
+      -3, 0, 3, 0, 0, 0, 0,   // d01
+      0, -3, 0, 3, 0, 0, 0,   // d10
+      -3. / 8., -3. / 8., -9. / 8., -9. / 8., 3. / 4., 3. / 4.,
+      3. / 2.; // h01 redundant
 
   // std::cout << "K_N: " << std::endl << K_N << std::endl;
 
@@ -5756,7 +6165,7 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
         independent_node_map[N[6] * 3 + dim] = 1; // set as independent
       }
 
-      std::cout << "top mid control point id: " << N[6] << std::endl;
+      // std::cout << "top mid control point id: " << N[6] << std::endl;
 
       // bottom
       const auto& fid_bot = e_chart.bottom_face_index;
@@ -5790,7 +6199,7 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
         independent_node_map[N_bot[6] * 3 + dim] = 1; // set as independent
       }
 
-      std::cout << "bot mid control point id: " << N_bot[6] << std::endl;
+      // std::cout << "bot mid control point id: " << N_bot[6] << std::endl;
 
       continue;
 
@@ -5851,7 +6260,7 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
     const Eigen::Vector2d& v0_pos_prime = e_chart.right_vertex_uv_position;
     const Eigen::Vector2d& v1_pos_prime = e_chart.left_vertex_uv_position;
     const Eigen::Vector2d& v2_pos_prime_macro =
-      e_chart.bottom_vertex_uv_position;
+        e_chart.bottom_vertex_uv_position;
     Eigen::Vector2d v2_pos_prime;
     if (use_incenter) {
       v2_pos_prime = e_chart.bottom_incenter;
@@ -5878,11 +6287,11 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
 
     // compute M_N and k_N
     Eigen::Matrix<double, 1, 7> M_N =
-      (m_01.dot(u_01.normalized())) / u_01.norm() * c_e.transpose() * K_N;
+        (m_01.dot(u_01.normalized())) / u_01.norm() * c_e.transpose() * K_N;
     auto k_N = m_01.dot(u_01_prep.normalized());
     Eigen::Matrix<double, 1, 7> M_N_prime =
-      (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
-      c_e.transpose() * K_N;
+        (m_01_prime.dot(u_01_prime.normalized())) / u_01_prime.norm() *
+        c_e.transpose() * K_N;
     auto k_N_prime = m_01_prime.dot(u_01_prep_prime.normalized());
 
     // compute CM
@@ -5973,12 +6382,13 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
       //   (-k_N * CM_prime[6]);
 
       Eigen::SparseVector<double> p_01_c_prime =
-        (k_N_prime * (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10 +
-                      CM[4] * p_0c + CM[5] * p_1c + CM[6] * p_01_c) +
-         k_N * (CM_prime[0] * p_0_prime + CM_prime[1] * p_1_prime +
-                CM_prime[2] * p_01_prime + CM_prime[3] * p_10_prime +
-                CM_prime[4] * p_0c_prime + CM_prime[5] * p_1c_prime)) /
-        (-k_N * CM_prime[6]);
+          (k_N_prime *
+               (CM[0] * p_0 + CM[1] * p_1 + CM[2] * p_01 + CM[3] * p_10 +
+                CM[4] * p_0c + CM[5] * p_1c + CM[6] * p_01_c) +
+           k_N * (CM_prime[0] * p_0_prime + CM_prime[1] * p_1_prime +
+                  CM_prime[2] * p_01_prime + CM_prime[3] * p_10_prime +
+                  CM_prime[4] * p_0c_prime + CM_prime[5] * p_1c_prime)) /
+          (-k_N * CM_prime[6]);
 
       assign_spvec_to_spmat_row(m, p_01_c_prime, N_prime[6] * 3 + dim);
       independent_node_map[N_prime[6] * 3 + dim] = 0; // set as dependent
@@ -5988,9 +6398,9 @@ CloughTocherSurface::bezier_midpoint_ind2dep_expanded(
 
 void
 CloughTocherSurface::bezier_internal_ind2dep_2_expanded(
-  Eigen::SparseMatrix<double, 1>& m,
-  std::vector<int>& independent_node_map,
-  bool use_incenter)
+    Eigen::SparseMatrix<double, 1>& m,
+    std::vector<int>& independent_node_map,
+    bool use_incenter)
 {
   const auto& f_charts = m_affine_manifold.m_face_charts;
 
@@ -6021,7 +6431,7 @@ CloughTocherSurface::bezier_internal_ind2dep_2_expanded(
       Eigen::SparseVector<double> p20_c = m.row(node_ids[11] * 3 + dim);
 
       Eigen::SparseVector<double> pc0 =
-        alpha * p0c + beta * p01_c + gamma * p20_c;
+          alpha * p0c + beta * p01_c + gamma * p20_c;
 
       assign_spvec_to_spmat_row(m, pc0, node_ids[13] * 3 + dim);
       independent_node_map[node_ids[13] * 3 + dim] = 0; // set as dependent
@@ -6031,7 +6441,7 @@ CloughTocherSurface::bezier_internal_ind2dep_2_expanded(
       Eigen::SparseVector<double> p12_c = m.row(node_ids[10] * 3 + dim);
 
       Eigen::SparseVector<double> pc1 =
-        alpha * p01_c + beta * p1c + gamma * p12_c;
+          alpha * p01_c + beta * p1c + gamma * p12_c;
 
       assign_spvec_to_spmat_row(m, pc1, node_ids[15] * 3 + dim);
       independent_node_map[node_ids[15] * 3 + dim] = 0; // set as dependent
@@ -6040,7 +6450,7 @@ CloughTocherSurface::bezier_internal_ind2dep_2_expanded(
       Eigen::SparseVector<double> p2c = m.row(node_ids[16] * 3 + dim);
 
       Eigen::SparseVector<double> pc2 =
-        alpha * p20_c + beta * p12_c + gamma * p2c;
+          alpha * p20_c + beta * p12_c + gamma * p2c;
 
       assign_spvec_to_spmat_row(m, pc2, node_ids[17] * 3 + dim);
       independent_node_map[node_ids[17] * 3 + dim] = 0; // set as dependent
@@ -6051,4 +6461,24 @@ CloughTocherSurface::bezier_internal_ind2dep_2_expanded(
       independent_node_map[node_ids[18] * 3 + dim] = 0; // set as dependent
     }
   }
+}
+
+void
+CloughTocherSurface::serialize_boundary_data(const std::string& v_filename,
+                                             const std::string& e_filename)
+{
+  std::ofstream v_file(v_filename);
+  std::ofstream e_file(e_filename);
+
+  for (const auto& p : m_patches) {
+    for (int row = 0; row < 12; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        v_file << p.m_boundary_data(row, col) << " ";
+      }
+      v_file << std::endl;
+    }
+  }
+
+  v_file.close();
+  e_file.close();
 }

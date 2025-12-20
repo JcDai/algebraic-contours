@@ -17,7 +17,7 @@ from argparse import ArgumentParser
 # files in the directory
 from utils import *
 from step_1_generate_embedded_mesh import *
-from step_2_cone_arrangement_and_parametrization import *
+from clough_tocher_surface.c1meshing_pipeline.step_2a_cone_arrangement_and_parametrization import *
 from step_3_face_split import *
 from step_4_generate_CT_constraints import *
 from step_5_map_nodes_tri2tet import *

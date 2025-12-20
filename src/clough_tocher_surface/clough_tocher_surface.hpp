@@ -17,7 +17,7 @@ public:
                       Eigen::SparseMatrix<double>& fit_matrix,
                       Eigen::SparseMatrix<double>& energy_hessian,
                       Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
-                        energy_hessian_inverse);
+                          energy_hessian_inverse);
 
   Eigen::Matrix<double, 1, 3> evaluate_patch(const PatchIndex& patch_index,
                                              const double& u,
@@ -29,17 +29,17 @@ public:
 
   void write_cubic_surface_to_msh_with_conn(std::string filename);
   void write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
-    std::string filename,
-    bool write_bezier = false);
+      std::string filename,
+      bool write_bezier = false);
   void write_degenerate_cubic_surface_to_msh_with_conn(
-    std::string filename,
-    const Eigen::MatrixXd& V,
-    const Eigen::MatrixXi& F);
+      std::string filename,
+      const Eigen::MatrixXd& V,
+      const Eigen::MatrixXi& F);
 
   void write_degenerate_cubic_surface_to_msh_with_conn(std::string filename);
   void write_external_bd_interpolated_function_values_from_lagrange_nodes(
-    std::string filename,
-    std::vector<Eigen::Matrix<double, 12, 1>>& external_boundary_data);
+      std::string filename,
+      std::vector<Eigen::Matrix<double, 12, 1>>& external_boundary_data);
 
   // for bilaplacian
   void write_connected_lagrange_nodes(std::string filename, Eigen::MatrixXd& V);
@@ -129,16 +129,16 @@ public:
   std::vector<Eigen::Vector3d> m_degenerated_bezier_control_points;
 
   void compute_degenerate_bezier_control_points(
-    const Eigen::SparseMatrix<double>& r2f_matrix,
-    const std::vector<int>& independent_node_map,
-    const Eigen::MatrixXd& V,
-    const Eigen::MatrixXi& F);
+      const Eigen::SparseMatrix<double>& r2f_matrix,
+      const std::vector<int>& independent_node_map,
+      const Eigen::MatrixXd& V,
+      const Eigen::MatrixXi& F);
 
   std::vector<Eigen::Vector3d> m_degenerated_bc_special;
 
   void compute_degenerate_bezier_control_points_special_midpoint(
-    const Eigen::MatrixXd& V,
-    const Eigen::MatrixXi& F);
+      const Eigen::MatrixXd& V,
+      const Eigen::MatrixXi& F);
   void write_special_bc_to_msh(const std::string& filename);
 
 public:
@@ -191,17 +191,28 @@ public:
                                         std::vector<int>& independent_node_map,
                                         bool debug_isolate);
   void bezier_internal_ind2dep_1_expanded(
-    Eigen::SparseMatrix<double, 1>& m,
-    std::vector<int>& independent_node_map,
-    bool use_incenter);
+      Eigen::SparseMatrix<double, 1>& m,
+      std::vector<int>& independent_node_map,
+      bool use_incenter);
   void bezier_midpoint_ind2dep_expanded(Eigen::SparseMatrix<double, 1>& m,
                                         std::vector<int>& independent_node_map,
                                         bool use_incenter);
   void bezier_internal_ind2dep_2_expanded(
-    Eigen::SparseMatrix<double, 1>& m,
-    std::vector<int>& independent_node_map,
-    bool use_incenter);
+      Eigen::SparseMatrix<double, 1>& m,
+      std::vector<int>& independent_node_map,
+      bool use_incenter);
 
   void write_external_point_values_with_conn(const std::string& filename,
                                              const Eigen::MatrixXd& vertices);
+  void write_external_point_values_as_tracked_vertices_info(
+      const std::string& filename,
+      const Eigen::MatrixXd& vertices);
+
+  void write_tracked_vertices_info(
+      const std::string& filename,
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      int subdivision_level);
+
+  void serialize_boundary_data(const std::string& v_filename,
+                               const std::string& e_filename);
 };

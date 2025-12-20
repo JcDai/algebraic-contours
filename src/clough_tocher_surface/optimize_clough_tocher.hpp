@@ -24,7 +24,8 @@ public:
   CloughTocherOptimizer(const Eigen::MatrixXd V,
                         const Eigen::MatrixXi F,
                         const AffineManifold affine_manifold,
-                        bool use_incenter = false);
+                        bool use_incenter = false,
+                        bool skip_cone_constraints = false);
 
   /**
    * @brief Optimize the quadratic Laplacian energy over the parameterization
@@ -35,7 +36,18 @@ public:
    * @return optimized control points
    */
   std::vector<Eigen::Vector3d> optimize_laplacian_energy(
-    const std::vector<Eigen::Vector3d>& bezier_control_points);
+      const std::vector<Eigen::Vector3d>& bezier_control_points);
+
+  /**
+   * @brief Optimize the quadratic Laplacian energy over the parameterization
+   * metric with fitting term by **TRACKED VERTICES** while maintining the C1
+   * constraints.
+   *
+   * @param bezier_control_points: initial Bezier points
+   * @return optimized control points
+   */
+  std::vector<Eigen::Vector3d> optimize_laplacian_energy_tracked(
+      const std::vector<Eigen::Vector3d>& bezier_control_points);
 
   /**
    * @brief Optimize the Laplace Beltrami energy with fitting term, starting
@@ -47,14 +59,42 @@ public:
    * @return optimized control points
    */
   std::vector<Eigen::Vector3d> optimize_laplace_beltrami_energy(
-    const std::vector<Eigen::Vector3d>& bezier_control_points,
-    int iterations = 1,
-    double step_size = 1.);
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      int iterations = 1,
+      double step_size = 1.);
+
+  std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
+  generate_position_energy_quadratic_tracked(
+      const Eigen::VectorXd& v0,
+      const Eigen::SparseMatrix<double>& A,
+      const std::vector<Eigen::Vector3d>& optimized_control_points) const;
 
   std::vector<Eigen::Vector3d> gradient_descent_laplace_beltrami_energy(
-    const std::vector<Eigen::Vector3d>& bezier_control_points,
-    int iterations = 10,
-    double step_size = 1e-4);
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      int iterations = 10,
+      double step_size = 1e-4);
+
+  /**
+   * @brief Optimize the Laplace Beltrami energy with fitting term by **TRACKED
+   * VERTICES** , starting over the inital surface metric, while maintining the
+   * C1 constraints.
+   *
+   * @param bezier_control_points: initial Bezier points (including positions
+   * for fitting term)
+   * @param iterations: number of iterations of metric optimization to apply
+   * @return optimized control points
+   */
+  std::vector<Eigen::Vector3d> optimize_laplace_beltrami_energy_tracked(
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      int iterations = 1,
+      double step_size = 1.);
+
+  // TODO:
+  // std::vector<Eigen::Vector3d>
+  // gradient_descent_laplace_beltrami_energy_tracked(
+  //     const std::vector<Eigen::Vector3d>& bezier_control_points,
+  //     int iterations = 10,
+  //     double step_size = 1e-4);
 
   /**
    * @brief Project the surface determined by the control points to the
@@ -64,7 +104,7 @@ public:
    * @return projected Bezier control points
    */
   std::vector<Eigen::Vector3d> project_to_constraints(
-    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   /**
    * @brief Evaluate the quadratic Laplacian energy over the parameterization
@@ -74,14 +114,14 @@ public:
    * @return energy for the Bezier points
    */
   double evaluate_energy(
-    const std::vector<Eigen::Vector3d>& bezier_control_points);
+      const std::vector<Eigen::Vector3d>& bezier_control_points);
 
   Eigen::SparseMatrix<double> generate_laplace_beltrami_stiffness_matrix()
-    const;
+      const;
 
   std::vector<double> compute_face_energies(
-    const std::vector<Eigen::Vector3d>& bezier_control_points,
-    bool use_laplace_beltrami);
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      bool use_laplace_beltrami);
 
   std::vector<Eigen::Vector3d>& get_bezier_control_points()
   {
@@ -120,14 +160,16 @@ public:
   bool invert_area = false;
   bool normalize_count = false;
   bool bound_energy =
-    true; // bound the energy during Laplace Beltrami optimization
+      true; // bound the energy during Laplace Beltrami optimization
   bool bound_residual =
-    true; // bound the residual during Laplace Beltrami optimization
+      true; // bound the residual during Laplace Beltrami optimization
   bool use_orthogonal_projection =
-    true; // use orthongonal projection to constraint subset
+      true; // use orthongonal projection to constraint subset
   bool use_parametric_metric = false; // use parameterization metric for first
                                       // iteration of Laplace Beltrami
   bool use_fixed_metric = false; // use fixed metric for gradient computation
+
+  bool m_skip_cone_constraints = false;
 
   /**
    * @brief Assemble the stiffness matrix for the parameterization metric
@@ -145,24 +187,24 @@ public:
    * @return Laplace Beltrami energy stiffness matrix
    */
   Eigen::SparseMatrix<double> generate_laplace_beltrami_stiffness_matrix(
-    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   double compute_normalized_fitting_weight() const;
 
   Eigen::SparseMatrix<double> generate_position_matrix(
-    const Eigen::VectorXd& p) const;
+      const Eigen::VectorXd& p) const;
 
   void initialize_data_log();
   void write_data_log_entry();
   void close_logs();
   void checkpoint_control_points(
-    const std::vector<Eigen::Vector3d>& bezier_control_points,
-    int iter);
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      int iter);
 
   std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
   generate_position_energy_quadratic(
-    const std::vector<Eigen::Vector3d>& bezier_control_points,
-    const std::vector<Eigen::Vector3d>& optimized_control_points) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      const std::vector<Eigen::Vector3d>& optimized_control_points) const;
 
   std::string output_dir = "./";
   int p_norm = 2;
@@ -221,7 +263,7 @@ private:
    * @return array of 3 patch Bezier nodes (10 node indices per patch)
    */
   std::array<std::array<int64_t, 10>, 3> get_micro_triangle_nodes(
-    int64_t face_index) const;
+      int64_t face_index) const;
 
   std::array<std::array<int64_t, 10>, 3> get_local_micro_triangle_nodes() const
   {
@@ -265,7 +307,7 @@ private:
    * @return tripled matrix
    */
   Eigen::SparseMatrix<double> triple_matrix(
-    const Eigen::SparseMatrix<double>& mat) const;
+      const Eigen::SparseMatrix<double>& mat) const;
 
   /**
    * @brief Given a list of global Bezier nodes, generate the vector of full
@@ -277,7 +319,7 @@ private:
    * @return flattened variable vector
    */
   Eigen::VectorXd build_node_vector(
-    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   /**
    * @brief Given a vector of full Bezier variables, construct a list of Bezier
@@ -289,7 +331,7 @@ private:
    * @return list of 3D variable nodes
    */
   std::vector<Eigen::Vector3d> build_control_points(
-    const Eigen::VectorXd& p) const;
+      const Eigen::VectorXd& p) const;
 
   /**
    * @brief Project a vector orthogonally to the reduced constraint subspace.
@@ -309,9 +351,9 @@ private:
    * @param stiffness_matrix_trips: IJV triplets for the global stiffness matrix
    */
   void assemble_local_laplacian_siffness_matrix(
-    const std::array<PlanarPoint, 3>& face_uv_positions,
-    const std::array<std::array<int64_t, 10>, 3>& patch_indices,
-    std::vector<Triplet>& stiffness_matrix_trips) const;
+      const std::array<PlanarPoint, 3>& face_uv_positions,
+      const std::array<std::array<int64_t, 10>, 3>& patch_indices,
+      std::vector<Triplet>& stiffness_matrix_trips) const;
 
   /**
    * @brief Helper function to assemble to local stiffness matrix for a given
@@ -323,30 +365,30 @@ private:
    * @param stiffness_matrix_trips: IJV triplets for the global stiffness matrix
    */
   void assemble_local_laplace_beltrami_siffness_matrix(
-    const std::vector<Eigen::Vector3d>& bezier_control_points,
-    const std::array<std::array<int64_t, 10>, 3>& patch_indices,
-    std::vector<Triplet>& stiffness_matrix_trips) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      const std::array<std::array<int64_t, 10>, 3>& patch_indices,
+      std::vector<Triplet>& stiffness_matrix_trips) const;
 
   std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>
   generate_autodiff_laplace_beltrami_stiffness_matrix(
-    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   void assemble_autodiff_laplace_beltrami_siffness_matrix(
-    const std::vector<Eigen::Vector3d>& bezier_control_points,
-    const std::array<std::array<int64_t, 10>, 3>& patch_indices,
-    double& energy,
-    Eigen::VectorXd& gradient,
-    std::vector<Triplet>& stiffness_matrix_trips) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      const std::array<std::array<int64_t, 10>, 3>& patch_indices,
+      double& energy,
+      Eigen::VectorXd& gradient,
+      std::vector<Triplet>& stiffness_matrix_trips) const;
 
   std::tuple<double, Eigen::VectorXd>
   generate_autodiff_laplace_beltrami_gradient(
-    const std::vector<Eigen::Vector3d>& bezier_control_points) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   void assemble_autodiff_laplace_beltrami_gradient(
-    const std::vector<Eigen::Vector3d>& bezier_control_points,
-    const std::array<std::array<int64_t, 10>, 3>& patch_indices,
-    double& energy,
-    Eigen::VectorXd& gradient) const;
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      const std::array<std::array<int64_t, 10>, 3>& patch_indices,
+      double& energy,
+      Eigen::VectorXd& gradient) const;
 
   /**
    * @brief Helper function to assemble local hessian into the global Hessian.
@@ -358,6 +400,67 @@ private:
   void assemble_patch_coefficients(const std::array<int64_t, 10>& patch_indices,
                                    const CubicHessian& local_hessian,
                                    std::vector<Triplet>& global_hessian_trips);
+
+  // for tracked vertices
+public:
+  struct TrackedVertex
+  {
+    int64_t macro_tri_id = -1;
+
+    Eigen::Vector3d pos_3d;
+    Eigen::Vector2d local_uv_pos;
+    double one_ring_area;
+  };
+
+  bool fit_tracked_vertices;
+
+  std::vector<TrackedVertex> m_tracked_vertices;
+
+  /**
+   * @brief get face node matrix for tracked vertices of size [19 *
+   * #tracked_vertices, #control_points]
+   */
+  void P_G2F_tracked(Eigen::SparseMatrix<double>& m);
+
+  /**
+   * @brief get 19 to 10 nodes block diagonal matrix. size [10 * 19] *
+   * #tracked_vertices at diagonal
+   */
+  void Macro2Micro_tracked(Eigen::SparseMatrix<double>& m);
+
+  /**
+   * @brief get (bezier coeff * uvw values) matrix, size [1 * 10] * #
+   * tracked_vertices block diagonal
+   */
+  void bezier_coeff_with_uv_value_tracked(Eigen::SparseMatrix<double>& m);
+
+  void compute_area_weighted_fitting_weight_matrix_tracked(
+      Eigen::SparseMatrix<double>& m);
+
+  /**
+   * @brief generate position matrix P for tracked vertices.
+   * size [10 * #tracked, #bezier_cp]
+   * P * N  = traced 3d pos in cubic triangles. replace
+   * generate_position_matrix()
+   */
+  Eigen::SparseMatrix<double> generate_tracked_position_matrix();
+
+  Eigen::VectorXd build_tracked_vertices_vector();
+
+  std::vector<Eigen::Vector3d> evaluate_tracked_vertices(
+      const std::vector<Eigen::Vector3d>& bezier_control_points);
+
+  // test tracked vertices
+  std::vector<Eigen::Vector3d> optimize_fitting_term_direct(
+      const std::vector<Eigen::Vector3d>& bezier_control_points);
+
+  std::vector<Eigen::Vector3d> optimize_fitting_term_iterative(
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      int iterations,
+      double step_size);
+
+  std::vector<Eigen::Vector3d> direct_fitting_without_c1(
+      const std::vector<Eigen::Vector3d>& bezier_control_points);
 };
 
 std::vector<Eigen::Vector3d>
@@ -366,14 +469,27 @@ generate_linear_clough_tocher_surface(CloughTocherSurface& ct_surface,
 
 void
 set_bezier_control_points(
-  CloughTocherSurface& ct_surface,
-  const std::vector<Eigen::Vector3d>& bezier_control_points);
+    CloughTocherSurface& ct_surface,
+    const std::vector<Eigen::Vector3d>& bezier_control_points);
 
 // Helper function to write a curface with external bezier nodes to file
 void
 write_mesh(CloughTocherSurface& ct_surface,
            const std::vector<Eigen::Vector3d>& bezier_control_points,
            const std::string& filename);
+
+void
+write_tracked_vertices(
+    CloughTocherSurface& ct_surface,
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    const std::string& filename);
+
+void
+write_tracked_vertices_with_subdivision_level(
+    CloughTocherSurface& ct_surface,
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    const std::string& filename,
+    int subdivision_level);
 
 // write edge geometry to file
 void

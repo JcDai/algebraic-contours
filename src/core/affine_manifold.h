@@ -25,13 +25,13 @@ struct VertexManifoldChart
 {
   Halfedge::Index vertex_index; // Index of the vertex in the affine manifold
   std::vector<Halfedge::Index>
-    vertex_one_ring; // List of manifold vertex indices in the one ring
+      vertex_one_ring; // List of manifold vertex indices in the one ring
   std::vector<Halfedge::Index>
-    face_one_ring; // List of manifold face indices in the one ring
+      face_one_ring; // List of manifold face indices in the one ring
   MatrixXr
-    one_ring_uv_positions;  // Local uv coordinates of the one ring vertices
-  bool is_boundary = false; // Mark boundary vertices
-  bool is_cone = false;     // Mark cone vertices
+      one_ring_uv_positions; // Local uv coordinates of the one ring vertices
+  bool is_boundary = false;  // Mark boundary vertices
+  bool is_cone = false;      // Mark cone vertices
   bool is_cone_adjacent = false; // Mark vertices adjacent to a cone
 
   // for bezier cone constraints
@@ -43,11 +43,11 @@ struct VertexManifoldChart
   // for sharp features
   bool is_feature_cone = false; // Mark feature cone
   bool is_feature_edge_endpoint =
-    false; // Mark stand-alone endpoint of a feature edge
+      false; // Mark stand-alone endpoint of a feature edge
   bool is_feature_edge_intersection =
-    false; // Mark intersection of feature edges
+      false; // Mark intersection of feature edges
   bool is_feature_edge_interior =
-    false; // Mark vertex as in the middle of the edge chain
+      false; // Mark vertex as in the middle of the edge chain
   // std::vector<int>
   //   face_feature_section;            // face sections devided by feature
   //   edges
@@ -56,11 +56,12 @@ struct VertexManifoldChart
 
   std::vector<int64_t> edge_one_ring; // edge v-v_onering id in m_edge_charts
   std::map<int64_t, int64_t>
-    edge_to_local_vid_map; // corresponding local vid to edge id in the one ring
+      edge_to_local_vid_map; // corresponding local vid to edge id in the one
+                             // ring
 
   std::vector<std::vector<int64_t>>
-    separate_constraint_groups; // vector edges that are considered in the same
-                                // group
+      separate_constraint_groups; // vector edges that are considered in the
+                                  // same group
 };
 
 /// Local layout manifold chart in R2 of the triangles around an edge.
@@ -138,9 +139,9 @@ struct FaceManifoldChart
 
   // for incenter
   PlanarPoint incenter;
-  double alpha;
-  double beta;
-  double gamma;
+  double alpha = 1. / 3.;
+  double beta = 1. / 3.;
+  double gamma = 1. / 3.;
 };
 
 /// Representation for an affine manifold, which is a topological manifold F
@@ -186,7 +187,7 @@ public:
   ///
   /// @return halfedge to corner map of the manifold
   std::vector<std::pair<Eigen::Index, Eigen::Index>> const& get_he_to_corner()
-    const
+      const
   {
     return m_he_to_corner;
   }
@@ -237,8 +238,8 @@ public:
   /// @param[in] face_index: index of the face for the chart segments
   /// @param[out] corner_uv_positions: chart uv positions as enumerated above
   void get_face_corner_charts(
-    Index face_index,
-    std::array<Matrix2x2r, 3>& corner_uv_positions) const;
+      Index face_index,
+      std::array<Matrix2x2r, 3>& corner_uv_positions) const;
 
   /// Get the portion of the edge charts contained in the interior of the given
   /// face.
@@ -252,8 +253,8 @@ public:
   /// @param[out] face_edge_uv_positions: uv positions contained in the given
   /// face
   void get_face_edge_charts(
-    Index face_index,
-    std::array<Matrix3x2r, 3>& face_edge_uv_positions) const;
+      Index face_index,
+      std::array<Matrix3x2r, 3>& face_edge_uv_positions) const;
 
   /// @brief Get the uv coordinates of the face.
   ///
@@ -298,7 +299,7 @@ public:
   ///
   /// @param[out] is_cone_corner: true iff corner i, j is a cone
   void compute_cones_corners(
-    std::vector<std::array<bool, 3>>& is_cone_corner) const;
+      std::vector<std::array<bool, 3>>& is_cone_corner) const;
 
   /// Compute a matrix of cone point positions from mesh vertex positions.
   ///
@@ -370,15 +371,15 @@ public:
 
 public:
   void build_vertex_charts_from_lengths(
-    const Eigen::MatrixXi& F,
-    const std::vector<std::vector<double>>& l,
-    std::vector<VertexManifoldChart>& vertex_charts) const;
+      const Eigen::MatrixXi& F,
+      const std::vector<std::vector<double>>& l,
+      std::vector<VertexManifoldChart>& vertex_charts) const;
 
   void build_edge_charts_from_lengths(
-    const Eigen::MatrixXi& F,
-    const Halfedge& halfedge,
-    const std::vector<std::vector<double>>& l,
-    std::vector<EdgeManifoldChart>& edge_charts) const;
+      const Eigen::MatrixXi& F,
+      const Halfedge& halfedge,
+      const std::vector<std::vector<double>>& l,
+      std::vector<EdgeManifoldChart>& edge_charts) const;
 
   void build_face_charts(const Eigen::MatrixXi& F,
                          const MatrixXr& global_uv,
@@ -386,9 +387,9 @@ public:
                          std::vector<FaceManifoldChart>& face_charts) const;
 
   void build_corner_to_edge_map(
-    const std::vector<std::vector<Halfedge::Index>>& corner_to_he,
-    const std::vector<Halfedge::Index>& he_to_edge,
-    std::vector<std::vector<Halfedge::Index>>& corner_to_edge) const;
+      const std::vector<std::vector<Halfedge::Index>>& corner_to_he,
+      const std::vector<Halfedge::Index>& he_to_edge,
+      std::vector<std::vector<Halfedge::Index>>& corner_to_edge) const;
 
   PlanarPoint layout_next_vertex(const PlanarPoint& current_point,
                                  double next_edge_length,
@@ -459,13 +460,13 @@ public:
   // b0 b1 b2 b01 b10 b12 b21 b20 b02 b01^c b12^c b20^c b0c bc0 b1c bc1 b2c
   // bc2 bc
   std::vector<std::pair<int64_t, PlanarPoint>>
-    m_lagrange_nodes; // (face_idx, barycentric coord)
+      m_lagrange_nodes; // (face_idx, barycentric coord)
   std::map<int64_t, int64_t> v_to_lagrange_node_map; // vidx to node idx
   std::map<int64_t, int64_t> lagrange_node_to_v_map; // node idx to vids
 
   // edge with v_idx to two nodes idx on edge
   std::map<std::pair<int64_t, int64_t>, std::array<int64_t, 4>>
-    m_boundary_edge_to_node_map;
+      m_boundary_edge_to_node_map;
 
   // added for initial solutions
   // call before generate_lagrange_nodes_incenter()
@@ -477,7 +478,7 @@ public:
   // for sharp features
   void mark_feature_vertices(const std::vector<int64_t>& feature_vids);
   void mark_feature_edges(
-    const std::vector<std::pair<int64_t, int64_t>>& feature_edge_vids);
+      const std::vector<std::pair<int64_t, int64_t>>& feature_edge_vids);
   void mark_separate_endpoint_constraint_group();
 };
 

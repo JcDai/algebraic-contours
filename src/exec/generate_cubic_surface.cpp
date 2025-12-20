@@ -206,6 +206,23 @@ main(int argc, char* argv[])
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
     output_name + "_from_bezier_nodes", true);
 
+  ct_surface.serialize_boundary_data("per_face_boundary_data.txt", "");
+
+  // output cone vids
+  std::ofstream cone_vids_file("cone_vids.txt");
+  for (size_t vid = 0;
+       vid < ct_surface.m_affine_manifold.m_vertex_charts.size();
+       ++vid) {
+    const auto& v_chart = ct_surface.m_affine_manifold.m_vertex_charts[vid];
+    if (v_chart.is_cone) {
+      cone_vids_file << vid << std::endl;
+    }
+  }
+
+  cone_vids_file.close();
+
+  exit(0);
+
   // code added for sharp feature
   // call order cannot be changed
   ct_surface.m_affine_manifold.compute_he_to_echart_id();
@@ -674,7 +691,9 @@ main(int argc, char* argv[])
 
   Eigen::saveMarket(r2f_expanded, output_name + "_bezier_r2f_expanded_old.txt");
 
-  exit(0);
+  // ct_surface.serialize_boundary_data("per_face_boundary_data.txt", "");
+
+  // exit(0);
 
   // compute expanded beizer control points
   std::cout << "computing bezier c points expanded" << std::endl;

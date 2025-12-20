@@ -87,33 +87,39 @@ main(int argc, char* argv[])
   bool use_gradient = false;
   bool triangulate = false;
   bool use_incenter = false;
+  bool fit_tracked_vertices = false;
+  std::string tracked_vertices_file = "";
 
   std::string feature_edge_file = "";
   std::string feature_vertex_file = "";
 
+  bool skip_cone_constraints = false;
+
+  int tracked_subdivision = 3;
+
   app.add_option("-i,--input", input_filename, "Mesh filepath")
-    ->check(CLI::ExistingFile)
-    ->required();
+      ->check(CLI::ExistingFile)
+      ->required();
   app.add_option("--render_path", render_path, "Render output filepath");
 
   app.add_option("--log_level", log_level, "Level of logging")
-    ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case));
-  app
-    .add_option("-w,--weight",
-                weight,
-                "Fitting weight for the quadratic surface approximation")
-    ->check(CLI::PositiveNumber);
+      ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case));
+  app.add_option("-w,--weight",
+                 weight,
+                 "Fitting weight for the quadratic surface approximation")
+      ->check(CLI::PositiveNumber);
   app.add_option("--step_size", step_size, "step size for gradient descent")
-    ->check(CLI::PositiveNumber);
+      ->check(CLI::PositiveNumber);
   app.add_option(
-    "-n,--iterations", iterations, "Number of iterations of optimization");
+      "-n,--iterations", iterations, "Number of iterations of optimization");
   app.add_option("--scale", scale, "Scale input mesh");
   app.add_option("--refinement", refinement, "Levels of refinement");
   app.add_option("-o, --output", output_name, "Output file prefix");
   app.add_option("-p, --p_norm", p_norm, "p norm for fitting term");
   app.add_flag("-v, --visualize", visualize, "Visualize with polyscope");
-  app.add_flag(
-    "--invert_area", invert_area, "Use inverse area for fitting noramlization");
+  app.add_flag("--invert_area",
+               invert_area,
+               "Use inverse area for fitting noramlization");
   app.add_flag("--square_area", square_area, "Use squared area in laplacian");
   app.add_flag("--normalize_count", normalize_count, "Normalize");
   app.add_flag("--skip_energy_decrease",
@@ -126,9 +132,9 @@ main(int argc, char* argv[])
                use_coordinate_projection,
                "use initial coordinate projection instead of orthogonal");
   app.add_flag(
-    "--use_parametric_metric",
-    use_parametric_metric,
-    "use parameterization metric for first iteration of Laplace Beltrami");
+      "--use_parametric_metric",
+      use_parametric_metric,
+      "use parameterization metric for first iteration of Laplace Beltrami");
   app.add_flag("--use_fixed_metric",
                use_fixed_metric,
                "use fixed metric for gradient computation");
@@ -138,13 +144,28 @@ main(int argc, char* argv[])
   app.add_flag("--use_gradient", use_gradient, "use gradient descent");
 
   app.add_flag(
-    "--use_incenter", use_incenter, "Use incenter instead of barycenter");
+      "--use_incenter", use_incenter, "Use incenter instead of barycenter");
+
+  app.add_flag("--skip_cone_constraints",
+               skip_cone_constraints,
+               "skip cone constraints");
 
   app.add_option("--feature_edge", feature_edge_file, "feature edges");
   app.add_option("--feature_vertex", feature_vertex_file, "feature vertices");
+
+  // app.add_flag("--fit_tracked_vertices",
+  //              fit_tracked_vertices,
+  //              "fit tracked vertices instead of input vertices");
+  app.add_option(
+      "--tracked_vertices", tracked_vertices_file, "tracked vertices filename");
+
+  app.add_option("--tracked_subdivision",
+                 tracked_subdivision,
+                 "subdivision level for generating fitting target");
+
   CLI11_PARSE(app, argc, argv);
   std::string mesh_name =
-    std::filesystem::path(input_filename).filename().replace_extension();
+      std::filesystem::path(input_filename).filename().replace_extension();
 
   // Set logger level
   spdlog::set_level(log_level);
@@ -173,7 +194,7 @@ main(int argc, char* argv[])
 
   // normalize area
   spdlog::info("normalizing uv area");
-  uv *= std::sqrt(area / uv_area);
+  // uv *= std::sqrt(area / uv_area);
   igl::doublearea(uv, FT, double_area);
   uv_area = double_area.sum() / 2.;
   spdlog::info("new uv area: {}", uv_area);
@@ -230,7 +251,7 @@ main(int argc, char* argv[])
   Eigen::SparseMatrix<double> fit_matrix;
   Eigen::SparseMatrix<double> energy_hessian;
   Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>
-    energy_hessian_inverse;
+      energy_hessian_inverse;
   CloughTocherSurface ct_surface(V,
                                  affine_manifold,
                                  optimization_params,
@@ -240,19 +261,40 @@ main(int argc, char* argv[])
   // WARNING: surface writing needed to generate points
   // TODO: make part of initialization
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
-    join_path(output_name, "initial"), true);
+      join_path(output_name, "initial"), true);
   ct_surface.write_degenerate_cubic_surface_to_msh_with_conn(
-    join_path(output_name, "CT_degenerate_cubic_bezier_points"), V, F);
+      join_path(output_name, "CT_degenerate_cubic_bezier_points"), V, F);
   std::vector<Eigen::Vector3d> bezier_control_points =
-    generate_linear_clough_tocher_surface(ct_surface, V);
+      generate_linear_clough_tocher_surface(ct_surface, V);
   write_mesh(
-    ct_surface, bezier_control_points, join_path(output_name, "linear"));
+      ct_surface, bezier_control_points, join_path(output_name, "linear"));
   set_bezier_control_points(ct_surface, bezier_control_points);
   if (visualize)
     ct_surface.add_surface_to_viewer(rgb_orange, 3, "linear");
 
+  // tracked vertices
+  std::vector<CloughTocherOptimizer::TrackedVertex> tracked_vertices;
+  if (tracked_vertices_file != "") {
+    fit_tracked_vertices = true;
+
+    std::ifstream tv_file(tracked_vertices_file);
+
+    int64_t fid;
+    double p0, p1, p2, uv0, uv1, area;
+    while (tv_file >> fid >> p0 >> p1 >> p2 >> uv0 >> uv1 >> area) {
+      CloughTocherOptimizer::TrackedVertex tv;
+      tv.macro_tri_id = fid;
+      tv.pos_3d = Eigen::Vector3d(p0, p1, p2);
+      tv.local_uv_pos = Eigen::Vector2d(uv0, uv1);
+      tv.one_ring_area = area;
+
+      tracked_vertices.push_back(tv);
+    }
+  }
+
   // initialize optimizer
-  CloughTocherOptimizer optimizer(V, F, affine_manifold, use_incenter);
+  CloughTocherOptimizer optimizer(
+      V, F, affine_manifold, use_incenter, skip_cone_constraints);
   optimizer.fitting_weight = weight;
   optimizer.invert_area = invert_area;
   optimizer.double_area = square_area;
@@ -263,10 +305,13 @@ main(int argc, char* argv[])
   optimizer.bound_residual = !skip_residual;
   optimizer.use_parametric_metric = use_parametric_metric;
   optimizer.p_norm = p_norm;
+  optimizer.fit_tracked_vertices = fit_tracked_vertices;
+
+  optimizer.m_tracked_vertices = tracked_vertices;
 
   // just project to constraints
   std::vector<Eigen::Vector3d> projected_control_points =
-    optimizer.project_to_constraints(bezier_control_points);
+      optimizer.project_to_constraints(bezier_control_points);
   write_mesh(ct_surface,
              projected_control_points,
              join_path(output_name, "projected_mesh"));
@@ -275,31 +320,123 @@ main(int argc, char* argv[])
     ct_surface.add_surface_to_viewer(rgb_maroon, 3, "projected");
 
   // optimize the bezier nodes with laplacian energy
-  std::vector<Eigen::Vector3d> laplacian_control_points =
-    optimizer.optimize_laplacian_energy(bezier_control_points);
-  write_mesh(ct_surface,
-             laplacian_control_points,
-             join_path(output_name, "laplacian_mesh"));
-  set_bezier_control_points(ct_surface, laplacian_control_points);
-  if (visualize)
-    ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
-  if (visualize)
-    polyscope::show();
+  std::vector<Eigen::Vector3d> laplacian_control_points;
+  if (!optimizer.fit_tracked_vertices) {
+    laplacian_control_points =
+        optimizer.optimize_laplacian_energy(bezier_control_points);
+    write_mesh(ct_surface,
+               laplacian_control_points,
+               join_path(output_name, "laplacian_mesh"));
+    set_bezier_control_points(ct_surface, laplacian_control_points);
+    if (visualize)
+      ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
+    if (visualize)
+      polyscope::show();
+  } else {
+    // fit tracked
+    laplacian_control_points =
+        optimizer.optimize_laplacian_energy_tracked(bezier_control_points);
+    write_mesh(ct_surface,
+               laplacian_control_points,
+               join_path(output_name, "laplacian_mesh_tracked"));
+    set_bezier_control_points(ct_surface, laplacian_control_points);
+    if (visualize)
+      ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
+    if (visualize)
+      polyscope::show();
+  }
+
+  // TODO: comment this out! only for testing
+  // optimize fitting term only
+  std::vector<Eigen::Vector3d> fitting_control_points;
+  if (optimizer.fit_tracked_vertices) {
+    // fitting_control_points = optimizer.optimize_fitting_term_iterative(
+    //     bezier_control_points, iterations, step_size);
+    fitting_control_points =
+        optimizer.optimize_fitting_term_direct(bezier_control_points);
+
+    std::cout << "finished optimization fitting only" << std::endl;
+    write_mesh(ct_surface,
+               fitting_control_points,
+               join_path(output_name, "fitting_mesh_iterative"));
+    const auto& eval_tracked_pos =
+        optimizer.evaluate_tracked_vertices(fitting_control_points);
+    std::ofstream tracked_out("tracked_after_optimization_fitting_only.obj");
+    for (size_t i = 0; i < eval_tracked_pos.size(); ++i) {
+      tracked_out << std::setprecision(16) << "v " << eval_tracked_pos[i][0]
+                  << " " << eval_tracked_pos[i][1] << " "
+                  << eval_tracked_pos[i][2] << std::endl;
+    }
+    tracked_out.close();
+  }
+
+  // fitting without c1 constraints
+  std::vector<Eigen::Vector3d> fitting_control_points_no_c1;
+  if (optimizer.fit_tracked_vertices) {
+    fitting_control_points_no_c1 =
+        optimizer.direct_fitting_without_c1(bezier_control_points);
+
+    std::cout << "finished optimization fitting only without c1" << std::endl;
+    write_mesh(ct_surface,
+               fitting_control_points_no_c1,
+               join_path(output_name, "fitting_mesh_without_c1"));
+    const auto& eval_tracked_pos =
+        optimizer.evaluate_tracked_vertices(fitting_control_points_no_c1);
+    std::ofstream tracked_out(
+        "tracked_after_optimization_fitting_without_c1.obj");
+    for (size_t i = 0; i < eval_tracked_pos.size(); ++i) {
+      tracked_out << std::setprecision(16) << "v " << eval_tracked_pos[i][0]
+                  << " " << eval_tracked_pos[i][1] << " "
+                  << eval_tracked_pos[i][2] << std::endl;
+    }
+    tracked_out.close();
+  }
 
   // optimize the bezier nodes with laplace beltrami energy
   std::vector<Eigen::Vector3d> laplace_beltrami_control_points;
-  if (use_gradient) {
+  if (optimizer.fit_tracked_vertices) {
     laplace_beltrami_control_points =
-      optimizer.gradient_descent_laplace_beltrami_energy(
-        bezier_control_points, iterations, step_size);
+        optimizer.optimize_laplace_beltrami_energy_tracked(
+            bezier_control_points, iterations, step_size);
   } else {
-    laplace_beltrami_control_points =
-      optimizer.optimize_laplace_beltrami_energy(
-        bezier_control_points, iterations, step_size);
+    if (use_gradient) {
+      laplace_beltrami_control_points =
+          optimizer.gradient_descent_laplace_beltrami_energy(
+              bezier_control_points, iterations, step_size);
+    } else {
+      laplace_beltrami_control_points =
+          optimizer.optimize_laplace_beltrami_energy(
+              bezier_control_points, iterations, step_size);
+    }
   }
-  write_mesh(ct_surface,
-             laplace_beltrami_control_points,
-             join_path(output_name, "laplace_beltrami_mesh"));
+
+  if (optimizer.fit_tracked_vertices) {
+    write_mesh(ct_surface,
+               laplace_beltrami_control_points,
+               join_path(output_name, "laplace_beltrami_mesh_tracked"));
+
+    const auto& eval_tracked_pos =
+        optimizer.evaluate_tracked_vertices(laplace_beltrami_control_points);
+    std::ofstream tracked_out("tracked_after_optimization.obj");
+    for (size_t i = 0; i < eval_tracked_pos.size(); ++i) {
+      tracked_out << "v " << eval_tracked_pos[i][0] << " "
+                  << eval_tracked_pos[i][1] << " " << eval_tracked_pos[i][2]
+                  << std::endl;
+    }
+    tracked_out.close();
+  } else {
+    write_mesh(ct_surface,
+               laplace_beltrami_control_points,
+               join_path(output_name, "laplace_beltrami_mesh"));
+    write_tracked_vertices(ct_surface,
+                           laplace_beltrami_control_points,
+                           join_path(output_name, "tracked_vertices_info.txt"));
+    write_tracked_vertices_with_subdivision_level(
+        ct_surface,
+        laplace_beltrami_control_points,
+        join_path(output_name, "subdivided_tracked_vertices_info.txt"),
+        tracked_subdivision);
+  }
 
   set_bezier_control_points(ct_surface, laplace_beltrami_control_points);
   if (triangulate) {
@@ -307,17 +444,19 @@ main(int argc, char* argv[])
     Eigen::MatrixXi F_out;
     ct_surface.discretize(3, V_out, F_out);
     igl::writeOBJ(
-      join_path(output_name, "triangulated_mesh.obj"), V_out, F_out);
+        join_path(output_name, "triangulated_mesh.obj"), V_out, F_out);
   }
 
   std::vector<SpatialVector> points;
   std::vector<std::vector<int>> polylines;
   ct_surface.discretize_patch_boundaries(3, points, polylines, true);
   write_polylines_to_obj(
-    join_path(output_name, "patch_boundaries.obj"), points, polylines);
+      join_path(output_name, "patch_boundaries.obj"), points, polylines);
   ct_surface.discretize_patch_boundaries(3, points, polylines, false);
   write_polylines_to_obj(
-    join_path(output_name, "interior_patch_boundaries.obj"), points, polylines);
+      join_path(output_name, "interior_patch_boundaries.obj"),
+      points,
+      polylines);
 
   // write lag2bezier mat for c1meshing soft constraint
   Eigen::SparseMatrix<double, 1> l2b_mat;

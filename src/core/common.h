@@ -33,13 +33,13 @@
 
 // Global epsilons
 // const double MAX_PRECISION = 1e-8;
-extern double FLOAT_EQUAL_PRECISION;      // Epsilon for default float
-extern double ADJACENT_CONTOUR_PRECISION; // Epsilon for chaining contours
+extern double FLOAT_EQUAL_PRECISION;         // Epsilon for default float
+extern double ADJACENT_CONTOUR_PRECISION;    // Epsilon for chaining contours
+extern double PLANAR_BOUNDING_BOX_PRECISION; // Epsilon for curve-curve bounding
+                                             // box padding
 extern double
-  PLANAR_BOUNDING_BOX_PRECISION; // Epsilon for curve-curve bounding box padding
-extern double
-  FIND_INTERSECTIONS_BEZIER_CLIPPING_PRECISION; // Epsilon for Bezier clipping
-                                                // intersections
+    FIND_INTERSECTIONS_BEZIER_CLIPPING_PRECISION; // Epsilon for Bezier clipping
+                                                  // intersections
 
 extern int DISCRETIZATION_LEVEL; // Spline surface discretization level
 const int HASH_TABLE_SIZE = 70;  // Size of spline surface hash table
@@ -223,7 +223,7 @@ view_parametrized_mesh(const Eigen::MatrixXd& V,
   polyscope::init();
   polyscope::registerSurfaceMesh("surface", V, F);
   polyscope::getSurfaceMesh("surface")->addVertexParameterizationQuantity(
-    "parameterization", uv);
+      "parameterization", uv);
   polyscope::show();
 }
 
@@ -237,8 +237,8 @@ screenshot_mesh(const Eigen::MatrixXd& V,
 {
   polyscope::init();
   polyscope::registerSurfaceMesh("surface", V, F)
-    ->setEdgeWidth(1)
-    ->setSurfaceColor(glm::vec3(0.670, 0.673, 0.292));
+      ->setEdgeWidth(1)
+      ->setSurfaceColor(glm::vec3(0.670, 0.673, 0.292));
   // polyscope::options::groundPlaneMode =
   // polyscope::GroundPlaneMode::ShadowOnly;
   glm::vec3 glm_camera_position = { camera_position[0],
@@ -474,9 +474,9 @@ project_vector_to_plane(const Eigen::Matrix<Scalar, dimension, 1>& vector,
                         const Eigen::Matrix<Scalar, dimension, 1>& plane_normal)
 {
   Scalar vector_normal_component =
-    dot_product<double, dimension>(vector, plane_normal);
+      dot_product<double, dimension>(vector, plane_normal);
   Scalar normal_length_sq =
-    dot_product<double, dimension>(plane_normal, plane_normal);
+      dot_product<double, dimension>(plane_normal, plane_normal);
 
   // Do nothing for the zero plane normal
   if (normal_length_sq == Scalar(0.0))
@@ -605,7 +605,7 @@ index_vector_complement(const std::vector<Index>& index_vector,
   // Build index boolean array
   std::vector<bool> boolean_array;
   convert_index_vector_to_boolean_array(
-    index_vector, num_indices, boolean_array);
+      index_vector, num_indices, boolean_array);
 
   // Build complement
   complement_vector.clear();
@@ -648,7 +648,7 @@ remove_vector_values(const std::vector<Index>& indices_to_remove,
   // Remove faces adjacent to cones
   std::vector<Index> indices_to_keep;
   index_vector_complement<Index>(
-    indices_to_remove, vec.size(), indices_to_keep);
+      indices_to_remove, vec.size(), indices_to_keep);
   subvec.resize(indices_to_keep.size());
   for (size_t i = 0; i < indices_to_keep.size(); ++i) {
     subvec[i] = vec[indices_to_keep[i]];
@@ -674,7 +674,7 @@ copy_to_spatial_vector(const std::vector<T>& input_vector,
   output_vector.resize(input_vector.size());
   for (size_t i = 0; i < input_vector.size(); ++i) {
     output_vector[i] << input_vector[i][0], input_vector[i][1],
-      input_vector[i][2];
+        input_vector[i][2];
   }
 }
 
@@ -943,7 +943,7 @@ is_manifold(const Eigen::MatrixXi& F)
   // Check vertex manifold condition
   Eigen::VectorXi invalid_vertices;
   if (!igl::is_vertex_manifold(F, invalid_vertices)) {
-    spdlog::error("Mesh is not edge manifold");
+    spdlog::error("Mesh is not vertex manifold");
     return false;
   }
 
@@ -1037,9 +1037,9 @@ angle_from_length(double edge_length_opposite_corner,
 template<int dimension>
 double
 angle_from_positions(
-  const Eigen::Matrix<double, 1, dimension>& angle_corner_position,
-  const Eigen::Matrix<double, 1, dimension>& second_corner_position,
-  const Eigen::Matrix<double, 1, dimension>& third_corner_position)
+    const Eigen::Matrix<double, 1, dimension>& angle_corner_position,
+    const Eigen::Matrix<double, 1, dimension>& second_corner_position,
+    const Eigen::Matrix<double, 1, dimension>& third_corner_position)
 {
   double l0 = (third_corner_position - second_corner_position).norm();
   double l1 = (second_corner_position - angle_corner_position).norm();

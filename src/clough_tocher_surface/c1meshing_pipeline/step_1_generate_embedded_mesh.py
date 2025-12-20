@@ -137,11 +137,13 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
                 # print(surface_tet_face[i][j])
                 surface_tet_faces[i][j] = unsliced_to_sliced_v_map[surface_tet_faces[i][j]]
         surface_tet_faces = np.array(surface_tet_faces)
-        # print(surface_tet_faces)
+        print("!!!!!!!", surface_tet_faces.shape)
 
     para_in_v, para_in_f, im, para_in_v_to_tet_v_map = igl.remove_unreferenced(
         vertices, surface_tet_faces
     )
+    print("??????", para_in_f.shape)
+
     assert (igl.bfs_orient(para_in_f)[0] == para_in_f).all()
 
     igl.write_obj(workspace_path + "embedded_surface.obj",
@@ -207,6 +209,8 @@ def read_and_generate_embedded_surface(workspace_path, input, slice=False, debug
         "[{}] ".format(datetime.datetime.now()),
         "computed tet->surface and surface->tet mapping.",
     )
+
+    # print(surface_adj_tet)
 
     return tets, vertices, winding_numbers, tet_surface_origin, surface_adj_tet, para_in_v, para_in_f, para_in_v_to_tet_v_map, surface_tet_faces, surface_vertices
 
