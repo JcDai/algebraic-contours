@@ -291,15 +291,15 @@ CloughTocherOptimizer::checkpoint_control_points(
     const std::vector<Eigen::Vector3d>& bezier_control_points,
     int iter)
 {
-  polyscope::removeAllStructures();
+  // polyscope::removeAllStructures();
   std::filesystem::create_directory(output_dir);
   set_bezier_control_points(ct_surface, bezier_control_points);
   write_mesh(ct_surface,
              bezier_control_points,
              join_path(output_dir, "iter_" + std::to_string(iter)));
-  ct_surface.add_surface_to_viewer({ 0.1, 0.1, 0.8 }, 3, "laplace_beltrami");
-  polyscope::screenshot(
-      join_path(output_dir, "iter_" + std::to_string(iter) + ".png"));
+  // ct_surface.add_surface_to_viewer({ 0.1, 0.1, 0.8 }, 3, "laplace_beltrami");
+  // polyscope::screenshot(
+  //     join_path(output_dir, "iter_" + std::to_string(iter) + ".png"));
 }
 
 std::tuple<double, Eigen::VectorXd, Eigen::SparseMatrix<double>>

@@ -10,20 +10,20 @@
 // Compute the surface mapping with normalized domain
 void
 compute_normalized_surface_mapping(
-  const Matrix6x3r& surface_mapping_coeffs,
-  const ConvexPolygon& domain,
-  Matrix6x3r& normalized_surface_mapping_coeffs)
+    const Matrix6x3r& surface_mapping_coeffs,
+    const ConvexPolygon& domain,
+    Matrix6x3r& normalized_surface_mapping_coeffs)
 {
   // Normalize the surface coefficients
   MatrixXr domain_vertices = domain.get_vertices();
   Eigen::Matrix<double, 6, 6> change_of_basis_matrix;
   generate_quadratic_coordinate_domain_triangle_normalization_matrix<double>(
-    domain_vertices.row(0),
-    domain_vertices.row(1),
-    domain_vertices.row(2),
-    change_of_basis_matrix);
+      domain_vertices.row(0),
+      domain_vertices.row(1),
+      domain_vertices.row(2),
+      change_of_basis_matrix);
   normalized_surface_mapping_coeffs =
-    change_of_basis_matrix * surface_mapping_coeffs;
+      change_of_basis_matrix * surface_mapping_coeffs;
 }
 
 void
@@ -53,16 +53,16 @@ QuadraticSplineSurfacePatch::QuadraticSplineSurfacePatch()
 }
 
 QuadraticSplineSurfacePatch::QuadraticSplineSurfacePatch(
-  const Matrix6x3r& surface_mapping_coeffs,
-  const ConvexPolygon& domain)
-  : m_surface_mapping_coeffs(surface_mapping_coeffs)
-  , m_domain(domain)
+    const Matrix6x3r& surface_mapping_coeffs,
+    const ConvexPolygon& domain)
+    : m_surface_mapping_coeffs(surface_mapping_coeffs)
+    , m_domain(domain)
 {
   // Compute derived mapping information from the surface mapping and domain
   generate_quadratic_surface_normal_coeffs(surface_mapping_coeffs,
                                            m_normal_mapping_coeffs);
   compute_normalized_surface_mapping(
-    surface_mapping_coeffs, domain, m_normalized_surface_mapping_coeffs);
+      surface_mapping_coeffs, domain, m_normalized_surface_mapping_coeffs);
   compute_bezier_points(m_normalized_surface_mapping_coeffs, m_bezier_points);
   compute_point_cloud_bounding_box(m_bezier_points, m_min_point, m_max_point);
 
@@ -126,7 +126,7 @@ QuadraticSplineSurfacePatch::get_domain() const
 
 void
 QuadraticSplineSurfacePatch::get_patch_boundaries(
-  std::array<RationalFunction<4, 3>, 3>& patch_boundaries) const
+    std::array<RationalFunction<4, 3>, 3>& patch_boundaries) const
 {
   // Get parametrized domain boundaries
   std::array<LineSegment, 3> domain_boundaries;
@@ -142,7 +142,7 @@ QuadraticSplineSurfacePatch::get_patch_boundaries(
 
 void
 QuadraticSplineSurfacePatch::normalize_patch_domain(
-  QuadraticSplineSurfacePatch& normalized_spline_surface_patch) const
+    QuadraticSplineSurfacePatch& normalized_spline_surface_patch) const
 {
   // Generate the standard u + v <= 1 triangle
   Matrix3x2r normalized_domain_vertices;
@@ -151,14 +151,14 @@ QuadraticSplineSurfacePatch::normalize_patch_domain(
 
   // Build the normalized surface patch
   Matrix6x3r const& normalized_surface_mapping_coeffs =
-    get_normalized_surface_mapping();
+      get_normalized_surface_mapping();
   normalized_spline_surface_patch = QuadraticSplineSurfacePatch(
-    normalized_surface_mapping_coeffs, normalized_domain);
+      normalized_surface_mapping_coeffs, normalized_domain);
 }
 
 PlanarPoint
 QuadraticSplineSurfacePatch::denormalize_domain_point(
-  PlanarPoint& normalized_domain_point) const
+    PlanarPoint& normalized_domain_point) const
 {
   // Get domain triangle vertices
   ConvexPolygon const& domain = get_domain();
@@ -184,22 +184,22 @@ QuadraticSplineSurfacePatch::evaluate(const PlanarPoint& domain_point,
                                       SpatialVector& surface_point) const
 {
   evaluate_quadratic_mapping<3>(
-    m_surface_mapping_coeffs, domain_point, surface_point);
+      m_surface_mapping_coeffs, domain_point, surface_point);
 }
 
 void
 QuadraticSplineSurfacePatch::evaluate_normal(
-  const PlanarPoint& domain_point,
-  SpatialVector& surface_normal) const
+    const PlanarPoint& domain_point,
+    SpatialVector& surface_normal) const
 {
   evaluate_quadratic_mapping<3>(
-    m_normal_mapping_coeffs, domain_point, surface_normal);
+      m_normal_mapping_coeffs, domain_point, surface_normal);
 }
 
 void
 QuadraticSplineSurfacePatch::sample(
-  size_t sampling_density,
-  std::vector<SpatialVector>& spline_surface_patch_points) const
+    size_t sampling_density,
+    std::vector<SpatialVector>& spline_surface_patch_points) const
 {
   // Sample the convex domain
   std::vector<PlanarPoint> domain_points;
@@ -236,20 +236,21 @@ QuadraticSplineSurfacePatch::triangulate(size_t num_refinements,
   }
 }
 
-void
-QuadraticSplineSurfacePatch::add_patch_to_viewer(std::string patch_name) const
-{
-  // Generate mesh discretization
-  int num_refinements = 2;
-  Eigen::MatrixXd V;
-  Eigen::MatrixXi F;
-  Eigen::MatrixXd N;
-  triangulate(num_refinements, V, F, N);
+// void
+// QuadraticSplineSurfacePatch::add_patch_to_viewer(std::string patch_name)
+// const
+// {
+//   // Generate mesh discretization
+//   int num_refinements = 2;
+//   Eigen::MatrixXd V;
+//   Eigen::MatrixXi F;
+//   Eigen::MatrixXd N;
+//   triangulate(num_refinements, V, F, N);
 
-  // Add patch mesh
-  polyscope::init();
-  polyscope::registerSurfaceMesh(patch_name, V, F);
-}
+//   // Add patch mesh
+//   polyscope::init();
+//   polyscope::registerSurfaceMesh(patch_name, V, F);
+// }
 
 std::ostream&
 operator<<(std::ostream& out,
@@ -327,7 +328,7 @@ QuadraticSplineSurfacePatch::formatted_patch() const
 {
   std::stringstream spline_surface_patch_string;
   spline_surface_patch_string
-    << formatted_bivariate_quadratic_mapping<3>(m_surface_mapping_coeffs, 16);
+      << formatted_bivariate_quadratic_mapping<3>(m_surface_mapping_coeffs, 16);
 
   return spline_surface_patch_string.str();
 }

@@ -16,10 +16,10 @@
 /// domain
 void
 convert_diverging_function_to_colormap_function(
-  const VectorXr& diverging_function,
-  double range,
-  double center,
-  VectorXr& colormap_function);
+    const VectorXr& diverging_function,
+    double range,
+    double center,
+    VectorXr& colormap_function);
 
 /// Given a scalar function, linearly map the range [range_min, range_max] to
 /// the
@@ -63,20 +63,21 @@ generate_binary_colormap(const VectorXr& colormap_function,
 /// @param[out] colormap: RGB matrix of color values
 void
 generate_smooth_diverging_colormap(
-  const VectorXr& colormap_function,
-  const Eigen::Matrix<double, 3, 1>& below_color,
-  const Eigen::Matrix<double, 3, 1>& above_color,
-  int smoothness,
-  MatrixXr& colormap);
+    const VectorXr& colormap_function,
+    const Eigen::Matrix<double, 3, 1>& below_color,
+    const Eigen::Matrix<double, 3, 1>& above_color,
+    int smoothness,
+    MatrixXr& colormap);
 
-/// Given a vector of category labels, generate a colormap that assigns a random
-/// color to each label.
-///
-/// @param[in] category_labels: labels for discrete categories
-/// @param[out] colormap: RGB matrix of color values
-void
-generate_random_category_colormap(const std::vector<int>& category_labels,
-                                  MatrixXr& colormap);
+// /// Given a vector of category labels, generate a colormap that assigns a
+// random
+// /// color to each label.
+// ///
+// /// @param[in] category_labels: labels for discrete categories
+// /// @param[out] colormap: RGB matrix of color values
+// void
+// generate_random_category_colormap(const std::vector<int>& category_labels,
+//                                   MatrixXr& colormap);
 
 /// Given a colormap function with range [0,1], generate a colormap that
 /// continuously blends from one color to another.
@@ -91,5 +92,5 @@ generate_interpolating_colormap(const VectorXr& colormap_function,
                                 const Eigen::Matrix<double, 3, 1>& above_color,
                                 MatrixXr& colormap);
 
-Eigen::Matrix<double, 3, 1>
-generate_random_color();
+// Eigen::Matrix<double, 3, 1>
+// generate_random_color();

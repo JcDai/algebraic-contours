@@ -6,11 +6,11 @@
 #include "PS12_patch_coeffs.h"
 #include "PS12tri_bounds_coeffs.h"
 #include "common.h"
-#include "quadratic_spline_surface.h"
 #include "igl/per_vertex_normals.h"
 #include "line_segment.h"
 #include "polynomial_function.h"
 #include "position_data.h"
+#include "quadratic_spline_surface.h"
 #include "rational_function.h"
 
 /// \file twelve_split_spline.h
@@ -44,15 +44,15 @@ public:
   /// @param[out] energy_hessian_inverse: inverse of the hessian for the energy
   /// computation
   TwelveSplitSplineSurface(
-    const Eigen::MatrixXd& V,
-    const AffineManifold& affine_manifold,
-    const OptimizationParameters& optimization_params,
-    std::vector<std::vector<int>>& face_to_patch_indices,
-    std::vector<int>& patch_to_face_indices,
-    Eigen::SparseMatrix<double>& fit_matrix,
-    Eigen::SparseMatrix<double>& energy_hessian,
-    Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
-      energy_hessian_inverse);
+      const Eigen::MatrixXd& V,
+      const AffineManifold& affine_manifold,
+      const OptimizationParameters& optimization_params,
+      std::vector<std::vector<int>>& face_to_patch_indices,
+      std::vector<int>& patch_to_face_indices,
+      Eigen::SparseMatrix<double>& fit_matrix,
+      Eigen::SparseMatrix<double>& energy_hessian,
+      Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
+          energy_hessian_inverse);
 
   /// Constructor for the spline directly from position data.
   ///
@@ -66,11 +66,11 @@ public:
   /// @param[out] patch_to_face_indices: map from patches to the corresponding
   /// mesh face
   TwelveSplitSplineSurface(
-    const std::vector<std::array<TriangleCornerFunctionData, 3>>& corner_data,
-    const std::vector<std::array<TriangleMidpointFunctionData, 3>>&
-      midpoint_data,
-    std::vector<std::vector<int>>& face_to_patch_indices,
-    std::vector<int>& patch_to_face_indices);
+      const std::vector<std::array<TriangleCornerFunctionData, 3>>& corner_data,
+      const std::vector<std::array<TriangleMidpointFunctionData, 3>>&
+          midpoint_data,
+      std::vector<std::vector<int>>& face_to_patch_indices,
+      std::vector<int>& patch_to_face_indices);
 
   /// Update the spline surface vertex positions for the fit
   ///
@@ -79,10 +79,10 @@ public:
   /// @param[out] energy_hessian_inverse: inverse of the hessian for the energy
   /// computation
   void update_positions(
-    const Eigen::MatrixXd& V,
-    const Eigen::SparseMatrix<double>& fit_matrix,
-    const Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
-      energy_hessian_inverse);
+      const Eigen::MatrixXd& V,
+      const Eigen::SparseMatrix<double>& fit_matrix,
+      const Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
+          energy_hessian_inverse);
 
   /// Get the underlying affine manifold for the spline
   ///
@@ -92,27 +92,27 @@ public:
     return m_affine_manifold;
   }
 
-  /// Add the position data for the surface to the viewer
-  void add_position_data_to_viewer() const;
+  // /// Add the position data for the surface to the viewer
+  // void add_position_data_to_viewer() const;
 
   /// Clear the surface data.
   void clear();
 
-  /// View the surface
-  ///
-  /// @param[in] color: color for the surface in the viewer
-  /// @param[in] num_subdivisions: number of subdivisions for the surface
-  virtual void view(Eigen::Matrix<double, 3, 1> color = SKY_BLUE,
-                    int num_subdivisions = DISCRETIZATION_LEVEL) const;
+  // /// View the surface
+  // ///
+  // /// @param[in] color: color for the surface in the viewer
+  // /// @param[in] num_subdivisions: number of subdivisions for the surface
+  // virtual void view(Eigen::Matrix<double, 3, 1> color = SKY_BLUE,
+  //                   int num_subdivisions = DISCRETIZATION_LEVEL) const;
 
 private:
   void init_twelve_split_patches(
-    const std::vector<std::array<TriangleCornerFunctionData, 3>>& corner_data,
-    const std::vector<std::array<TriangleMidpointFunctionData, 3>>&
-      midpoint_data,
-    const std::vector<std::array<bool, 3>>& is_cone_corner,
-    std::vector<std::vector<int>>& face_to_patch_indices,
-    std::vector<int>& patch_to_face_indices);
+      const std::vector<std::array<TriangleCornerFunctionData, 3>>& corner_data,
+      const std::vector<std::array<TriangleMidpointFunctionData, 3>>&
+          midpoint_data,
+      const std::vector<std::array<bool, 3>>& is_cone_corner,
+      std::vector<std::vector<int>>& face_to_patch_indices,
+      std::vector<int>& patch_to_face_indices);
 
   void generate_face_normals(const Eigen::MatrixXd& V,
                              const AffineManifold& affine_manifold,
@@ -129,7 +129,8 @@ private:
 /// @param[out] patch_boundaries: twelve patch domain boundary coefficients
 void
 generate_twelve_split_spline_patch_patch_boundaries(
-  std::array<std::array<Eigen::Matrix<double, 3, 1>, 3>, 12>& patch_boundaries);
+    std::array<std::array<Eigen::Matrix<double, 3, 1>, 3>, 12>&
+        patch_boundaries);
 
 /// Generate a map from patches to corners of the face they correspond to, or
 /// -1 for interior patches, and the vertex of the patch at the corner.
@@ -138,7 +139,7 @@ generate_twelve_split_spline_patch_patch_boundaries(
 /// for each patch
 void
 generate_twelve_split_spline_patch_patch_to_corner_map(
-  std::array<std::pair<int, int>, 12>& patch_to_corner_map);
+    std::array<std::pair<int, int>, 12>& patch_to_corner_map);
 
 /// Generate areas for the twelve split patches in the same order as the
 /// patch surface mappings for a given domain triangle.
@@ -159,7 +160,7 @@ generate_twelve_split_domain_areas(const PlanarPoint& v0,
 template<typename Scalar>
 void
 generate_twelve_split_data_to_monomial_matrices(
-  std::array<Eigen::Matrix<Scalar, 6, 12>, 12>& coefficient_matrices)
+    std::array<Eigen::Matrix<Scalar, 6, 12>, 12>& coefficient_matrices)
 {
   double patch_coeffs[12][6][12];
   PS12_patch_coeffs(patch_coeffs);
@@ -179,10 +180,9 @@ generate_twelve_split_data_to_monomial_matrices(
 /// are boundaries
 void
 compute_twelve_split_spline_patch_boundary_edges(
-  const Eigen::MatrixXi& F,
-  const std::vector<std::vector<int>>& face_to_patch_indices,
-  std::vector<std::pair<int, int>>& patch_boundary_edges);
-
+    const Eigen::MatrixXi& F,
+    const std::vector<std::vector<int>>& face_to_patch_indices,
+    std::vector<std::pair<int, int>>& patch_boundary_edges);
 
 /// Combine structured position data into a single matrix
 ///
@@ -193,11 +193,11 @@ compute_twelve_split_spline_patch_boundary_edges(
 template<typename Scalar>
 void
 generate_twelve_split_data_matrix(
-  const std::array<TriangleCornerData<Eigen::Matrix<Scalar, 1, 3>>, 3>&
-    corner_data,
-  const std::array<TriangleMidpointData<Eigen::Matrix<Scalar, 1, 3>>, 3>&
-    midpoint_data,
-  Eigen::Matrix<Scalar, 12, 3>& twelve_split_data)
+    const std::array<TriangleCornerData<Eigen::Matrix<Scalar, 1, 3>>, 3>&
+        corner_data,
+    const std::array<TriangleMidpointData<Eigen::Matrix<Scalar, 1, 3>>, 3>&
+        midpoint_data,
+    Eigen::Matrix<Scalar, 12, 3>& twelve_split_data)
 {
   // Vertex positions
   twelve_split_data.row(0) = corner_data[0].function_value;
@@ -228,11 +228,11 @@ generate_twelve_split_data_matrix(
 template<typename Scalar>
 void
 generate_twelve_split_spline_patch_surface_mapping(
-  const std::array<TriangleCornerData<Eigen::Matrix<Scalar, 1, 3>>, 3>&
-    corner_data,
-  const std::array<TriangleMidpointData<Eigen::Matrix<Scalar, 1, 3>>, 3>&
-    midpoint_data,
-  std::array<Eigen::Matrix<Scalar, 6, 3>, 12>& surface_mappings)
+    const std::array<TriangleCornerData<Eigen::Matrix<Scalar, 1, 3>>, 3>&
+        corner_data,
+    const std::array<TriangleMidpointData<Eigen::Matrix<Scalar, 1, 3>>, 3>&
+        midpoint_data,
+    std::array<Eigen::Matrix<Scalar, 6, 3>, 12>& surface_mappings)
 {
   // Generate matrices to go from the position data to surface coefficients
   std::array<Eigen::Matrix<Scalar, 6, 12>, 12> coefficient_matrices;
@@ -241,7 +241,7 @@ generate_twelve_split_spline_patch_surface_mapping(
   // Combine position data into a matrix
   Eigen::Matrix<Scalar, 12, 3> twelve_split_data;
   generate_twelve_split_data_matrix<Scalar>(
-    corner_data, midpoint_data, twelve_split_data);
+      corner_data, midpoint_data, twelve_split_data);
 
   // Build the surface mappings
   for (size_t i = 0; i < 12; ++i) {

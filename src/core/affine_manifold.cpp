@@ -3,9 +3,9 @@
 
 #include "affine_manifold.h"
 
-#include "polyscope/point_cloud.h"
-#include "polyscope/polyscope.h"
-#include "polyscope/surface_mesh.h"
+// #include "polyscope/point_cloud.h"
+// #include "polyscope/polyscope.h"
+// #include "polyscope/surface_mesh.h"
 
 #include "vertex_circulator.h"
 
@@ -374,62 +374,63 @@ AffineManifold::get_global_uv() const
   return m_global_uv;
 }
 
-void
-AffineManifold::add_to_viewer(const MatrixXr& V,
-                              Eigen::Matrix<double, 3, 1> color) const
-{
-  polyscope::init();
+// void
+// AffineManifold::add_to_viewer(const MatrixXr& V,
+//                               Eigen::Matrix<double, 3, 1> color) const
+// {
+//   polyscope::init();
 
-  // Add manifold
-  Eigen::MatrixXi const F = get_faces();
-  polyscope::registerSurfaceMesh("cone_manifold", V, F);
-  polyscope::getSurfaceMesh("cone_manifold")
-      ->setEdgeWidth(1)
-      ->setSurfaceColor(glm::vec3(color[0], color[1], color[2]));
+//   // Add manifold
+//   Eigen::MatrixXi const F = get_faces();
+//   polyscope::registerSurfaceMesh("cone_manifold", V, F);
+//   polyscope::getSurfaceMesh("cone_manifold")
+//       ->setEdgeWidth(1)
+//       ->setSurfaceColor(glm::vec3(color[0], color[1], color[2]));
 
-  // Add cone points
-  MatrixXr cone_points;
-  compute_cone_points(V, cone_points);
-  polyscope::registerPointCloud("cones", cone_points);
-  polyscope::getPointCloud("cones")->setPointColor(glm::vec3(0.5, 0.0, 0.0));
-}
+//   // Add cone points
+//   MatrixXr cone_points;
+//   compute_cone_points(V, cone_points);
+//   polyscope::registerPointCloud("cones", cone_points);
+//   polyscope::getPointCloud("cones")->setPointColor(glm::vec3(0.5, 0.0, 0.0));
+// }
 
-void
-AffineManifold::view(const MatrixXr& V) const
-{
-  add_to_viewer(V);
-  polyscope::show();
-}
+// void
+// AffineManifold::view(const MatrixXr& V) const
+// {
+//   add_to_viewer(V);
+//   polyscope::show();
+// }
 
-void
-AffineManifold::screenshot(const std::string& filename,
-                           const MatrixXr& V,
-                           SpatialVector camera_position,
-                           SpatialVector camera_target,
-                           bool use_orthographic) const
-{
-  // Add the contour network to the surface
-  add_to_viewer(V);
+// void
+// AffineManifold::screenshot(const std::string& filename,
+//                            const MatrixXr& V,
+//                            SpatialVector camera_position,
+//                            SpatialVector camera_target,
+//                            bool use_orthographic) const
+// {
+//   // Add the contour network to the surface
+//   add_to_viewer(V);
 
-  // Build the cameras for the viewer
-  glm::vec3 glm_camera_position = { camera_position[0],
-                                    camera_position[1],
-                                    camera_position[2] };
-  glm::vec3 glm_camera_target = { camera_target[0],
-                                  camera_target[1],
-                                  camera_target[2] };
+//   // Build the cameras for the viewer
+//   glm::vec3 glm_camera_position = { camera_position[0],
+//                                     camera_position[1],
+//                                     camera_position[2] };
+//   glm::vec3 glm_camera_target = { camera_target[0],
+//                                   camera_target[1],
+//                                   camera_target[2] };
 
-  // Set up the cameras
-  polyscope::view::lookAt(glm_camera_position, glm_camera_target);
-  if (use_orthographic) {
-    polyscope::view::projectionMode = polyscope::ProjectionMode::Orthographic;
-  }
+//   // Set up the cameras
+//   polyscope::view::lookAt(glm_camera_position, glm_camera_target);
+//   if (use_orthographic) {
+//     polyscope::view::projectionMode =
+//     polyscope::ProjectionMode::Orthographic;
+//   }
 
-  // Take the screenshot
-  polyscope::screenshot(filename);
-  SPDLOG_INFO("Screenshot saved to {}", filename);
-  polyscope::removeAllStructures();
-}
+//   // Take the screenshot
+//   polyscope::screenshot(filename);
+//   SPDLOG_INFO("Screenshot saved to {}", filename);
+//   polyscope::removeAllStructures();
+// }
 
 void
 AffineManifold::clear()

@@ -430,41 +430,41 @@ CloughTocherSurface::discretize_patch_boundaries(
   }
 }
 
-void
-CloughTocherSurface::add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color,
-                                           int num_subdivisions,
-                                           std::string meshname) const
-{
-  // Generate mesh discretization
-  Eigen::MatrixXd V;
-  Eigen::MatrixXi F;
-  discretize(num_subdivisions, V, F);
+// void
+// CloughTocherSurface::add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color,
+//                                            int num_subdivisions,
+//                                            std::string meshname) const
+// {
+//   // Generate mesh discretization
+//   Eigen::MatrixXd V;
+//   Eigen::MatrixXi F;
+//   discretize(num_subdivisions, V, F);
 
-  // Add surface mesh
-  polyscope::init();
-  polyscope::registerSurfaceMesh(meshname, V, F)->setEdgeWidth(0);
-  polyscope::getSurfaceMesh(meshname)->setSurfaceColor(
-      glm::vec3(color[0], color[1], color[2]));
+//   // Add surface mesh
+//   polyscope::init();
+//   polyscope::registerSurfaceMesh(meshname, V, F)->setEdgeWidth(0);
+//   polyscope::getSurfaceMesh(meshname)->setSurfaceColor(
+//       glm::vec3(color[0], color[1], color[2]));
 
-  // Discretize patch boundaries
-  std::vector<SpatialVector> boundary_points;
-  std::vector<std::vector<int>> boundary_polylines;
-  discretize_patch_boundaries(
-      num_subdivisions, boundary_points, boundary_polylines, true);
+//   // Discretize patch boundaries
+//   std::vector<SpatialVector> boundary_points;
+//   std::vector<std::vector<int>> boundary_polylines;
+//   discretize_patch_boundaries(
+//       num_subdivisions, boundary_points, boundary_polylines, true);
 
-  // View contour curve network
-  MatrixXr boundary_points_mat =
-      convert_nested_vector_to_matrix(boundary_points);
-  std::vector<std::array<int, 2>> boundary_edges =
-      convert_polylines_to_edges(boundary_polylines);
-  polyscope::registerCurveNetwork(
-      "patch_boundaries", boundary_points_mat, boundary_edges);
-  polyscope::getCurveNetwork("patch_boundaries")
-      ->setColor(glm::vec3(0.670, 0.673, 0.292));
-  polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
-  polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
-  polyscope::getCurveNetwork("patch_boundaries")->setEnabled(false);
-}
+//   // View contour curve network
+//   MatrixXr boundary_points_mat =
+//       convert_nested_vector_to_matrix(boundary_points);
+//   std::vector<std::array<int, 2>> boundary_edges =
+//       convert_polylines_to_edges(boundary_polylines);
+//   polyscope::registerCurveNetwork(
+//       "patch_boundaries", boundary_points_mat, boundary_edges);
+//   polyscope::getCurveNetwork("patch_boundaries")
+//       ->setColor(glm::vec3(0.670, 0.673, 0.292));
+//   polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
+//   polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
+//   polyscope::getCurveNetwork("patch_boundaries")->setEnabled(false);
+// }
 
 // deprecated
 void

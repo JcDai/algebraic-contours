@@ -4,7 +4,7 @@
 #include "quadratic_spline_surface.h"
 #include "convex_polygon.h"
 #include "polynomial_function.h"
-#include "polyscope/point_cloud.h"
+// #include "polyscope/point_cloud.h"
 #include "twelve_split_spline.h"
 #include <igl/per_face_normals.h>
 #include <igl/per_vertex_normals.h>
@@ -23,7 +23,7 @@ QuadraticSplineSurface::QuadraticSplineSurface()
 }
 
 QuadraticSplineSurface::QuadraticSplineSurface(
-  std::vector<QuadraticSplineSurfacePatch>& patches)
+    std::vector<QuadraticSplineSurfacePatch>& patches)
 {
   clear();
   m_patches = patches;
@@ -32,7 +32,7 @@ QuadraticSplineSurface::QuadraticSplineSurface(
 
 QuadraticSplineSurface
 QuadraticSplineSurface::subsurface(
-  const std::vector<PatchIndex>& patch_indices) const
+    const std::vector<PatchIndex>& patch_indices) const
 {
   std::vector<QuadraticSplineSurfacePatch> sub_patches;
   sub_patches.clear();
@@ -63,10 +63,10 @@ QuadraticSplineSurface::triangulate_patch(const PatchIndex& patch_index,
 
 void
 QuadraticSplineSurface::discretize(
-  const SurfaceDiscretizationParameters& surface_disc_params,
-  Eigen::MatrixXd& V,
-  Eigen::MatrixXi& F,
-  Eigen::MatrixXd& N) const
+    const SurfaceDiscretizationParameters& surface_disc_params,
+    Eigen::MatrixXd& V,
+    Eigen::MatrixXi& F,
+    Eigen::MatrixXd& N) const
 {
   V.resize(0, 0);
   F.resize(0, 0);
@@ -94,12 +94,13 @@ QuadraticSplineSurface::discretize(
     Eigen::MatrixXd N_patch;
     triangulate_patch(patch_index, num_subdivisions, V_patch, F_patch, N_patch);
     V.block(num_patch_vertices * patch_index, 0, num_patch_vertices, V.cols()) =
-      V_patch;
+        V_patch;
     F.block(num_patch_faces * patch_index, 0, num_patch_faces, F.cols()) =
-      F_patch + Eigen::MatrixXi::Constant(
-                  num_patch_faces, F.cols(), num_patch_vertices * patch_index);
+        F_patch + Eigen::MatrixXi::Constant(num_patch_faces,
+                                            F.cols(),
+                                            num_patch_vertices * patch_index);
     N.block(num_patch_vertices * patch_index, 0, num_patch_vertices, N.cols()) =
-      N_patch;
+        N_patch;
   }
 
   spdlog::info("{} surface vertices", V.rows());
@@ -112,7 +113,7 @@ std::tuple<Eigen::MatrixXd, // V
            Eigen::MatrixXd  // N
            >
 QuadraticSplineSurface::discretize(
-  const SurfaceDiscretizationParameters& surface_disc_params) const
+    const SurfaceDiscretizationParameters& surface_disc_params) const
 {
   Eigen::MatrixXd V;
   Eigen::MatrixXi F;
@@ -123,8 +124,8 @@ QuadraticSplineSurface::discretize(
 
 void
 QuadraticSplineSurface::discretize_patch_boundaries(
-  std::vector<SpatialVector>& points,
-  std::vector<std::vector<int>>& polylines) const
+    std::vector<SpatialVector>& points,
+    std::vector<std::vector<int>>& polylines) const
 {
   points.clear();
   polylines.clear();
@@ -133,7 +134,7 @@ QuadraticSplineSurface::discretize_patch_boundaries(
     std::array<LineSegment, 3> patch_boundaries;
     auto& spline_surface_patch = get_patch(patch_index);
     spline_surface_patch.get_domain().parametrize_patch_boundaries(
-      patch_boundaries);
+        patch_boundaries);
     for (size_t k = 0; k < patch_boundaries.size(); ++k) {
       // Get points on the boundary curve
       std::vector<PlanarPoint> parameter_points_k;
@@ -170,77 +171,78 @@ QuadraticSplineSurface::save_obj(const std::string& filename) const
   igl::writeOBJ(filename, V, F, N, F, TC, FTC);
 }
 
-void
-QuadraticSplineSurface::add_surface_to_viewer(Eigen::Matrix<double, 3, 1> color,
-                                              int num_subdivisions) const
-{
-  // Generate mesh discretization
-  Eigen::MatrixXd V;
-  Eigen::MatrixXi F;
-  Eigen::MatrixXd N;
-  SurfaceDiscretizationParameters surface_disc_params;
-  surface_disc_params.num_subdivisions = num_subdivisions;
-  discretize(surface_disc_params, V, F, N);
+// void
+// QuadraticSplineSurface::add_surface_to_viewer(Eigen::Matrix<double, 3, 1>
+// color,
+//                                               int num_subdivisions) const
+// {
+//   // Generate mesh discretization
+//   Eigen::MatrixXd V;
+//   Eigen::MatrixXi F;
+//   Eigen::MatrixXd N;
+//   SurfaceDiscretizationParameters surface_disc_params;
+//   surface_disc_params.num_subdivisions = num_subdivisions;
+//   discretize(surface_disc_params, V, F, N);
 
-  // Add surface mesh
-  polyscope::init();
-  polyscope::registerSurfaceMesh("surface", V, F)
-    ->setEdgeWidth(0);
-  polyscope::getSurfaceMesh("surface")->setSurfaceColor(
-    glm::vec3(color[0], color[1], color[2]));
+//   // Add surface mesh
+//   polyscope::init();
+//   polyscope::registerSurfaceMesh("surface", V, F)->setEdgeWidth(0);
+//   polyscope::getSurfaceMesh("surface")->setSurfaceColor(
+//       glm::vec3(color[0], color[1], color[2]));
 
-  // Discretize patch boundaries
-  std::vector<SpatialVector> boundary_points;
-  std::vector<std::vector<int>> boundary_polylines;
-  discretize_patch_boundaries(boundary_points, boundary_polylines);
+//   // Discretize patch boundaries
+//   std::vector<SpatialVector> boundary_points;
+//   std::vector<std::vector<int>> boundary_polylines;
+//   discretize_patch_boundaries(boundary_points, boundary_polylines);
 
-  // View contour curve network
-  MatrixXr boundary_points_mat =
-    convert_nested_vector_to_matrix(boundary_points);
-  std::vector<std::array<int, 2>> boundary_edges =
-    convert_polylines_to_edges(boundary_polylines);
-  polyscope::registerCurveNetwork(
-    "patch_boundaries", boundary_points_mat, boundary_edges);
-  polyscope::getCurveNetwork("patch_boundaries")
-    ->setColor(glm::vec3(0.670, 0.673, 0.292));
-  polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
-  polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
-  polyscope::getCurveNetwork("patch_boundaries")->setEnabled(false);
-}
+//   // View contour curve network
+//   MatrixXr boundary_points_mat =
+//       convert_nested_vector_to_matrix(boundary_points);
+//   std::vector<std::array<int, 2>> boundary_edges =
+//       convert_polylines_to_edges(boundary_polylines);
+//   polyscope::registerCurveNetwork(
+//       "patch_boundaries", boundary_points_mat, boundary_edges);
+//   polyscope::getCurveNetwork("patch_boundaries")
+//       ->setColor(glm::vec3(0.670, 0.673, 0.292));
+//   polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
+//   polyscope::getCurveNetwork("patch_boundaries")->setRadius(0.0005);
+//   polyscope::getCurveNetwork("patch_boundaries")->setEnabled(false);
+// }
 
-void
-QuadraticSplineSurface::view(Eigen::Matrix<double, 3, 1> color,
-                             int num_subdivisions) const
-{
-  add_surface_to_viewer(color, num_subdivisions);
-  polyscope::show();
-}
+// void
+// QuadraticSplineSurface::view(Eigen::Matrix<double, 3, 1> color,
+//                              int num_subdivisions) const
+// {
+//   add_surface_to_viewer(color, num_subdivisions);
+//   polyscope::show();
+// }
 
-void
-QuadraticSplineSurface::screenshot(const std::string& filename,
-                                   SpatialVector camera_position,
-                                   SpatialVector camera_target,
-                                   bool use_orthographic) const
-{
-  add_surface_to_viewer();
-  //polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::ShadowOnly;
-  glm::vec3 glm_camera_position = { camera_position[0],
-                                    camera_position[1],
-                                    camera_position[2] };
-  glm::vec3 glm_camera_target = { camera_target[0],
-                                  camera_target[1],
-                                  camera_target[2] };
-  polyscope::view::lookAt(glm_camera_position, glm_camera_target);
-  if (use_orthographic) {
-    polyscope::view::projectionMode = polyscope::ProjectionMode::Orthographic;
-  }
-  else {
-    polyscope::view::projectionMode = polyscope::ProjectionMode::Perspective;
-  }
-  polyscope::screenshot(filename);
-  spdlog::info("Screenshot saved to {}", filename);
-  polyscope::removeAllStructures();
-}
+// void
+// QuadraticSplineSurface::screenshot(const std::string& filename,
+//                                    SpatialVector camera_position,
+//                                    SpatialVector camera_target,
+//                                    bool use_orthographic) const
+// {
+//   add_surface_to_viewer();
+//   // polyscope::options::groundPlaneMode =
+//   // polyscope::GroundPlaneMode::ShadowOnly;
+//   glm::vec3 glm_camera_position = { camera_position[0],
+//                                     camera_position[1],
+//                                     camera_position[2] };
+//   glm::vec3 glm_camera_target = { camera_target[0],
+//                                   camera_target[1],
+//                                   camera_target[2] };
+//   polyscope::view::lookAt(glm_camera_position, glm_camera_target);
+//   if (use_orthographic) {
+//     polyscope::view::projectionMode =
+//     polyscope::ProjectionMode::Orthographic;
+//   } else {
+//     polyscope::view::projectionMode = polyscope::ProjectionMode::Perspective;
+//   }
+//   polyscope::screenshot(filename);
+//   spdlog::info("Screenshot saved to {}", filename);
+//   polyscope::removeAllStructures();
+// }
 
 void
 QuadraticSplineSurface::serialize(std::ostream& out) const
@@ -315,7 +317,7 @@ QuadraticSplineSurface::deserialize(std::istream& in)
 
     // Add patch to the spline surface
     m_patches.push_back(
-      QuadraticSplineSurfacePatch(surface_mapping_coeffs, domain));
+        QuadraticSplineSurfacePatch(surface_mapping_coeffs, domain));
   }
 }
 
@@ -400,12 +402,12 @@ QuadraticSplineSurface::compute_patch_hash_tables()
   for (int i = 0; i < num_patch; i++) {
     int left_x = (m_patches[i].get_bbox_x_min() - eps - x_min) / x_interval;
     int right_x =
-      hash_size_x -
-      int((x_max - m_patches[i].get_bbox_x_max() - eps) / x_interval) - 1;
+        hash_size_x -
+        int((x_max - m_patches[i].get_bbox_x_max() - eps) / x_interval) - 1;
     int left_y = (m_patches[i].get_bbox_y_min() - eps - y_min) / y_interval;
     int right_y =
-      hash_size_y -
-      int((y_max - m_patches[i].get_bbox_y_max() - eps) / y_interval) - 1;
+        hash_size_y -
+        int((y_max - m_patches[i].get_bbox_y_max() - eps) / y_interval) - 1;
 
     for (int j = left_x; j <= right_x; j++) {
       for (int k = left_y; k <= right_y; k++) {
@@ -423,7 +425,7 @@ QuadraticSplineSurface::compute_patch_hash_tables()
 // Determine if a patch index is valid
 bool
 QuadraticSplineSurface::is_valid_patch_index(
-  QuadraticSplineSurface::PatchIndex patch_index) const
+    QuadraticSplineSurface::PatchIndex patch_index) const
 {
   if (patch_index >= num_patches())
     return false;

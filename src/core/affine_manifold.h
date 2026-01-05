@@ -341,31 +341,31 @@ public:
   /// them.
   void cut_cone_edges();
 
-  /// Add the cone manifold and its data to the polyscope viewer with name
-  /// 'cone_manifold'
-  ///
-  /// @param[in] V: mesh vertex positions
-  /// @param[in] color: color for the affine manifold in the viewer
-  void add_to_viewer(const MatrixXr& V,
-                     Eigen::Matrix<double, 3, 1> color = GOLD_YELLOW) const;
+  // /// Add the cone manifold and its data to the polyscope viewer with name
+  // /// 'cone_manifold'
+  // ///
+  // /// @param[in] V: mesh vertex positions
+  // /// @param[in] color: color for the affine manifold in the viewer
+  // void add_to_viewer(const MatrixXr& V,
+  //                    Eigen::Matrix<double, 3, 1> color = GOLD_YELLOW) const;
 
-  /// View the cone manifold and its data
-  ///
-  /// @param[in] V: mesh vertex positions
-  void view(const MatrixXr& V) const;
+  // /// View the cone manifold and its data
+  // ///
+  // /// @param[in] V: mesh vertex positions
+  // void view(const MatrixXr& V) const;
 
-  /// Save an image of the cone manifold and its data to file.
-  ///
-  /// @param[in] filename: file to save the screenshot to
-  /// @param[in] V: mesh vertex positions
-  /// @param[in] camera_position: camera position for the screenshot
-  /// @param[in] camera_target: camera target for the screenshot
-  /// @param[in] use_orthographic: use orthographic perspective if true
-  void screenshot(const std::string& filename,
-                  const MatrixXr& V,
-                  SpatialVector camera_position,
-                  SpatialVector camera_target,
-                  bool use_orthographic) const;
+  // /// Save an image of the cone manifold and its data to file.
+  // ///
+  // /// @param[in] filename: file to save the screenshot to
+  // /// @param[in] V: mesh vertex positions
+  // /// @param[in] camera_position: camera position for the screenshot
+  // /// @param[in] camera_target: camera target for the screenshot
+  // /// @param[in] use_orthographic: use orthographic perspective if true
+  // void screenshot(const std::string& filename,
+  //                 const MatrixXr& V,
+  //                 SpatialVector camera_position,
+  //                 SpatialVector camera_target,
+  //                 bool use_orthographic) const;
   // Clear all internal data for a trivial cone manifold
   void clear();
 

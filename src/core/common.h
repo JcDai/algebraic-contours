@@ -7,8 +7,8 @@
 
 #include "autodiff.h"
 
-#include "polyscope/polyscope.h"
-#include "polyscope/surface_mesh.h"
+// #include "polyscope/polyscope.h"
+// #include "polyscope/surface_mesh.h"
 
 #include "spdlog/fmt/ostr.h"
 #include "spdlog/spdlog.h"
@@ -193,69 +193,70 @@ matrix_equal(const MatrixXr& A,
   return true;
 }
 
-// ******
-// Viewer
-// ******
+// // ******
+// // Viewer
+// // ******
 
-/// @brief View a mesh in polyscope
-///
-/// @param[in] V: mesh vertices
-/// @param[in] F: mesh faces
-inline void
-view_mesh(const Eigen::MatrixXd& V, const Eigen::MatrixXi& F)
-{
-  polyscope::init();
-  polyscope::registerSurfaceMesh("surface", V, F);
-  polyscope::show();
-  polyscope::removeAllStructures();
-}
+// /// @brief View a mesh in polyscope
+// ///
+// /// @param[in] V: mesh vertices
+// /// @param[in] F: mesh faces
+// inline void
+// view_mesh(const Eigen::MatrixXd& V, const Eigen::MatrixXi& F)
+// {
+//   polyscope::init();
+//   polyscope::registerSurfaceMesh("surface", V, F);
+//   polyscope::show();
+//   polyscope::removeAllStructures();
+// }
 
-/// @brief View a mesh with uv coordinates in polyscope
-///
-/// @param[in] V: mesh vertices
-/// @param[in] F: mesh faces
-/// @param[in] V: mesh uv coordinates
-inline void
-view_parametrized_mesh(const Eigen::MatrixXd& V,
-                       const Eigen::MatrixXi& F,
-                       const Eigen::MatrixXd& uv)
-{
-  polyscope::init();
-  polyscope::registerSurfaceMesh("surface", V, F);
-  polyscope::getSurfaceMesh("surface")->addVertexParameterizationQuantity(
-      "parameterization", uv);
-  polyscope::show();
-}
+// /// @brief View a mesh with uv coordinates in polyscope
+// ///
+// /// @param[in] V: mesh vertices
+// /// @param[in] F: mesh faces
+// /// @param[in] V: mesh uv coordinates
+// inline void
+// view_parametrized_mesh(const Eigen::MatrixXd& V,
+//                        const Eigen::MatrixXi& F,
+//                        const Eigen::MatrixXd& uv)
+// {
+//   polyscope::init();
+//   polyscope::registerSurfaceMesh("surface", V, F);
+//   polyscope::getSurfaceMesh("surface")->addVertexParameterizationQuantity(
+//       "parameterization", uv);
+//   polyscope::show();
+// }
 
-inline void
-screenshot_mesh(const Eigen::MatrixXd& V,
-                const Eigen::MatrixXi& F,
-                const std::string& filename,
-                SpatialVector camera_position = SpatialVector(0, 0, 0),
-                SpatialVector camera_target = SpatialVector(0, 0, 2),
-                bool use_orthographic = false)
-{
-  polyscope::init();
-  polyscope::registerSurfaceMesh("surface", V, F)
-      ->setEdgeWidth(1)
-      ->setSurfaceColor(glm::vec3(0.670, 0.673, 0.292));
-  // polyscope::options::groundPlaneMode =
-  // polyscope::GroundPlaneMode::ShadowOnly;
-  glm::vec3 glm_camera_position = { camera_position[0],
-                                    camera_position[1],
-                                    camera_position[2] };
-  glm::vec3 glm_camera_target = { camera_target[0],
-                                  camera_target[1],
-                                  camera_target[2] };
-  polyscope::view::lookAt(glm_camera_position, glm_camera_target);
-  if (use_orthographic) {
-    polyscope::view::projectionMode = polyscope::ProjectionMode::Orthographic;
-  } else {
-    polyscope::view::projectionMode = polyscope::ProjectionMode::Perspective;
-  }
-  polyscope::screenshot(filename);
-  polyscope::removeAllStructures();
-}
+// inline void
+// screenshot_mesh(const Eigen::MatrixXd& V,
+//                 const Eigen::MatrixXi& F,
+//                 const std::string& filename,
+//                 SpatialVector camera_position = SpatialVector(0, 0, 0),
+//                 SpatialVector camera_target = SpatialVector(0, 0, 2),
+//                 bool use_orthographic = false)
+// {
+//   polyscope::init();
+//   polyscope::registerSurfaceMesh("surface", V, F)
+//       ->setEdgeWidth(1)
+//       ->setSurfaceColor(glm::vec3(0.670, 0.673, 0.292));
+//   // polyscope::options::groundPlaneMode =
+//   // polyscope::GroundPlaneMode::ShadowOnly;
+//   glm::vec3 glm_camera_position = { camera_position[0],
+//                                     camera_position[1],
+//                                     camera_position[2] };
+//   glm::vec3 glm_camera_target = { camera_target[0],
+//                                   camera_target[1],
+//                                   camera_target[2] };
+//   polyscope::view::lookAt(glm_camera_position, glm_camera_target);
+//   if (use_orthographic) {
+//     polyscope::view::projectionMode =
+//     polyscope::ProjectionMode::Orthographic;
+//   } else {
+//     polyscope::view::projectionMode = polyscope::ProjectionMode::Perspective;
+//   }
+//   polyscope::screenshot(filename);
+//   polyscope::removeAllStructures();
+// }
 
 // ****************
 // Basic arithmetic

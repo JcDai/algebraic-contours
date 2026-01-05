@@ -5,16 +5,16 @@
 #include "compute_boundaries.h"
 
 TwelveSplitSplineSurface::TwelveSplitSplineSurface(
-  const Eigen::MatrixXd& V,
-  const AffineManifold& affine_manifold,
-  const OptimizationParameters& optimization_params,
-  std::vector<std::vector<int>>& face_to_patch_indices,
-  std::vector<int>& patch_to_face_indices,
-  Eigen::SparseMatrix<double>& fit_matrix,
-  Eigen::SparseMatrix<double>& energy_hessian,
-  Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
-    energy_hessian_inverse)
-  : m_affine_manifold(affine_manifold)
+    const Eigen::MatrixXd& V,
+    const AffineManifold& affine_manifold,
+    const OptimizationParameters& optimization_params,
+    std::vector<std::vector<int>>& face_to_patch_indices,
+    std::vector<int>& patch_to_face_indices,
+    Eigen::SparseMatrix<double>& fit_matrix,
+    Eigen::SparseMatrix<double>& energy_hessian,
+    Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
+        energy_hessian_inverse)
+    : m_affine_manifold(affine_manifold)
 {
   // Generate normals
   MatrixXr N;
@@ -69,12 +69,13 @@ TwelveSplitSplineSurface::TwelveSplitSplineSurface(
 }
 
 TwelveSplitSplineSurface::TwelveSplitSplineSurface(
-  const std::vector<std::array<TriangleCornerFunctionData, 3>>& corner_data,
-  const std::vector<std::array<TriangleMidpointFunctionData, 3>>& midpoint_data,
-  std::vector<std::vector<int>>& face_to_patch_indices,
-  std::vector<int>& patch_to_face_indices)
-  : m_corner_data(corner_data)
-  , m_midpoint_data(midpoint_data)
+    const std::vector<std::array<TriangleCornerFunctionData, 3>>& corner_data,
+    const std::vector<std::array<TriangleMidpointFunctionData, 3>>&
+        midpoint_data,
+    std::vector<std::vector<int>>& face_to_patch_indices,
+    std::vector<int>& patch_to_face_indices)
+    : m_corner_data(corner_data)
+    , m_midpoint_data(midpoint_data)
 {
   int num_faces = corner_data.size();
   spdlog::info("Building surface directly from position data");
@@ -93,10 +94,10 @@ TwelveSplitSplineSurface::TwelveSplitSplineSurface(
 
 void
 TwelveSplitSplineSurface::update_positions(
-  const Eigen::MatrixXd& V,
-  const Eigen::SparseMatrix<double>& fit_matrix,
-  const Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
-    energy_hessian_inverse)
+    const Eigen::MatrixXd& V,
+    const Eigen::SparseMatrix<double>& fit_matrix,
+    const Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>&
+        energy_hessian_inverse)
 {
   AffineManifold const& affine_manifold = get_affine_manifold();
 
@@ -126,51 +127,51 @@ TwelveSplitSplineSurface::update_positions(
                             patch_to_face_indices);
 }
 
-void
-TwelveSplitSplineSurface::add_position_data_to_viewer() const
-{
-  // Add corner position data if it exists
-  if (!m_corner_data.empty()) {
-    MatrixXr position_matrix;
-    MatrixXr first_derivative_matrix;
-    MatrixXr second_derivative_matrix;
-    generate_corner_data_matrices(m_corner_data,
-                                  position_matrix,
-                                  first_derivative_matrix,
-                                  second_derivative_matrix);
-    polyscope::registerPointCloud("corner data", position_matrix);
-    polyscope::getPointCloud("corner data")
-      ->addVectorQuantity("first derivatives", first_derivative_matrix);
-    polyscope::getPointCloud("corner data")
-      ->addVectorQuantity("second derivatives", second_derivative_matrix);
-  }
+// void
+// TwelveSplitSplineSurface::add_position_data_to_viewer() const
+// {
+//   // Add corner position data if it exists
+//   if (!m_corner_data.empty()) {
+//     MatrixXr position_matrix;
+//     MatrixXr first_derivative_matrix;
+//     MatrixXr second_derivative_matrix;
+//     generate_corner_data_matrices(m_corner_data,
+//                                   position_matrix,
+//                                   first_derivative_matrix,
+//                                   second_derivative_matrix);
+//     polyscope::registerPointCloud("corner data", position_matrix);
+//     polyscope::getPointCloud("corner data")
+//       ->addVectorQuantity("first derivatives", first_derivative_matrix);
+//     polyscope::getPointCloud("corner data")
+//       ->addVectorQuantity("second derivatives", second_derivative_matrix);
+//   }
 
-  // Add midpoint position data if it (and the corner data) exists
-  if ((!m_corner_data.empty()) && (!m_midpoint_data.empty())) {
-    MatrixXr position_matrix;
-    MatrixXr tangent_derivative_matrix;
-    MatrixXr normal_derivative_matrix;
-    generate_midpoint_data_matrices(m_corner_data,
-                                    m_midpoint_data,
-                                    position_matrix,
-                                    tangent_derivative_matrix,
-                                    normal_derivative_matrix);
-    polyscope::registerPointCloud("midpoint data", position_matrix);
-    polyscope::getPointCloud("midpoint data")
-      ->addVectorQuantity("tangent derivatives", tangent_derivative_matrix);
-    polyscope::getPointCloud("midpoint data")
-      ->addVectorQuantity("normal derivatives", normal_derivative_matrix);
-  }
-}
+//   // Add midpoint position data if it (and the corner data) exists
+//   if ((!m_corner_data.empty()) && (!m_midpoint_data.empty())) {
+//     MatrixXr position_matrix;
+//     MatrixXr tangent_derivative_matrix;
+//     MatrixXr normal_derivative_matrix;
+//     generate_midpoint_data_matrices(m_corner_data,
+//                                     m_midpoint_data,
+//                                     position_matrix,
+//                                     tangent_derivative_matrix,
+//                                     normal_derivative_matrix);
+//     polyscope::registerPointCloud("midpoint data", position_matrix);
+//     polyscope::getPointCloud("midpoint data")
+//       ->addVectorQuantity("tangent derivatives", tangent_derivative_matrix);
+//     polyscope::getPointCloud("midpoint data")
+//       ->addVectorQuantity("normal derivatives", normal_derivative_matrix);
+//   }
+// }
 
-void
-TwelveSplitSplineSurface::view(Eigen::Matrix<double, 3, 1> color,
-                             int num_subdivisions) const
-{
-  add_surface_to_viewer(color, num_subdivisions);
-  add_position_data_to_viewer();
-  polyscope::show();
-}
+// void
+// TwelveSplitSplineSurface::view(Eigen::Matrix<double, 3, 1> color,
+//                              int num_subdivisions) const
+// {
+//   add_surface_to_viewer(color, num_subdivisions);
+//   add_position_data_to_viewer();
+//   polyscope::show();
+// }
 
 void
 TwelveSplitSplineSurface::clear()
@@ -184,11 +185,12 @@ TwelveSplitSplineSurface::clear()
 // Initialize patches for a twelve split Powell-Sabin type surface
 void
 TwelveSplitSplineSurface::init_twelve_split_patches(
-  const std::vector<std::array<TriangleCornerFunctionData, 3>>& corner_data,
-  const std::vector<std::array<TriangleMidpointFunctionData, 3>>& midpoint_data,
-  const std::vector<std::array<bool, 3>>& is_cone_corner,
-  std::vector<std::vector<int>>& face_to_patch_indices,
-  std::vector<int>& patch_to_face_indices)
+    const std::vector<std::array<TriangleCornerFunctionData, 3>>& corner_data,
+    const std::vector<std::array<TriangleMidpointFunctionData, 3>>&
+        midpoint_data,
+    const std::vector<std::array<bool, 3>>& is_cone_corner,
+    std::vector<std::vector<int>>& face_to_patch_indices,
+    std::vector<int>& patch_to_face_indices)
 {
   int num_faces = corner_data.size();
 
@@ -223,14 +225,14 @@ TwelveSplitSplineSurface::init_twelve_split_patches(
     // Get surface mappings
     std::array<Eigen::Matrix<double, 6, 3>, 12> surface_mappings;
     generate_twelve_split_spline_patch_surface_mapping<double>(
-      corner_data[face_index], midpoint_data[face_index], surface_mappings);
+        corner_data[face_index], midpoint_data[face_index], surface_mappings);
 
     // Add patches
     face_to_patch_indices[face_index].clear();
     for (int j = 0; j < patches_per_face; ++j) {
       // Add patch to surface
       m_patches.push_back(
-        QuadraticSplineSurfacePatch(surface_mappings[j], domains[j]));
+          QuadraticSplineSurfacePatch(surface_mappings[j], domains[j]));
 
       // Mark cones
       int corner_index = patch_to_corner_map[j].first;
@@ -256,9 +258,9 @@ TwelveSplitSplineSurface::init_twelve_split_patches(
 
 void
 TwelveSplitSplineSurface::generate_face_normals(
-  const Eigen::MatrixXd& V,
-  const AffineManifold& affine_manifold,
-  Eigen::MatrixXd& N)
+    const Eigen::MatrixXd& V,
+    const AffineManifold& affine_manifold,
+    Eigen::MatrixXd& N)
 {
   Eigen::MatrixXi const& F = affine_manifold.get_faces();
 
@@ -285,7 +287,8 @@ TwelveSplitSplineSurface::generate_face_normals(
 
 void
 generate_twelve_split_spline_patch_patch_boundaries(
-  std::array<std::array<Eigen::Matrix<double, 3, 1>, 3>, 12>& patch_boundaries)
+    std::array<std::array<Eigen::Matrix<double, 3, 1>, 3>, 12>&
+        patch_boundaries)
 {
   size_t num_patches = 12;
   size_t num_boundaries = 3;
@@ -307,7 +310,7 @@ generate_twelve_split_spline_patch_patch_boundaries(
 
 void
 generate_twelve_split_spline_patch_patch_to_corner_map(
-  std::array<std::pair<int, int>, 12>& patch_to_corner_map)
+    std::array<std::pair<int, int>, 12>& patch_to_corner_map)
 {
   // First six patches are interior
   for (size_t i = 0; i < 6; ++i) {
@@ -353,9 +356,9 @@ generate_twelve_split_domain_areas(const PlanarPoint& v0,
 
 void
 compute_twelve_split_spline_patch_boundary_edges(
-  const Eigen::MatrixXi& F,
-  const std::vector<std::vector<int>>& face_to_patch_indices,
-  std::vector<std::pair<int, int>>& patch_boundary_edges)
+    const Eigen::MatrixXi& F,
+    const std::vector<std::vector<int>>& face_to_patch_indices,
+    std::vector<std::pair<int, int>>& patch_boundary_edges)
 {
   patch_boundary_edges.clear();
   spdlog::info("Computing patch boundary edges for mesh with {} faces",
@@ -363,10 +366,10 @@ compute_twelve_split_spline_patch_boundary_edges(
 
   // Validate input
   if (face_to_patch_indices.size() != static_cast<size_t>(F.rows())) {
-    spdlog::error(
-      "Incompatible number of mesh faces ({}) and face to patch mappings ({})",
-      F.rows(),
-      face_to_patch_indices.size());
+    spdlog::error("Incompatible number of mesh faces ({}) and face to patch "
+                  "mappings ({})",
+                  F.rows(),
+                  face_to_patch_indices.size());
     return;
   }
 
@@ -385,10 +388,10 @@ compute_twelve_split_spline_patch_boundary_edges(
     int face_vertex_index = (face_boundary_edges[i].second + 1) % 3;
 
     int first_patch_index =
-      face_to_patch_indices[face_index][6 + (2 * face_vertex_index)];
+        face_to_patch_indices[face_index][6 + (2 * face_vertex_index)];
     int first_patch_vertex_index = 1;
     int second_patch_index =
-      face_to_patch_indices[face_index][7 + (2 * face_vertex_index)];
+        face_to_patch_indices[face_index][7 + (2 * face_vertex_index)];
     int second_patch_vertex_index = 0;
 
     // Skip faces without a patch
@@ -398,8 +401,8 @@ compute_twelve_split_spline_patch_boundary_edges(
 
     // Add patch boundary edges
     patch_boundary_edges.push_back(
-      std::make_pair(first_patch_index, first_patch_vertex_index));
+        std::make_pair(first_patch_index, first_patch_vertex_index));
     patch_boundary_edges.push_back(
-      std::make_pair(second_patch_index, second_patch_vertex_index));
+        std::make_pair(second_patch_index, second_patch_vertex_index));
   }
 }

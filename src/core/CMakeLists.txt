@@ -25,7 +25,7 @@ target_include_directories(QuadraticContoursCoreLib PUBLIC .)
 target_link_libraries(QuadraticContoursCoreLib PUBLIC
   Eigen3::Eigen
   igl::core
-  polyscope
+  # polyscope
   spdlog::spdlog
   SuiteSparse::CHOLMOD
   SVGLib

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "polyscope/curve_network.h"
+// #include "polyscope/curve_network.h"
 
 #include "common.h"
 #include "interval.h"
@@ -40,8 +40,8 @@ public:
   ///
   /// @param[in] numerator_coeffs: coefficients of the polynomial functions
   RationalFunction(
-    const Eigen::Matrix<double, degree + 1, dimension>& numerator_coeffs)
-    : m_numerator_coeffs(numerator_coeffs)
+      const Eigen::Matrix<double, degree + 1, dimension>& numerator_coeffs)
+      : m_numerator_coeffs(numerator_coeffs)
   {
     m_denominator_coeffs.setZero();
     m_denominator_coeffs[0] = 1.0;
@@ -55,10 +55,10 @@ public:
   /// @param[in] numerator_coeffs: coefficients of the numerator polynomials
   /// @param[in] denominator_coeffs: coefficients of the denominator polynomial
   RationalFunction(
-    const Eigen::Matrix<double, degree + 1, dimension>& numerator_coeffs,
-    const Eigen::Matrix<double, degree + 1, 1>& denominator_coeffs)
-    : m_numerator_coeffs(numerator_coeffs)
-    , m_denominator_coeffs(denominator_coeffs)
+      const Eigen::Matrix<double, degree + 1, dimension>& numerator_coeffs,
+      const Eigen::Matrix<double, degree + 1, 1>& denominator_coeffs)
+      : m_numerator_coeffs(numerator_coeffs)
+      , m_denominator_coeffs(denominator_coeffs)
   {
     m_domain.reset_bounds();
 
@@ -71,12 +71,12 @@ public:
   /// @param[in] denominator_coeffs: coefficients of the denominator polynomial
   /// @param[in] domain: domain interval for the mapping
   RationalFunction(
-    const Eigen::Matrix<double, degree + 1, dimension>& numerator_coeffs,
-    const Eigen::Matrix<double, degree + 1, 1>& denominator_coeffs,
-    const Interval& domain)
-    : m_numerator_coeffs(numerator_coeffs)
-    , m_denominator_coeffs(denominator_coeffs)
-    , m_domain(domain)
+      const Eigen::Matrix<double, degree + 1, dimension>& numerator_coeffs,
+      const Eigen::Matrix<double, degree + 1, 1>& denominator_coeffs,
+      const Interval& domain)
+      : m_numerator_coeffs(numerator_coeffs)
+      , m_denominator_coeffs(denominator_coeffs)
+      , m_domain(domain)
   {
     assert(is_valid());
   }
@@ -101,7 +101,7 @@ public:
   ///
   /// @param[out] derivative: derivative rational function
   void compute_derivative(
-    RationalFunction<2 * degree, dimension>& derivative) const
+      RationalFunction<2 * degree, dimension>& derivative) const
   {
     // Compute the derivatives of the numerator and denominator polynomials
     spdlog::trace("Taking derivative of rational function");
@@ -109,7 +109,7 @@ public:
     spdlog::trace("Denominator:\n{}", m_denominator_coeffs);
     Eigen::Matrix<double, degree, dimension> numerator_deriv_coeffs;
     compute_polynomial_mapping_derivative<degree, dimension>(
-      m_numerator_coeffs, numerator_deriv_coeffs);
+        m_numerator_coeffs, numerator_deriv_coeffs);
     Eigen::Matrix<double, degree, 1> denominator_deriv_coeffs;
     compute_polynomial_mapping_derivative<degree, 1>(m_denominator_coeffs,
                                                      denominator_deriv_coeffs);
@@ -121,9 +121,9 @@ public:
     // Compute the derivative numerator and denominator from the quotient rule
     Eigen::Matrix<double, 2 * degree, dimension> term_0, term_1;
     compute_polynomial_mapping_scalar_product<degree, degree - 1, dimension>(
-      m_denominator_coeffs, numerator_deriv_coeffs, term_0);
+        m_denominator_coeffs, numerator_deriv_coeffs, term_0);
     compute_polynomial_mapping_scalar_product<degree - 1, degree, dimension>(
-      denominator_deriv_coeffs, m_numerator_coeffs, term_1);
+        denominator_deriv_coeffs, m_numerator_coeffs, term_1);
     spdlog::trace("First term:\n{}", term_0);
     spdlog::trace("Second term:\n{}", term_1);
     Eigen::Matrix<double, 2 * degree + 1, dimension> num_coeffs;
@@ -131,11 +131,11 @@ public:
     num_coeffs.block(0, 0, 2 * degree, dimension) = term_0 - term_1;
     Eigen::Matrix<double, 2 * degree + 1, 1> denom_coeffs;
     compute_polynomial_mapping_product<degree, degree, 1>(
-      m_denominator_coeffs, m_denominator_coeffs, denom_coeffs);
+        m_denominator_coeffs, m_denominator_coeffs, denom_coeffs);
 
     // Build the derivative
     derivative = RationalFunction<2 * degree, dimension>(
-      num_coeffs, denom_coeffs, m_domain);
+        num_coeffs, denom_coeffs, m_domain);
   }
 
   /// @brief Compose the rational mapping f: R -> R^n with a one form to obtain
@@ -153,7 +153,7 @@ public:
     // Create a scalar rational function with the same domain and denominator
     // but the new numerator
     scalar_function = RationalFunction<degree, 1>(
-      numerator_coeffs, m_denominator_coeffs, m_domain);
+        numerator_coeffs, m_denominator_coeffs, m_domain);
   }
 
   /// @brief Split the rational function into two rational function at some knot
@@ -171,14 +171,14 @@ public:
     assert(t0 <= knot);
     Interval lower_domain(t0, knot);
     lower_segment = RationalFunction<degree, dimension>(
-      m_numerator_coeffs, m_denominator_coeffs, lower_domain);
+        m_numerator_coeffs, m_denominator_coeffs, lower_domain);
 
     // Build upper segment
     double t1 = m_domain.get_upper_bound();
     assert(knot <= t1);
     Interval upper_domain(knot, t1);
     upper_segment = RationalFunction<degree, dimension>(
-      m_numerator_coeffs, m_denominator_coeffs, upper_domain);
+        m_numerator_coeffs, m_denominator_coeffs, upper_domain);
   }
 
   /// @brief Sample points in the rational function.
@@ -186,8 +186,8 @@ public:
   /// @param[in] num_points: number of points to sample
   /// @param[out] points: vector of sampled points
   void sample_points(
-    int num_points,
-    std::vector<Eigen::Matrix<double, 1, dimension>>& points) const
+      int num_points,
+      std::vector<Eigen::Matrix<double, 1, dimension>>& points) const
   {
     // Get sample of the domain
     std::vector<double> t_samples = m_domain.sample_points(num_points);
@@ -261,8 +261,8 @@ public:
   /// @param[in] t: normalized coordinate
   /// @param[out] point: rational function evaluated at normalized coordinate t
   void evaluate_normalized_coordinate(
-    double t,
-    Eigen::Matrix<double, 1, dimension>& point) const
+      double t,
+      Eigen::Matrix<double, 1, dimension>& point) const
   {
     // Check if domain is bounded
     if (!domain().is_bounded_below())
@@ -313,34 +313,34 @@ public:
     }
   }
 
-  /// @brief Add the rational function curve to the polyscope viewer.
-  ///
-  /// Note that this method only works for rational space curves.
-  ///
-  /// @param[in] curve_name: name to assign the curve in the viewer
-  void add_curve_to_viewer(
-    std::string curve_name = "rational_function_curve") const
-  {
-    if (dimension != 3) {
-      spdlog::error("Cannot view nonspatial curve");
-      return;
-    }
+  // /// @brief Add the rational function curve to the polyscope viewer.
+  // ///
+  // /// Note that this method only works for rational space curves.
+  // ///
+  // /// @param[in] curve_name: name to assign the curve in the viewer
+  // void add_curve_to_viewer(
+  //   std::string curve_name = "rational_function_curve") const
+  // {
+  //   if (dimension != 3) {
+  //     spdlog::error("Cannot view nonspatial curve");
+  //     return;
+  //   }
 
-    // Generate curve discretization
-    CurveDiscretizationParameters curve_disc_params;
-    std::vector<Eigen::Matrix<double, 1, dimension>> points;
-    std::vector<int> polyline;
-    discretize(curve_disc_params, points, polyline);
+  //   // Generate curve discretization
+  //   CurveDiscretizationParameters curve_disc_params;
+  //   std::vector<Eigen::Matrix<double, 1, dimension>> points;
+  //   std::vector<int> polyline;
+  //   discretize(curve_disc_params, points, polyline);
 
-    // Add curve mesh
-    MatrixXr points_mat = convert_nested_vector_to_matrix(points);
-    std::vector<std::vector<int>> polylines = { polyline };
-    std::vector<std::array<int, 2>> edges =
-      convert_polylines_to_edges(polylines);
-    polyscope::init();
-    polyscope::registerCurveNetwork(curve_name, points_mat, edges);
-    polyscope::getCurveNetwork(curve_name)->setRadius(0.0025);
-  }
+  //   // Add curve mesh
+  //   MatrixXr points_mat = convert_nested_vector_to_matrix(points);
+  //   std::vector<std::vector<int>> polylines = { polyline };
+  //   std::vector<std::array<int, 2>> edges =
+  //     convert_polylines_to_edges(polylines);
+  //   polyscope::init();
+  //   polyscope::registerCurveNetwork(curve_name, points_mat, edges);
+  //   polyscope::getCurveNetwork(curve_name)->setRadius(0.0025);
+  // }
 
   /// @brief Compute the derivative at domain point t with finite differences
   /// with finite difference step size h.
@@ -352,8 +352,8 @@ public:
   /// @param[in] h: finite difference step size
   /// @return finite difference derivative
   std::vector<Eigen::Matrix<double, 1, dimension>> finite_difference_derivative(
-    double t,
-    double h = 1e-3) const
+      double t,
+      double h = 1e-3) const
   {
     std::vector<Eigen::Matrix<double, 1, dimension>> F_plus, F_minus;
     evaluate(t + h, F_plus);
@@ -365,7 +365,7 @@ public:
   // Getters and setters
   // *******************
   void set_numerators(
-    const Eigen::Matrix<double, degree + 1, dimension>& numerator)
+      const Eigen::Matrix<double, degree + 1, dimension>& numerator)
   {
     m_numerator_coeffs = numerator;
   }
@@ -398,8 +398,8 @@ public:
   /// @return output stream for chaining
   template<size_t output_degree, size_t output_dimension>
   friend std::ostream& operator<<(
-    std::ostream& out,
-    const RationalFunction<output_degree, output_dimension>& F);
+      std::ostream& out,
+      const RationalFunction<output_degree, output_dimension>& F);
 
   /// @brief Evaluate the rational mapping at domain point t.
   ///
@@ -447,11 +447,11 @@ private:
     std::stringstream rational_function_string;
     rational_function_string << "1/(";
     rational_function_string
-      << formatted_polynomial<degree, 1>(m_denominator_coeffs, 17);
+        << formatted_polynomial<degree, 1>(m_denominator_coeffs, 17);
     rational_function_string << ") [\n  ";
     for (int i = 0; i < m_numerator_coeffs.cols(); ++i) {
       rational_function_string
-        << formatted_polynomial<degree, 1>(m_numerator_coeffs.col(i), 17);
+          << formatted_polynomial<degree, 1>(m_numerator_coeffs.col(i), 17);
       rational_function_string << ",\n  ";
     }
     rational_function_string << "], t in " << m_domain.formatted_interval();

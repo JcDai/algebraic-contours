@@ -27,7 +27,7 @@ add_compile_definitions(CHECK_VALIDITY)
 include(libigl)
 
 # Fetch other dependencies
-include(polyscope)
+# include(polyscope)
 include(eigen)
 include(spdlog)
 include(suitesparse)
@@ -40,14 +40,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Build main library
 add_subdirectory(src/core)
 add_subdirectory(src/quadratic_spline_surface)
-add_subdirectory(src/contour_network)
+# add_subdirectory(src/contour_network)
 add_subdirectory(src/clough_tocher_surface)
 target_include_directories(QuadraticContoursCoreLib PUBLIC ${PROJECT_SOURCE_DIR}/ext )
 add_library(QuadraticContoursLib INTERFACE)
 target_link_libraries(QuadraticContoursLib INTERFACE
   QuadraticContoursCoreLib
   QuadraticSplineSurfaceLib
-  ContourNetworkLib
+  # ContourNetworkLib
   CloughTocherPatchLib
 )
 

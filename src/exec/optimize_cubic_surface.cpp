@@ -1,5 +1,5 @@
 #include "optimize_clough_tocher.hpp"
-#include "polyscope/surface_mesh.h"
+// #include "polyscope/surface_mesh.h"
 #include <CLI/CLI.hpp>
 #include <igl/readOBJ.h>
 #include <igl/upsample.h>
@@ -38,28 +38,28 @@ main(int argc, char* argv[])
     { "critical", spdlog::level::critical }, { "off", spdlog::level::off },
   };
 
-  // color palette
-  // rgb(134, 16, 16)
-  Eigen::Vector3d rgb_maroon = build_color_from_rgb(134, 16, 15);
-  // rgb(24, 197, 188)
-  Eigen::Vector3d rgb_teal = build_color_from_rgb(24, 197, 188);
-  // rgb(191, 143, 211)
-  Eigen::Vector3d rgb_lavender = build_color_from_rgb(191, 143, 211);
-  // rgb(196, 118, 10)
-  Eigen::Vector3d rgb_orange = build_color_from_rgb(196, 118, 10);
-  // rgb(253, 214, 183)
-  // rgb(111, 50, 0)
+  // // color palette
+  // // rgb(134, 16, 16)
+  // Eigen::Vector3d rgb_maroon = build_color_from_rgb(134, 16, 15);
+  // // rgb(24, 197, 188)
+  // Eigen::Vector3d rgb_teal = build_color_from_rgb(24, 197, 188);
+  // // rgb(191, 143, 211)
+  // Eigen::Vector3d rgb_lavender = build_color_from_rgb(191, 143, 211);
+  // // rgb(196, 118, 10)
+  // Eigen::Vector3d rgb_orange = build_color_from_rgb(196, 118, 10);
+  // // rgb(253, 214, 183)
+  // // rgb(111, 50, 0)
 
-  // rgb(27, 130, 190)
-  // rgb(1, 22, 34)
+  // // rgb(27, 130, 190)
+  // // rgb(1, 22, 34)
 
-  // rgb(227, 205, 237)
-  // rgb(58, 8, 80)
-  // rgb(110, 30, 144)
+  // // rgb(227, 205, 237)
+  // // rgb(58, 8, 80)
+  // // rgb(110, 30, 144)
 
-  // rgb(0, 47, 74)
-  // rgb(0, 104, 33)
-  // rgb(34, 0, 74)
+  // // rgb(0, 47, 74)
+  // // rgb(0, 104, 33)
+  // // rgb(34, 0, 74)
 
   // Get command line arguments
   CLI::App app{ "Optimize Clough-Tocher cubic surface mesh." };
@@ -208,9 +208,9 @@ main(int argc, char* argv[])
     affine_manifold.compute_incenter_for_edge_charts();
   }
   affine_manifold.generate_lagrange_nodes(use_incenter);
-  polyscope::init();
-  if (visualize)
-    polyscope::registerSurfaceMesh("PL mesh", V, F);
+  // polyscope::init();
+  // if (visualize)
+  //   polyscope::registerSurfaceMesh("PL mesh", V, F);
 
   // code added for sharp feature
   // call order cannot be changed
@@ -271,8 +271,8 @@ main(int argc, char* argv[])
   write_mesh(
       ct_surface, bezier_control_points, join_path(output_name, "linear"));
   set_bezier_control_points(ct_surface, bezier_control_points);
-  if (visualize)
-    ct_surface.add_surface_to_viewer(rgb_orange, 3, "linear");
+  // if (visualize)
+  //   ct_surface.add_surface_to_viewer(rgb_orange, 3, "linear");
 
   // tracked vertices
   std::vector<CloughTocherOptimizer::TrackedVertex> tracked_vertices;
@@ -331,8 +331,8 @@ main(int argc, char* argv[])
              projected_control_points,
              join_path(output_name, "projected_mesh"));
   set_bezier_control_points(ct_surface, projected_control_points);
-  if (visualize)
-    ct_surface.add_surface_to_viewer(rgb_maroon, 3, "projected");
+  // if (visualize)
+  //   ct_surface.add_surface_to_viewer(rgb_maroon, 3, "projected");
 
   // optimize the bezier nodes with laplacian energy
   std::vector<Eigen::Vector3d> laplacian_control_points;
@@ -343,10 +343,10 @@ main(int argc, char* argv[])
                laplacian_control_points,
                join_path(output_name, "laplacian_mesh"));
     set_bezier_control_points(ct_surface, laplacian_control_points);
-    if (visualize)
-      ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
-    if (visualize)
-      polyscope::show();
+    // if (visualize)
+    //   ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
+    // if (visualize)
+    //   polyscope::show();
   } else {
     // fit tracked
     laplacian_control_points =
@@ -355,10 +355,10 @@ main(int argc, char* argv[])
                laplacian_control_points,
                join_path(output_name, "laplacian_mesh_tracked"));
     set_bezier_control_points(ct_surface, laplacian_control_points);
-    if (visualize)
-      ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
-    if (visualize)
-      polyscope::show();
+    // if (visualize)
+    //   ct_surface.add_surface_to_viewer(rgb_lavender, 3, "laplacian");
+    // if (visualize)
+    //   polyscope::show();
   }
 
   // TODO: comment this out! only for testing
@@ -510,12 +510,12 @@ main(int argc, char* argv[])
   Eigen::saveMarket(l2b_mat,
                     join_path(output_name, "CT_lag2bezier_matrix.txt"));
 
-  ct_surface.add_surface_to_viewer(rgb_teal, 3, "laplace_beltrami");
-  polyscope::screenshot(render_path);
-  polyscope::screenshot(join_path(output_name, "render.png"));
-  if (visualize) {
-    polyscope::show();
-  }
+  // ct_surface.add_surface_to_viewer(rgb_teal, 3, "laplace_beltrami");
+  // polyscope::screenshot(render_path);
+  // polyscope::screenshot(join_path(output_name, "render.png"));
+  // if (visualize) {
+  //   polyscope::show();
+  // }
 
   return 0;
 }

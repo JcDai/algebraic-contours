@@ -2,7 +2,7 @@
 #include "clough_tocher_surface.hpp"
 #include "common.h"
 #include "compute_boundaries.h"
-#include "contour_network.h"
+// #include "contour_network.h"
 #include "generate_transformation.h"
 #include "globals.cpp"
 #include "twelve_split_spline.h"

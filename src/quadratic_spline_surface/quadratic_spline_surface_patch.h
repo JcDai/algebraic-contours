@@ -7,9 +7,8 @@
 #include "convex_polygon.h"
 #include "evaluate_surface_normal.h"
 #include "polynomial_function.h"
-#include "polyscope/point_cloud.h"
+// #include "polyscope/point_cloud.h"
 #include <igl/is_vertex_manifold.h>
-
 
 /// \file quadratic_spline_surface.h
 ///
@@ -123,14 +122,14 @@ public:
   ///
   /// @param[out] patch_boundaries: patch boundary spatial curves
   void get_patch_boundaries(
-    std::array<RationalFunction<4, 3>, 3>& patch_boundaries) const;
+      std::array<RationalFunction<4, 3>, 3>& patch_boundaries) const;
 
   /// Construct a spline surface patch with the same image but where the domain
   /// is normalized to the triangle u + v <= 1 in the positive quadrant.
   ///
   /// @param[out] normalized_spline_surface_patch: normalized patch
   void normalize_patch_domain(
-    QuadraticSplineSurfacePatch& normalized_spline_surface_patch) const;
+      QuadraticSplineSurfacePatch& normalized_spline_surface_patch) const;
 
   /// Given a normalized domain point in the triangle u + v <= 1, map it to the
   /// corresponding point in the patch domain
@@ -138,7 +137,7 @@ public:
   /// @param[in] normalized_domain_point: normalized (barycentric) domain point
   /// @return corresponding point in the domain triangle
   PlanarPoint denormalize_domain_point(
-    PlanarPoint& normalized_domain_point) const;
+      PlanarPoint& normalized_domain_point) const;
 
   /// Evaluate the surface at a given domain point.
   ///
@@ -172,15 +171,15 @@ public:
                    Eigen::MatrixXi& F,
                    Eigen::MatrixXd& N) const;
 
-  /// Add triangulated patch to the polyscope viewer.
-  ///
-  /// @param[in] patch_name: name to assign the patch in the viewer
-  void add_patch_to_viewer(std::string patch_name = "surface_patch") const;
+  // /// Add triangulated patch to the polyscope viewer.
+  // ///
+  // /// @param[in] patch_name: name to assign the patch in the viewer
+  // void add_patch_to_viewer(std::string patch_name = "surface_patch") const;
 
   /// Overloaded insertion operator.
   friend std::ostream& operator<<(
-    std::ostream& out,
-    const QuadraticSplineSurfacePatch& spline_surface_patch);
+      std::ostream& out,
+      const QuadraticSplineSurfacePatch& spline_surface_patch);
 
   /// Write the patch information to the output stream in the format
   ///   c a_0 a_u a_v a_uv a_uu a_vv
