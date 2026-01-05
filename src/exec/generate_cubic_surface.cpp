@@ -64,30 +64,29 @@ main(int argc, char* argv[])
   std::string feature_vertex_file = "";
   bool skip_constraint = false;
   bool use_incenter = false;
+  bool skip_cone_constraints = false;
   spdlog::level::level_enum log_level = spdlog::level::off;
   Eigen::Matrix<double, 3, 1> color = SKY_BLUE;
   int num_subdivisions = DISCRETIZATION_LEVEL;
   OptimizationParameters optimization_params;
   double weight = optimization_params.position_difference_factor;
   app.add_option("-i,--input", input_filename, "Mesh filepath")
-    ->check(CLI::ExistingFile)
-    ->required();
+      ->check(CLI::ExistingFile)
+      ->required();
   app.add_option("--log_level", log_level, "Level of logging")
-    ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case));
-  app
-    .add_option(
-      "--num_subdivisions", num_subdivisions, "Number of subdivisions")
-    ->check(CLI::PositiveNumber);
-  app
-    .add_option("-w,--weight",
-                weight,
-                "Fitting weight for the quadratic surface approximation")
-    ->check(CLI::PositiveNumber);
+      ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case));
+  app.add_option(
+         "--num_subdivisions", num_subdivisions, "Number of subdivisions")
+      ->check(CLI::PositiveNumber);
+  app.add_option("-w,--weight",
+                 weight,
+                 "Fitting weight for the quadratic surface approximation")
+      ->check(CLI::PositiveNumber);
   app.add_option("-o, --output", output_name, "Output file prefix");
   app.add_option(
-    "--boundary-data",
-    boundary_data,
-    "input boundary data. Only support 1 Function Value interpolant");
+      "--boundary-data",
+      boundary_data,
+      "input boundary data. Only support 1 Function Value interpolant");
   app.add_option("--vertex_normals",
                  vertex_normal_file,
                  "vertex normals in the order of lagrange nodes");
@@ -95,7 +94,11 @@ main(int argc, char* argv[])
                skip_constraint,
                "skip constraint computation if not needed");
   app.add_flag(
-    "--use_incenter", use_incenter, "use incenter instead of barycenter");
+      "--use_incenter", use_incenter, "use incenter instead of barycenter");
+
+  app.add_flag("--skip_cone_constraints",
+               skip_cone_constraints,
+               "skip cone constraints");
 
   app.add_option("--feature_edge", feature_edge_file, "feature edges");
   app.add_option("--feature_vertex", feature_vertex_file, "feature vertices");
@@ -139,7 +142,7 @@ main(int argc, char* argv[])
   Eigen::SparseMatrix<double> fit_matrix;
   Eigen::SparseMatrix<double> energy_hessian;
   Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>
-    energy_hessian_inverse;
+      energy_hessian_inverse;
 
   // std::cout << "V:" << V << std::endl;
   // std::cout << "F:" << F << std::endl;
@@ -174,8 +177,8 @@ main(int argc, char* argv[])
       int cone_cnt = 0;
       for (size_t i = 0; i < v_chart.vertex_one_ring.size() - 1; ++i) {
         if (ct_surface.m_affine_manifold
-              .m_vertex_charts[v_chart.vertex_one_ring[i]]
-              .is_cone) {
+                .m_vertex_charts[v_chart.vertex_one_ring[i]]
+                .is_cone) {
           cone_cnt++;
         }
       }
@@ -187,8 +190,8 @@ main(int argc, char* argv[])
       } else if (cone_cnt > 1) {
         // assert(false);
         throw std::runtime_error(
-          "non-cone vertex is adjacent to more than one cone, cannot setup "
-          "cone constraint! Try moving the cones or denser meshes!");
+            "non-cone vertex is adjacent to more than one cone, cannot setup "
+            "cone constraint! Try moving the cones or denser meshes!");
       }
     }
   }
@@ -202,9 +205,9 @@ main(int argc, char* argv[])
   ct_surface.m_affine_manifold.generate_lagrange_nodes(use_incenter);
 
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
-    output_name + "_from_lagrange_nodes");
+      output_name + "_from_lagrange_nodes");
   ct_surface.write_cubic_surface_to_msh_with_conn_from_lagrange_nodes(
-    output_name + "_from_bezier_nodes", true);
+      output_name + "_from_bezier_nodes", true);
 
   ct_surface.serialize_boundary_data("per_face_boundary_data.txt", "");
 
@@ -270,7 +273,7 @@ main(int argc, char* argv[])
   //             << echart.right_vertex_index << std::endl;
   // }
   for (const auto& group : ct_surface.m_affine_manifold.m_vertex_charts[0]
-                             .separate_constraint_groups) {
+                               .separate_constraint_groups) {
     std::cout << "----------" << std::endl;
     for (const auto& eid : group) {
       const auto& echart = ct_surface.m_affine_manifold.m_edge_charts[eid];
@@ -321,9 +324,9 @@ main(int argc, char* argv[])
     if (lag_node_normals.size() !=
         ct_surface.m_affine_manifold.m_lagrange_nodes.size()) {
       std::cout
-        << "Lagrange node size not compatible with lag normal size! expected "
-        << ct_surface.m_affine_manifold.m_lagrange_nodes.size() << " but got "
-        << lag_node_normals.size() << std::endl;
+          << "Lagrange node size not compatible with lag normal size! expected "
+          << ct_surface.m_affine_manifold.m_lagrange_nodes.size() << " but got "
+          << lag_node_normals.size() << std::endl;
       throw std::runtime_error("normal size from file mismatching");
     }
 
@@ -333,14 +336,14 @@ main(int argc, char* argv[])
       if (ct_surface.m_affine_manifold.lagrange_node_to_v_map.find(i) !=
           ct_surface.m_affine_manifold.lagrange_node_to_v_map.end()) {
         v_normals.row(ct_surface.m_affine_manifold.lagrange_node_to_v_map[i]) =
-          lag_node_normals[i];
+            lag_node_normals[i];
       }
     }
 
   } else {
     // TODO: change weight
     igl::per_vertex_normals(
-      V, F, igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_AREA, v_normals);
+        V, F, igl::PER_VERTEX_NORMALS_WEIGHTING_TYPE_AREA, v_normals);
   }
 
   //////////////////////////////////
@@ -531,26 +534,35 @@ main(int argc, char* argv[])
   // if (!use_incenter) {
   //   std::cout << "compute cone constraints ..." << std::endl;
   //   ct_surface.bezier_cone_constraints_expanded(
-  //     f2f_expanded, independent_node_map, node_assigned, v_normals);
+  //       f2f_expanded, independent_node_map, node_assigned, v_normals);
   // }
 
-  bool debug_isolate = true; // TODO: set to false. true only for debugging
+  if (!skip_cone_constraints) {
+    if (!use_incenter) {
+      std::cout << "compute cone constraints ..." << std::endl;
+      ct_surface.bezier_cone_constraints_expanded(
+          f2f_expanded, independent_node_map, node_assigned, v_normals);
+    }
+  }
+
+  bool debug_isolate =
+      skip_cone_constraints; // TODO: set to false. true only for debugging
 
   std::cout << "compute endpoint constraints ..." << std::endl;
   ct_surface.bezier_endpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, debug_isolate);
+      f2f_expanded, independent_node_map, debug_isolate);
 
   std::cout << "compute interior 1 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_1_expanded(
-    f2f_expanded, independent_node_map, use_incenter);
+      f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute midpoint constraints ..." << std::endl;
   ct_surface.bezier_midpoint_ind2dep_expanded(
-    f2f_expanded, independent_node_map, use_incenter);
+      f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "compute interior 2 constraints ..." << std::endl;
   ct_surface.bezier_internal_ind2dep_2_expanded(
-    f2f_expanded, independent_node_map, use_incenter);
+      f2f_expanded, independent_node_map, use_incenter);
 
   std::cout << "done constraint computation" << std::endl;
 
@@ -590,9 +602,9 @@ main(int argc, char* argv[])
   std::cout << "cone total valance: " << cone_valance << std::endl;
 
   int64_t ind_target_cnt =
-    ct_surface.m_affine_manifold.m_vertex_charts.size() * 3 * 3 +
-    ct_surface.m_affine_manifold.m_edge_charts.size() * 1 * 3 -
-    cone_valance * 2 - cone_cnt * 2 * 3;
+      ct_surface.m_affine_manifold.m_vertex_charts.size() * 3 * 3 +
+      ct_surface.m_affine_manifold.m_edge_charts.size() * 1 * 3 -
+      cone_valance * 2 - cone_cnt * 2 * 3;
 
   std::cout << "ind target cnt: " << ind_target_cnt << std::endl;
 
@@ -662,7 +674,7 @@ main(int argc, char* argv[])
   std::vector<bool> diag_seen(f2f_expanded.rows(), false);
   for (int k = 0; k < f2f_expanded.outerSize(); ++k) {
     for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(
-           f2f_expanded, k);
+             f2f_expanded, k);
          it;
          ++it) {
       // check if dependent node
@@ -729,19 +741,19 @@ main(int argc, char* argv[])
   ct_surface.write_external_point_values_with_conn("cone_cons_lag_nodes_mesh",
                                                    full_from_cone_lag);
   ct_surface.write_external_point_values_with_conn(
-    "cone_cons_bezier_nodes_mesh", full_from_cone);
+      "cone_cons_bezier_nodes_mesh", full_from_cone);
 
   Eigen::SparseMatrix<double> old_cons(node_cnt, node_cnt);
   std::vector<int64_t> old_constrained_row_ids;
   std::map<int64_t, int> old_independent_node_map;
   ct_surface.Ci_endpoint_ind2dep(
-    old_cons, old_constrained_row_ids, old_independent_node_map);
+      old_cons, old_constrained_row_ids, old_independent_node_map);
   ct_surface.Ci_internal_ind2dep_1(
-    old_cons, old_constrained_row_ids, old_independent_node_map);
+      old_cons, old_constrained_row_ids, old_independent_node_map);
   ct_surface.Ci_midpoint_ind2dep(
-    old_cons, old_constrained_row_ids, old_independent_node_map);
+      old_cons, old_constrained_row_ids, old_independent_node_map);
   ct_surface.Ci_internal_ind2dep_2(
-    old_cons, old_constrained_row_ids, old_independent_node_map);
+      old_cons, old_constrained_row_ids, old_independent_node_map);
 
   Eigen::SparseMatrix<double> eye(node_cnt, node_cnt);
   for (int64_t i = 0; i < node_cnt; ++i) {
@@ -779,7 +791,7 @@ main(int argc, char* argv[])
                     output_name + "_edge_endpoint_constraint_matrix.txt");
   Eigen::saveMarket(C_e_end_elim,
                     output_name +
-                      "_edge_endpoint_constraint_matrix_eliminated.txt");
+                        "_edge_endpoint_constraint_matrix_eliminated.txt");
   Eigen::saveMarket(C_e_mid,
                     output_name + "_edge_midpoint_constraint_matrix.txt");
   Eigen::saveMarket(c_cone, output_name + "_cone_constraint_matrix.txt");
@@ -787,9 +799,9 @@ main(int argc, char* argv[])
   if (have_external_boundary_data) {
     // TODO
     ct_surface
-      .write_external_bd_interpolated_function_values_from_lagrange_nodes(
-        output_name + "_function_values_from_lagrange_nodes",
-        ext_boundary_data);
+        .write_external_bd_interpolated_function_values_from_lagrange_nodes(
+            output_name + "_function_values_from_lagrange_nodes",
+            ext_boundary_data);
   }
 
   // check constraint error
@@ -804,8 +816,8 @@ main(int argc, char* argv[])
   double int_min_error = int_error.minCoeff();
   std::cout << "interior max error: "
             << ((std::abs(int_max_error) > std::abs(int_min_error))
-                  ? std::abs(int_max_error)
-                  : std::abs(int_min_error))
+                    ? std::abs(int_max_error)
+                    : std::abs(int_min_error))
             << std::endl;
 
   auto end_error = C_e_end * lag_v_mat;
@@ -813,8 +825,8 @@ main(int argc, char* argv[])
   double end_min_error = end_error.minCoeff();
   std::cout << "endpoint max error: "
             << ((std::abs(end_max_error) > std::abs(end_min_error))
-                  ? std::abs(end_max_error)
-                  : std::abs(end_min_error))
+                    ? std::abs(end_max_error)
+                    : std::abs(end_min_error))
             << std::endl;
 
   auto mid_error = C_e_mid * lag_v_mat;
@@ -822,8 +834,8 @@ main(int argc, char* argv[])
   double mid_min_error = mid_error.minCoeff();
   std::cout << "midpoint max error: "
             << ((std::abs(mid_max_error) > std::abs(mid_min_error))
-                  ? std::abs(mid_max_error)
-                  : std::abs(mid_min_error))
+                    ? std::abs(mid_max_error)
+                    : std::abs(mid_min_error))
             << std::endl;
 
   return 0;

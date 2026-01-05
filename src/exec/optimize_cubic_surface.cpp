@@ -178,6 +178,8 @@ main(int argc, char* argv[])
   Eigen::MatrixXd V, uv, N;
   Eigen::MatrixXi F, FT, FN;
   igl::readOBJ(input_filename, V, uv, N, F, FT, FN);
+
+  Eigen::MatrixXd V_origin = V;
   spdlog::info("{} vertices", V.rows());
   if (scale != 1.)
     V *= scale;
@@ -280,13 +282,26 @@ main(int argc, char* argv[])
     std::ifstream tv_file(tracked_vertices_file);
 
     int64_t fid;
-    double p0, p1, p2, uv0, uv1, area;
-    while (tv_file >> fid >> p0 >> p1 >> p2 >> uv0 >> uv1 >> area) {
+    double p0, p1, p2, uv0, uv1;
+    int64_t micro_id;
+    double dux, duy, duz, dvx, dvy, dvz, micro_u, micro_v, mv0_u, mv0_v, mv1_u,
+        mv1_v, mv2_u, mv2_v, area;
+
+    while (tv_file >> fid >> p0 >> p1 >> p2 >> uv0 >> uv1 >> dux >> duy >>
+           duz >> dvx >> dvy >> dvz >> micro_id >> micro_u >> micro_v >>
+           mv0_u >> mv0_v >> mv1_u >> mv1_v >> mv2_u >> mv2_v >> area) {
       CloughTocherOptimizer::TrackedVertex tv;
       tv.macro_tri_id = fid;
       tv.pos_3d = Eigen::Vector3d(p0, p1, p2);
       tv.local_uv_pos = Eigen::Vector2d(uv0, uv1);
       tv.one_ring_area = area;
+
+      tv.dfdu = Eigen::Vector3d(dux, duy, duz);
+      tv.dfdv = Eigen::Vector3d(dvx, dvy, dvz);
+
+      tv.old_v0 = Eigen::Vector2d(mv0_u, mv0_v);
+      tv.old_v1 = Eigen::Vector2d(mv1_u, mv1_v);
+      tv.old_v2 = Eigen::Vector2d(mv2_u, mv2_v);
 
       tracked_vertices.push_back(tv);
     }
@@ -358,7 +373,7 @@ main(int argc, char* argv[])
     std::cout << "finished optimization fitting only" << std::endl;
     write_mesh(ct_surface,
                fitting_control_points,
-               join_path(output_name, "fitting_mesh_iterative"));
+               join_path(output_name, "fitting_mesh_direct"));
     const auto& eval_tracked_pos =
         optimizer.evaluate_tracked_vertices(fitting_control_points);
     std::ofstream tracked_out("tracked_after_optimization_fitting_only.obj");
@@ -384,6 +399,29 @@ main(int argc, char* argv[])
         optimizer.evaluate_tracked_vertices(fitting_control_points_no_c1);
     std::ofstream tracked_out(
         "tracked_after_optimization_fitting_without_c1.obj");
+    for (size_t i = 0; i < eval_tracked_pos.size(); ++i) {
+      tracked_out << std::setprecision(16) << "v " << eval_tracked_pos[i][0]
+                  << " " << eval_tracked_pos[i][1] << " "
+                  << eval_tracked_pos[i][2] << std::endl;
+    }
+    tracked_out.close();
+  }
+
+  // fitting normal + pos without c1 constraints
+  std::vector<Eigen::Vector3d> fitting_cp_normal;
+  if (optimizer.fit_tracked_vertices) {
+    fitting_cp_normal = optimizer.optimize_fitting_pos_and_normal_without_c1(
+        bezier_control_points, 0.5);
+
+    std::cout << "finished optimization fitting pos and normal without c1"
+              << std::endl;
+    write_mesh(ct_surface,
+               fitting_cp_normal,
+               join_path(output_name, "fitting_mesh_without_c1_pos_normal"));
+    const auto& eval_tracked_pos =
+        optimizer.evaluate_tracked_vertices(fitting_cp_normal);
+    std::ofstream tracked_out(
+        "tracked_after_optimization_fitting_without_c1_normal.obj");
     for (size_t i = 0; i < eval_tracked_pos.size(); ++i) {
       tracked_out << std::setprecision(16) << "v " << eval_tracked_pos[i][0]
                   << " " << eval_tracked_pos[i][1] << " "
@@ -436,6 +474,14 @@ main(int argc, char* argv[])
         laplace_beltrami_control_points,
         join_path(output_name, "subdivided_tracked_vertices_info.txt"),
         tracked_subdivision);
+
+    write_full_tracked_vertices_with_subdivision_level(
+        ct_surface,
+        laplace_beltrami_control_points,
+        join_path(output_name, "full_tracked_vertices_info.txt"),
+        tracked_subdivision,
+        V_origin,
+        F);
   }
 
   set_bezier_control_points(ct_surface, laplace_beltrami_control_points);

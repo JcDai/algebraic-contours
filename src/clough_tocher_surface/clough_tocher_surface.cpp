@@ -2,8 +2,11 @@
 
 #include <fstream>
 #include <igl/Timer.h>
+#include <igl/doublearea.h>
 #include <igl/edges.h>
 #include <igl/per_vertex_normals.h>
+#include <igl/triangle_triangle_adjacency.h>
+#include <igl/vertex_triangle_adjacency.h>
 #include <unsupported/Eigen/SparseExtra>
 
 #include "clough_tocher_constraint_matrices.hpp"
@@ -1816,6 +1819,699 @@ bary_coord_in_tri(const Eigen::Vector2d& p,
   double u = 1.0 - v - w;
 
   return Eigen::Vector2d(u, v);
+}
+
+std::vector<CloughTocherSurface::tracked_vertex_info>
+CloughTocherSurface::generate_tracked_vertices_info(
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    int subdivision_level,
+    const Eigen::MatrixXd& V,
+    const Eigen::MatrixXi& F)
+{
+  std::vector<tracked_vertex_info> return_vec;
+  const double step = 1.0 / subdivision_level;
+  const int N =
+      subdivision_level *
+      subdivision_level; // number of subdivided tris in micro triangle
+  return_vec.reserve(N * 3 * F.rows()); // rough estimate
+
+  // build 3d data
+  // area for each triangle
+  Eigen::VectorXd area;
+  igl::doublearea(V, F, area);
+  area /= 2.0;
+
+  // std::cout << area << std::endl;
+
+  // adjacency list for vertices
+  std::vector<std::vector<int64_t>> vf_adj, _VFi;
+  igl::vertex_triangle_adjacency(V, F, vf_adj, _VFi);
+
+  // face face adjacency matrix
+  Eigen::MatrixXi ff_adj;
+  igl::triangle_triangle_adjacency(F, ff_adj);
+
+  // compute tracked vertices info
+  const auto& face_charts = m_affine_manifold.m_face_charts;
+
+  std::map<int64_t, bool> visited_vertices;
+  std::map<std::pair<int64_t, int64_t>, bool> visited_edges;
+
+  for (size_t fid = 0; fid < face_charts.size(); fid++) {
+    const auto& f_chart = face_charts[fid];
+    const auto& nodes = f_chart.lagrange_nodes;
+    const auto& f_uvs = f_chart.face_uv_positions;
+
+    const auto center_uv_pos = f_chart.alpha * f_uvs[0] +
+                               f_chart.beta * f_uvs[1] +
+                               f_chart.gamma * f_uvs[2];
+
+    std::array<std::array<int64_t, 10>, 3> micro_nodes = {
+      { { { nodes[0],
+            nodes[1],
+            nodes[18],
+            nodes[3],
+            nodes[4],
+            nodes[14],
+            nodes[15],
+            nodes[13],
+            nodes[12],
+            nodes[9] } },
+        { { nodes[1],
+            nodes[2],
+            nodes[18],
+            nodes[5],
+            nodes[6],
+            nodes[16],
+            nodes[17],
+            nodes[15],
+            nodes[14],
+            nodes[10] } },
+        { { nodes[2],
+            nodes[0],
+            nodes[18],
+            nodes[7],
+            nodes[8],
+            nodes[12],
+            nodes[13],
+            nodes[17],
+            nodes[16],
+            nodes[11] } } }
+    };
+
+    std::array<std::array<Eigen::Vector3d, 10>, 3> micro_cp = {
+      { { { bezier_control_points[nodes[0]],
+            bezier_control_points[nodes[1]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[3]],
+            bezier_control_points[nodes[4]],
+            bezier_control_points[nodes[14]],
+            bezier_control_points[nodes[15]],
+            bezier_control_points[nodes[13]],
+            bezier_control_points[nodes[12]],
+            bezier_control_points[nodes[9]] } },
+        { { bezier_control_points[nodes[1]],
+            bezier_control_points[nodes[2]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[5]],
+            bezier_control_points[nodes[6]],
+            bezier_control_points[nodes[16]],
+            bezier_control_points[nodes[17]],
+            bezier_control_points[nodes[15]],
+            bezier_control_points[nodes[14]],
+            bezier_control_points[nodes[10]] } },
+        { { bezier_control_points[nodes[2]],
+            bezier_control_points[nodes[0]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[7]],
+            bezier_control_points[nodes[8]],
+            bezier_control_points[nodes[12]],
+            bezier_control_points[nodes[13]],
+            bezier_control_points[nodes[17]],
+            bezier_control_points[nodes[16]],
+            bezier_control_points[nodes[11]] } } }
+    };
+
+    // corner vertices
+    for (int i = 0; i < 3; ++i) {
+      if (visited_vertices.find(nodes[i]) != visited_vertices.end()) {
+        // already write in another triangle, skip
+        continue;
+      } else {
+        tracked_vertex_info info;
+
+        auto uv_pos = f_uvs[i];
+        auto pos = evaluate_cubic_triangle(micro_cp[i], 1, 0);
+        auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], 1, 0);
+
+        info.fid = fid;
+        info.pos_3d = pos;
+        info.pos_uv = uv_pos;
+        info.dfdu = tangents[0];
+        info.dfdv = tangents[1];
+
+        info.micro_id = i;
+        info.micro_u = 1;
+        info.micro_v = 0;
+
+        double A = 0;
+        for (const auto& one_ring_fid : vf_adj[F(fid, i)]) {
+          // std::cout << one_ring_fid << " ";
+          A += area[one_ring_fid];
+        }
+        // std::cout << std::endl;
+
+        info.area = (1. / 6.) * 2 * A / (3 * N);
+
+        info.micro_v0 = f_uvs[i];
+        info.micro_v1 = f_uvs[(i + 1) % 3];
+        info.micro_v2 = center_uv_pos;
+
+        return_vec.push_back(info);
+
+        visited_vertices[nodes[i]] = true;
+      }
+    }
+
+    {
+      // center v
+      tracked_vertex_info center_info;
+
+      auto center_pos = evaluate_cubic_triangle(micro_cp[0], 0, 0);
+      auto center_tangents =
+          evaluate_cubic_triangle_tangents(micro_cp[0], 0, 0);
+
+      center_info.fid = fid;
+      center_info.pos_3d = center_pos;
+      center_info.pos_uv = center_uv_pos;
+      center_info.dfdu = center_tangents[0];
+      center_info.dfdv = center_tangents[1];
+
+      center_info.micro_id = 0;
+      center_info.micro_u = 0;
+      center_info.micro_v = 0;
+
+      center_info.area = 2 * area[fid] / (3 * N);
+
+      center_info.micro_v0 = f_uvs[0];
+      center_info.micro_v1 = f_uvs[1];
+      center_info.micro_v2 = center_uv_pos;
+
+      return_vec.push_back(center_info);
+    }
+
+    // edges (external + internal)
+    for (int i = 0; i < 3; ++i) {
+      // external
+      if (visited_edges.find(std::make_pair(
+              micro_nodes[i][0], micro_nodes[i][1])) == visited_edges.end() &&
+          visited_edges.find(std::make_pair(
+              micro_nodes[i][1], micro_nodes[i][0])) == visited_edges.end()) {
+
+        tracked_vertex_info info;
+
+        for (int k = 1; k < subdivision_level; ++k) {
+          double u = 1.0 - k * step;
+          double v = 1.0 - u;
+          auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                        (1.0 - u - v) * center_uv_pos;
+          auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+          auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u, v);
+
+          info.fid = fid;
+          info.pos_3d = pos;
+          info.pos_uv = uv_pos;
+          info.dfdu = tangents[0];
+          info.dfdv = tangents[1];
+
+          info.micro_id = i;
+          info.micro_u = u;
+          info.micro_v = v;
+
+          double A = area[fid];
+          if (ff_adj(fid, i) > -1) {
+            A += area[ff_adj(fid, i)];
+          }
+
+          info.area = (1. / 2.) * 2 * A / (3 * N);
+
+          info.micro_v0 = f_uvs[i];
+          info.micro_v1 = f_uvs[(i + 1) % 3];
+          info.micro_v2 = center_uv_pos;
+
+          return_vec.push_back(info);
+        }
+
+        visited_edges[std::make_pair(micro_nodes[i][0], micro_nodes[i][1])] =
+            true;
+        visited_edges[std::make_pair(micro_nodes[i][1], micro_nodes[i][0])] =
+            true;
+      }
+
+      // internal edge (v1-v2 for micro)
+      for (int k = 1; k < subdivision_level; ++k) {
+        tracked_vertex_info info;
+
+        double u = 0;
+        double v = 1.0 - k * step;
+        auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                      (1.0 - u - v) * center_uv_pos;
+        auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+        auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u, v);
+
+        info.fid = fid;
+        info.pos_3d = pos;
+        info.pos_uv = uv_pos;
+        info.dfdu = tangents[0];
+        info.dfdv = tangents[1];
+
+        info.micro_id = i;
+        info.micro_u = u;
+        info.micro_v = v;
+
+        info.area = 2 * area[fid] / (3 * N);
+
+        info.micro_v0 = f_uvs[i];
+        info.micro_v1 = f_uvs[(i + 1) % 3];
+        info.micro_v2 = center_uv_pos;
+
+        return_vec.push_back(info);
+      }
+    }
+
+    // internal nodes
+    for (int i = 0; i < 3; ++i) {
+      for (int k = 1; k < subdivision_level; ++k) {
+        double u = 1.0 - k * step;
+        for (int h = 1; h < k; ++h) {
+          tracked_vertex_info info;
+
+          double v = h * step;
+          auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                        (1.0 - u - v) * center_uv_pos;
+          auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+          auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u, v);
+
+          info.fid = fid;
+          info.pos_3d = pos;
+          info.pos_uv = uv_pos;
+          info.dfdu = tangents[0];
+          info.dfdv = tangents[1];
+
+          info.micro_id = i;
+          info.micro_u = u;
+          info.micro_v = v;
+
+          info.area = 2 * area[fid] / (3 * N);
+
+          info.micro_v0 = f_uvs[i];
+          info.micro_v1 = f_uvs[(i + 1) % 3];
+          info.micro_v2 = center_uv_pos;
+
+          return_vec.push_back(info);
+        }
+      }
+    }
+  }
+
+  return return_vec;
+}
+
+Eigen::Vector3d
+cylinder_pos(double gu, double gv, double radius, double angle_scale)
+{
+  double theta = angle_scale * gu;
+  double cth = cos(theta);
+  double sth = sin(theta);
+
+  return Eigen::Vector3d(radius * cth, radius * sth, gv);
+}
+
+std::array<Eigen::Vector3d, 2>
+cylinder_tangents(double gu,
+                  double gv,
+                  double radius,
+                  double angle_scale,
+                  const Eigen::Vector2d& v0,
+                  const Eigen::Vector2d& v1,
+                  const Eigen::Vector2d& v2)
+{
+  double theta = angle_scale * gu;
+  double cth = cos(theta);
+  double sth = sin(theta);
+
+  double dgu_du = v0[0] - v2[0];
+  double dgu_dv = v1[0] - v2[0];
+  double dgv_du = v0[1] - v2[1];
+  double dgv_dv = v1[1] - v2[1];
+
+  Eigen::Vector3d df_dgu(
+      -radius * angle_scale * sth, radius * angle_scale * cth, 0.0);
+  Eigen::Vector3d df_dgv(0, 0, 1);
+
+  auto old_du = df_dgu * dgu_du + df_dgv * dgv_du;
+  auto old_dv = df_dgu * dgu_dv + df_dgv * dgv_dv;
+
+  return { { old_du, old_dv } };
+
+  // dgu_du = tri[0, 0] - tri[2, 0]
+  // dgu_dv = tri[1, 0] - tri[2, 0]
+  // dgv_du = tri[0, 1] - tri[2, 1]
+  // dgv_dv = tri[1, 1] - tri[2, 1]
+
+  // df_dgu = np.array([-radius * angle_scale * sth,
+  //                    radius * angle_scale * cth,
+  //                    0.0], dtype=float)
+  // df_dgv = np.array([0.0, 0.0, 1.0], dtype=float)
+  // old_du[i] = df_dgu * dgu_du + df_dgv * dgv_du
+  // old_dv[i] = df_dgu * dgu_dv + df_dgv * dgv_dv
+}
+
+std::vector<CloughTocherSurface::tracked_vertex_info>
+CloughTocherSurface::generate_tracked_vertices_info_from_cylinder(
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    int subdivision_level,
+    const Eigen::MatrixXd& V,
+    const Eigen::MatrixXi& F,
+    double radius,
+    double angle_scale)
+{
+
+  std::vector<tracked_vertex_info> return_vec;
+  const double step = 1.0 / subdivision_level;
+  const int N =
+      subdivision_level *
+      subdivision_level; // number of subdivided tris in micro triangle
+  return_vec.reserve(N * 3 * F.rows()); // rough estimate
+
+  // build 3d data
+  // area for each triangle
+  Eigen::VectorXd area;
+  igl::doublearea(V, F, area);
+  area /= 2.0;
+
+  std::cout << area << std::endl;
+
+  // adjacency list for vertices
+  std::vector<std::vector<int64_t>> vf_adj, _VFi;
+  igl::vertex_triangle_adjacency(V, F, vf_adj, _VFi);
+
+  // face face adjacency matrix
+  Eigen::MatrixXi ff_adj;
+  igl::triangle_triangle_adjacency(F, ff_adj);
+
+  // compute tracked vertices info
+  const auto& face_charts = m_affine_manifold.m_face_charts;
+
+  std::map<int64_t, bool> visited_vertices;
+  std::map<std::pair<int64_t, int64_t>, bool> visited_edges;
+
+  for (size_t fid = 0; fid < face_charts.size(); fid++) {
+    const auto& f_chart = face_charts[fid];
+    const auto& nodes = f_chart.lagrange_nodes;
+    const auto& f_uvs = f_chart.face_uv_positions;
+
+    const auto center_uv_pos = f_chart.alpha * f_uvs[0] +
+                               f_chart.beta * f_uvs[1] +
+                               f_chart.gamma * f_uvs[2];
+
+    std::array<std::array<int64_t, 10>, 3> micro_nodes = {
+      { { { nodes[0],
+            nodes[1],
+            nodes[18],
+            nodes[3],
+            nodes[4],
+            nodes[14],
+            nodes[15],
+            nodes[13],
+            nodes[12],
+            nodes[9] } },
+        { { nodes[1],
+            nodes[2],
+            nodes[18],
+            nodes[5],
+            nodes[6],
+            nodes[16],
+            nodes[17],
+            nodes[15],
+            nodes[14],
+            nodes[10] } },
+        { { nodes[2],
+            nodes[0],
+            nodes[18],
+            nodes[7],
+            nodes[8],
+            nodes[12],
+            nodes[13],
+            nodes[17],
+            nodes[16],
+            nodes[11] } } }
+    };
+
+    std::array<std::array<Eigen::Vector3d, 10>, 3> micro_cp = {
+      { { { bezier_control_points[nodes[0]],
+            bezier_control_points[nodes[1]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[3]],
+            bezier_control_points[nodes[4]],
+            bezier_control_points[nodes[14]],
+            bezier_control_points[nodes[15]],
+            bezier_control_points[nodes[13]],
+            bezier_control_points[nodes[12]],
+            bezier_control_points[nodes[9]] } },
+        { { bezier_control_points[nodes[1]],
+            bezier_control_points[nodes[2]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[5]],
+            bezier_control_points[nodes[6]],
+            bezier_control_points[nodes[16]],
+            bezier_control_points[nodes[17]],
+            bezier_control_points[nodes[15]],
+            bezier_control_points[nodes[14]],
+            bezier_control_points[nodes[10]] } },
+        { { bezier_control_points[nodes[2]],
+            bezier_control_points[nodes[0]],
+            bezier_control_points[nodes[18]],
+            bezier_control_points[nodes[7]],
+            bezier_control_points[nodes[8]],
+            bezier_control_points[nodes[12]],
+            bezier_control_points[nodes[13]],
+            bezier_control_points[nodes[17]],
+            bezier_control_points[nodes[16]],
+            bezier_control_points[nodes[11]] } } }
+    };
+
+    // corner vertices
+    for (int i = 0; i < 3; ++i) {
+      if (visited_vertices.find(nodes[i]) != visited_vertices.end()) {
+        // already write in another triangle, skip
+        continue;
+      } else {
+        tracked_vertex_info info;
+
+        auto uv_pos = f_uvs[i];
+        // auto pos = evaluate_cubic_triangle(micro_cp[i], 1, 0);
+        // auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], 1, 0);
+
+        auto pos = cylinder_pos(uv_pos[0], uv_pos[1], radius, angle_scale);
+        auto tangents = cylinder_tangents(uv_pos[0],
+                                          uv_pos[1],
+                                          radius,
+                                          angle_scale,
+                                          f_uvs[i],
+                                          f_uvs[(i + 1) % 3],
+                                          center_uv_pos);
+
+        info.fid = fid;
+        info.pos_3d = pos;
+        info.pos_uv = uv_pos;
+        info.dfdu = tangents[0];
+        info.dfdv = tangents[1];
+
+        info.micro_id = i;
+        info.micro_u = 1;
+        info.micro_v = 0;
+
+        double A = 0;
+        for (const auto& one_ring_fid : vf_adj[F(fid, i)]) {
+          std::cout << one_ring_fid << " ";
+          A += area[one_ring_fid];
+        }
+        std::cout << std::endl;
+
+        info.area = (1. / 6.) * 2 * A / (3 * N);
+
+        info.micro_v0 = f_uvs[i];
+        info.micro_v1 = f_uvs[(i + 1) % 3];
+        info.micro_v2 = center_uv_pos;
+
+        return_vec.push_back(info);
+
+        visited_vertices[nodes[i]] = true;
+      }
+    }
+
+    {
+      // center v
+      tracked_vertex_info center_info;
+
+      // auto center_pos = evaluate_cubic_triangle(micro_cp[0], 0, 0);
+      // auto center_tangents =
+      //     evaluate_cubic_triangle_tangents(micro_cp[0], 0, 0);
+
+      auto center_pos =
+          cylinder_pos(center_uv_pos[0], center_uv_pos[1], radius, angle_scale);
+      auto center_tangents = cylinder_tangents(center_uv_pos[0],
+                                               center_uv_pos[1],
+                                               radius,
+                                               angle_scale,
+                                               f_uvs[0],
+                                               f_uvs[1],
+                                               center_uv_pos);
+
+      center_info.fid = fid;
+      center_info.pos_3d = center_pos;
+      center_info.pos_uv = center_uv_pos;
+      center_info.dfdu = center_tangents[0];
+      center_info.dfdv = center_tangents[1];
+
+      center_info.micro_id = 0;
+      center_info.micro_u = 0;
+      center_info.micro_v = 0;
+
+      center_info.area = 2 * area[fid] / (3 * N);
+
+      center_info.micro_v0 = f_uvs[0];
+      center_info.micro_v1 = f_uvs[1];
+      center_info.micro_v2 = center_uv_pos;
+
+      return_vec.push_back(center_info);
+    }
+
+    // edges (external + internal)
+    for (int i = 0; i < 3; ++i) {
+      // external
+      if (visited_edges.find(std::make_pair(
+              micro_nodes[i][0], micro_nodes[i][1])) == visited_edges.end() &&
+          visited_edges.find(std::make_pair(
+              micro_nodes[i][1], micro_nodes[i][0])) == visited_edges.end()) {
+
+        tracked_vertex_info info;
+
+        for (int k = 1; k < subdivision_level; ++k) {
+          double u = 1.0 - k * step;
+          double v = 1.0 - u;
+          auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                        (1.0 - u - v) * center_uv_pos;
+          // auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+          // auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u,
+          // v);
+
+          auto pos = cylinder_pos(uv_pos[0], uv_pos[1], radius, angle_scale);
+          auto tangents = cylinder_tangents(uv_pos[0],
+                                            uv_pos[1],
+                                            radius,
+                                            angle_scale,
+                                            f_uvs[i],
+                                            f_uvs[(i + 1) % 3],
+                                            center_uv_pos);
+
+          info.fid = fid;
+          info.pos_3d = pos;
+          info.pos_uv = uv_pos;
+          info.dfdu = tangents[0];
+          info.dfdv = tangents[1];
+
+          info.micro_id = i;
+          info.micro_u = u;
+          info.micro_v = v;
+
+          double A = area[fid];
+          if (ff_adj(fid, i) > -1) {
+            A += area[ff_adj(fid, i)];
+          }
+
+          info.area = (1. / 2.) * 2 * A / (3 * N);
+
+          info.micro_v0 = f_uvs[i];
+          info.micro_v1 = f_uvs[(i + 1) % 3];
+          info.micro_v2 = center_uv_pos;
+
+          return_vec.push_back(info);
+        }
+
+        visited_edges[std::make_pair(micro_nodes[i][0], micro_nodes[i][1])] =
+            true;
+        visited_edges[std::make_pair(micro_nodes[i][1], micro_nodes[i][0])] =
+            true;
+      }
+
+      // internal edge (v1-v2 for micro)
+      for (int k = 1; k < subdivision_level; ++k) {
+        tracked_vertex_info info;
+
+        double u = 0;
+        double v = 1.0 - k * step;
+        auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                      (1.0 - u - v) * center_uv_pos;
+        // auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+        // auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u, v);
+
+        auto pos = cylinder_pos(uv_pos[0], uv_pos[1], radius, angle_scale);
+        auto tangents = cylinder_tangents(uv_pos[0],
+                                          uv_pos[1],
+                                          radius,
+                                          angle_scale,
+                                          f_uvs[i],
+                                          f_uvs[(i + 1) % 3],
+                                          center_uv_pos);
+
+        info.fid = fid;
+        info.pos_3d = pos;
+        info.pos_uv = uv_pos;
+        info.dfdu = tangents[0];
+        info.dfdv = tangents[1];
+
+        info.micro_id = i;
+        info.micro_u = u;
+        info.micro_v = v;
+
+        info.area = 2 * area[fid] / (3 * N);
+
+        info.micro_v0 = f_uvs[i];
+        info.micro_v1 = f_uvs[(i + 1) % 3];
+        info.micro_v2 = center_uv_pos;
+
+        return_vec.push_back(info);
+      }
+    }
+
+    // internal nodes
+    for (int i = 0; i < 3; ++i) {
+      for (int k = 1; k < subdivision_level; ++k) {
+        double u = 1.0 - k * step;
+        for (int h = 1; h < k; ++h) {
+          tracked_vertex_info info;
+
+          double v = h * step;
+          auto uv_pos = u * f_uvs[i] + v * f_uvs[(i + 1) % 3] +
+                        (1.0 - u - v) * center_uv_pos;
+          // auto pos = evaluate_cubic_triangle(micro_cp[i], u, v);
+          // auto tangents = evaluate_cubic_triangle_tangents(micro_cp[i], u,
+          // v);
+
+          auto pos = cylinder_pos(uv_pos[0], uv_pos[1], radius, angle_scale);
+          auto tangents = cylinder_tangents(uv_pos[0],
+                                            uv_pos[1],
+                                            radius,
+                                            angle_scale,
+                                            f_uvs[i],
+                                            f_uvs[(i + 1) % 3],
+                                            center_uv_pos);
+
+          info.fid = fid;
+          info.pos_3d = pos;
+          info.pos_uv = uv_pos;
+          info.dfdu = tangents[0];
+          info.dfdv = tangents[1];
+
+          info.micro_id = i;
+          info.micro_u = u;
+          info.micro_v = v;
+
+          info.area = 2 * area[fid] / (3 * N);
+
+          info.micro_v0 = f_uvs[i];
+          info.micro_v1 = f_uvs[(i + 1) % 3];
+          info.micro_v2 = center_uv_pos;
+
+          return_vec.push_back(info);
+        }
+      }
+    }
+  }
+
+  return return_vec;
 }
 
 void
@@ -4262,6 +4958,16 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
       continue;
     }
 
+    // // TODO: remove this, replace by group in endpoint constraints
+    // for (const auto one_ring_vid : v_chart.vertex_one_ring) {
+    //   if (v_charts[one_ring_vid].is_feature_edge_interior ||
+    //       v_charts[one_ring_vid].is_feature_edge_intersection ||
+    //       v_charts[one_ring_vid].is_feature_edge_endpoint) {
+    //     v_chart.is_feature_cone = true;
+    //     continue;
+    //   }
+    // }
+
     // cone case
     // compute base on one ring edges
 
@@ -5486,7 +6192,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
           continue;
         }
 
-        std::cout << "assign node id " << node_id << std::endl;
+        // std::cout << "assign node id " << node_id << std::endl;
         for (int i = 0; i < 3; ++i) {
           // set for xyz
           m.insert(node_id * 3 + i, node_id * 3 + i) = 1;
@@ -5501,7 +6207,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
                   v_chart.vertex_index
               ? e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[0]
               : e_charts[v_chart.edge_one_ring[0]].lagrange_nodes[3];
-      std::cout << "assign v node id " << v_node_id << std::endl;
+      // std::cout << "assign v node id " << v_node_id << std::endl;
 
       for (int i = 0; i < 3; ++i) {
         // set for xyz for v
@@ -5679,12 +6385,12 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
                   ? e_charts[group[i]].lagrange_nodes[1]
                   : e_charts[group[i]].lagrange_nodes[2];
 
-          std::cout << "node_id: " << node_id << std::endl;
-          std::cout << independent_node_map[node_id * 3] << std::endl;
+          // std::cout << "node_id: " << node_id << std::endl;
+          // std::cout << independent_node_map[node_id * 3] << std::endl;
 
           if (independent_node_map[node_id * 3] != -1) {
             // determined in the previous group
-            std::cout << "skipped node_id indep: " << node_id << std::endl;
+            // std::cout << "skipped node_id indep: " << node_id << std::endl;
             continue;
           }
           for (int k = 0; k < 3; ++k) {
@@ -5708,7 +6414,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 
         Eigen::Matrix2d U_ijik_inv = inverse_2by2(U_ijik);
 
-        std::cout << "group id: " << g << std::endl;
+        // std::cout << "group id: " << g << std::endl;
         // std::cout << U_ijik << std::endl;
         // std::cout << U_ijik_inv << std::endl;
 
@@ -5721,7 +6427,7 @@ CloughTocherSurface::bezier_endpoint_ind2dep_expanded(
 
           if (independent_node_map[node_id * 3] != -1) {
             // skip the last one in last group special case
-            std::cout << "skipped node_id: " << node_id << std::endl;
+            // std::cout << "skipped node_id: " << node_id << std::endl;
             continue;
           }
           // Eigen::Vector2d u_im =

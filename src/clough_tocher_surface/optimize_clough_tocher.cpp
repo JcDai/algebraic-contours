@@ -6,6 +6,7 @@
 #include "clough_tocher_patch.hpp"
 #include "igl/doublearea.h"
 
+#include <numbers>
 #include <unsupported/Eigen/SparseExtra>
 
 CloughTocherOptimizer::CloughTocherOptimizer(
@@ -266,6 +267,25 @@ CloughTocherOptimizer::compute_normalized_fitting_weight() const
   return normalized_fitting_weight;
 }
 
+double
+CloughTocherOptimizer::compute_normalized_fitting_weight_tracked() const
+{
+  const auto& V = get_vertices();
+  const auto& faces = get_faces();
+
+  // begin with just the base fitting weight
+  double normalized_fitting_weight = fitting_weight;
+
+  // normalize by area^2
+  Eigen::VectorXd double_area;
+  igl::doublearea(V, faces, double_area);
+  double area = double_area.sum() / 2.;
+
+  normalized_fitting_weight /= (area * area);
+
+  return normalized_fitting_weight;
+}
+
 void
 CloughTocherOptimizer::checkpoint_control_points(
     const std::vector<Eigen::Vector3d>& bezier_control_points,
@@ -305,6 +325,7 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
     int iterations,
     double step_size)
 {
+  spdlog::set_level(spdlog::level::info);
   total_timer.start();
   initialize_data_log();
 
@@ -492,7 +513,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
       break;
 
     // serialize if checkpoint iteration
-    int checkpoint = 10;
+    // int checkpoint = 10;
+    int checkpoint = 1;
     if (((ID.iter % checkpoint) == 0) || (ID.iter < 0)) {
       checkpoint_control_points(optimized_control_points, ID.iter);
     }
@@ -500,6 +522,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
   spdlog::info("final energy: {}", ID.optimized_energy);
   close_logs();
+
+  spdlog::set_level(spdlog::level::off);
 
   return optimized_control_points;
 }
@@ -1039,6 +1063,8 @@ CloughTocherOptimizer::assemble_local_laplace_beltrami_siffness_matrix(
   // permutation:      0   9   3   4   7   8   6   2   1   5
   std::array<int64_t, 10> perm = { 0, 9, 3, 4, 7, 8, 6, 2, 1, 5 };
 
+  // perm = { 0, 8, 7, 2, 3, 9, 6, 4, 5, 1 };
+
   double cp_3d[10][3];
   double A[10][10];
   for (int n = 0; n < 3; n++) {
@@ -1082,6 +1108,8 @@ CloughTocherOptimizer::assemble_autodiff_laplace_beltrami_gradient(
   // new order:      003 012 021 030 102 111 120 201 210 300
   // permutation:      0   9   3   4   7   8   6   2   1   5
   std::array<int64_t, 10> perm = { 0, 9, 3, 4, 7, 8, 6, 2, 1, 5 };
+
+  // perm = { 0, 8, 7, 2, 3, 9, 6, 4, 5, 1 };
 
   DiffScalar cp_3d[10][3];
   DiffScalar A_diff[10][10];
@@ -1146,6 +1174,8 @@ CloughTocherOptimizer::assemble_autodiff_laplace_beltrami_siffness_matrix(
   // new order:      003 012 021 030 102 111 120 201 210 300
   // permutation:      0   9   3   4   7   8   6   2   1   5
   std::array<int64_t, 10> perm = { 0, 9, 3, 4, 7, 8, 6, 2, 1, 5 };
+
+  // perm = { 0, 8, 7, 2, 3, 9, 6, 4, 5, 1 };
 
   DiffScalar cp_3d[10][3];
   DiffScalar A_diff[10][10];
@@ -1573,6 +1603,39 @@ write_tracked_vertices_with_subdivision_level(
       filename, bezier_control_points, subdivision_level);
 }
 
+void
+write_full_tracked_vertices_with_subdivision_level(
+    CloughTocherSurface& ct_surface,
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    const std::string& filename,
+    int subdivision_level,
+    const Eigen::MatrixXd& V,
+    const Eigen::MatrixXi& F)
+{
+  const auto& tracked_vertices_info = ct_surface.generate_tracked_vertices_info(
+      bezier_control_points, subdivision_level, V, F);
+
+  // const auto& tracked_vertices_info =
+  //     ct_surface.generate_tracked_vertices_info_from_cylinder(
+  //         bezier_control_points, subdivision_level, V, F, 2.0, 0.6 * M_PI);
+
+  std::ofstream file(filename);
+
+  for (const auto& info : tracked_vertices_info) {
+    file << std::setprecision(16) << info.fid << " " << info.pos_3d[0] << " "
+         << info.pos_3d[1] << " " << info.pos_3d[2] << " " << info.pos_uv[0]
+         << " " << info.pos_uv[1] << " " << info.dfdu[0] << " " << info.dfdu[1]
+         << " " << info.dfdu[2] << " " << info.dfdv[0] << " " << info.dfdv[1]
+         << " " << info.dfdv[2] << " " << info.micro_id << " " << info.micro_u
+         << " " << info.micro_v << " " << info.micro_v0[0] << " "
+         << info.micro_v0[1] << " " << info.micro_v1[0] << " "
+         << info.micro_v1[1] << " " << info.micro_v2[0] << " "
+         << info.micro_v2[1] << " " << info.area << std::endl;
+  }
+
+  file.close();
+}
+
 // write edge geometry to file
 void
 write_polylines_to_obj(const std::string& filename,
@@ -1679,6 +1742,129 @@ point_in_tri(const Eigen::Vector2d& p,
   double eps = 1e-10;
   return (s1 >= -eps && s2 >= -eps && s3 >= -eps) ||
          (s1 <= eps && s2 <= eps && s3 <= eps);
+}
+
+std::array<Eigen::Vector3d, 2>
+CloughTocherOptimizer::transform_tangent_old_to_new(
+    const Eigen::Vector2d& old_v0,
+    const Eigen::Vector2d& old_v1,
+    const Eigen::Vector2d& old_v2,
+    const Eigen::Vector2d& new_v0,
+    const Eigen::Vector2d& new_v1,
+    const Eigen::Vector2d& new_v2,
+    const Eigen::Vector3d& old_du,
+    const Eigen::Vector3d& old_dv)
+{
+  Eigen::Matrix2d J_old, J_new;
+  Eigen::Vector2d old_20 = old_v0 - old_v2;
+  Eigen::Vector2d old_21 = old_v1 - old_v2;
+  Eigen::Vector2d new_20 = new_v0 - new_v2;
+  Eigen::Vector2d new_21 = new_v1 - new_v2;
+
+  J_old << old_20[0], old_21[0], old_20[1], old_21[1];
+  J_new << new_20[0], new_21[0], new_20[1], new_21[1];
+
+  Eigen::Matrix<double, 3, 2> d_old;
+  d_old << old_du[0], old_dv[0], old_du[1], old_dv[1], old_du[2], old_dv[2];
+  Eigen::Matrix<double, 3, 2> grad_uv = d_old * J_old.inverse();
+  Eigen::Matrix<double, 3, 2> d_new = grad_uv * J_new;
+
+  return { { d_new.col(0), d_new.col(1) } };
+}
+
+int
+micro_tri_idx(double u, double v)
+{
+  // p = u * p0 + v * p1 + w * p2
+
+  double w = 1.0 - u - v;
+  if (w <= u && w <= v) {
+    return 0; // 01c
+  } else if (u <= v && u <= w) {
+    return 1; // 12c
+  }
+
+  return 2;
+}
+
+void
+CloughTocherOptimizer::compute_tracked_vertices_normals()
+{
+  for (size_t i = 0; i < m_tracked_vertices.size(); ++i) {
+    auto& tv = m_tracked_vertices[i];
+    int64_t fid = tv.macro_tri_id;
+
+    const auto& f_chart = m_affine_manifold.m_face_charts[fid];
+    Eigen::Vector2d center_pos =
+        (f_chart.face_uv_positions[0] + f_chart.face_uv_positions[1] +
+         f_chart.face_uv_positions[2]) /
+        3.;
+
+    // int micro_id = micro_tri_idx(tv.local_uv_pos[0], tv.local_uv_pos[1]);
+    int micro_id = -1;
+    for (int k = 0; k < 3; ++k) {
+      if (point_in_tri(tv.local_uv_pos,
+                       f_chart.face_uv_positions[micro_id],
+                       f_chart.face_uv_positions[(micro_id + 1) % 3],
+                       center_pos)) {
+        micro_id = k;
+        break;
+      }
+    }
+    assert(micro_id > -1);
+
+    auto new_dudv = transform_tangent_old_to_new(
+        tv.old_v0,
+        tv.old_v1,
+        tv.old_v2,
+        f_chart.face_uv_positions[micro_id],
+        f_chart.face_uv_positions[(micro_id + 1) % 3],
+        center_pos,
+        tv.dfdu,
+        tv.dfdv);
+
+    tv.normal = new_dudv[0].cross(new_dudv[1]);
+    // tv.normal = tv.dfdu.cross(tv.dfdv);
+    double norm = tv.normal.norm();
+    if (norm > 0) {
+      tv.normal /= norm;
+    }
+  }
+
+  std::ofstream file("transfered_normals.obj");
+  for (size_t i = 0; i < m_tracked_vertices.size(); ++i) {
+    auto& tv = m_tracked_vertices[i];
+    file << "v " << tv.pos_3d[0] << " " << tv.pos_3d[1] << " " << tv.pos_3d[2]
+         << " " << std::endl;
+    double length = 30.;
+    file << "v " << tv.pos_3d[0] + tv.normal[0] / length << " "
+         << tv.pos_3d[1] + tv.normal[1] / length << " "
+         << tv.pos_3d[2] + tv.normal[2] / length << " " << std::endl;
+  }
+  for (size_t i = 0; i < m_tracked_vertices.size(); ++i) {
+
+    file << "l " << 2 * i + 1 << " " << 2 * i + 2 << std::endl;
+  }
+  file.close();
+}
+
+void
+CloughTocherOptimizer::normal_matrix_tracked(Eigen::SparseMatrix<double>& m)
+{
+  const auto& tracked_cnt = m_tracked_vertices.size();
+
+  m.resize(tracked_cnt, 3 * tracked_cnt);
+
+  std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(3 * tracked_cnt);
+
+  for (size_t i = 0; i < tracked_cnt; ++i) {
+    for (int dim = 0; dim < 3; ++dim) {
+      triplets.emplace_back(i, 3 * i + dim, m_tracked_vertices[i].normal[dim]);
+    }
+  }
+
+  m.setFromTriplets(triplets.begin(), triplets.end());
 }
 
 void
@@ -1854,19 +2040,260 @@ CloughTocherOptimizer::bezier_coeff_with_uv_value_tracked(
   m.setFromTriplets(triplets.begin(), triplets.end());
 }
 
+void
+CloughTocherOptimizer::dudv_bezier_coeff_with_uv_value_tracked(
+    Eigen::SparseMatrix<double>& m_u,
+    Eigen::SparseMatrix<double>& m_v)
+{
+  const auto& tracked_cnt = m_tracked_vertices.size();
+
+  m_u.resize(3 * tracked_cnt, 10 * 3 * tracked_cnt);
+  m_v.resize(3 * tracked_cnt, 10 * 3 * tracked_cnt);
+
+  std::vector<Eigen::Triplet<double>> triplets_u, triplets_v;
+  triplets_u.reserve(10 * tracked_cnt * 3);
+  triplets_v.reserve(10 * tracked_cnt * 3);
+
+  const auto& local_micro_indices = get_local_micro_triangle_nodes();
+  const auto& face_charts = m_affine_manifold.m_face_charts;
+
+  for (size_t i = 0; i < tracked_cnt; ++i) {
+    // get corresponding fid for tracked vertex i
+    const auto& fid = m_tracked_vertices[i].macro_tri_id;
+    const auto& f_chart = face_charts[fid];
+
+    // compute macro triangle center
+    double alpha, beta, gamma;
+    if (m_use_incenter) {
+      alpha = f_chart.alpha;
+      beta = f_chart.beta;
+      gamma = f_chart.gamma;
+    } else {
+      alpha = 1. / 3.;
+      beta = 1. / 3.;
+      gamma = 1. / 3.;
+    }
+    Eigen::Vector2d center_pos = alpha * f_chart.face_uv_positions[0] +
+                                 beta * f_chart.face_uv_positions[1] +
+                                 gamma * f_chart.face_uv_positions[2];
+
+    // find which micro triangle contains the tracked vertex
+    const double macro_u = m_tracked_vertices[i].local_uv_pos[0];
+    const double macro_v = m_tracked_vertices[i].local_uv_pos[1];
+    Eigen::Vector2d tracked_pos =
+        macro_u * f_chart.face_uv_positions[0] +
+        macro_v * f_chart.face_uv_positions[1] +
+        (1. - macro_u - macro_v) * f_chart.face_uv_positions[2];
+
+    int micro_idx = -1;
+    for (int k = 0; k < 3; ++k) {
+      if (point_in_tri(tracked_pos,
+                       f_chart.face_uv_positions[k],
+                       f_chart.face_uv_positions[(k + 1) % 3],
+                       center_pos)) {
+        micro_idx = k;
+        break;
+      }
+    }
+    assert(micro_idx > -1);
+
+    // const int micro_idx = ct_surface.m_patches[fid].triangle_ind(
+    //     macro_u, macro_v, 1.0 - macro_u - macro_v);
+
+    const auto& local_indices = local_micro_indices[micro_idx];
+
+    // compute barycentric coords in local triangle
+    double s, t, u;
+
+    Eigen::Vector2d v0_pos = f_chart.face_uv_positions[local_indices[0]];
+    Eigen::Vector2d v1_pos = f_chart.face_uv_positions[local_indices[1]];
+    // std::cout << local_indices[0] << local_indices[1] << std::endl;
+
+    Eigen::Vector2d micro_uv =
+        barycentric_coord_in_tri(tracked_pos, v0_pos, v1_pos, center_pos);
+
+    s = micro_uv[0];
+    t = micro_uv[1];
+    u = 1.0 - s - t;
+
+    // build local 10 by 10 matrix with bezier coeffs and uvs
+    // P = sV0 + tV1+ uV2
+    // convention using wikipedia page
+    // dfdu = 3 * u * u * cp[0] + 0 * cp[1] -
+    //        3 * (u + v - 1) * (u + v - 1) * cp[2] + 6 * u * v * cp[3] +
+    //        3 * v * v * cp[4] - 3 * v * v * cp[5] + 6 * v * (u + v - 1) *
+    //        cp[6] + 3 * (u + v - 1) * (3 * u + v - 1) * cp[7] + 3 * u * (-3 *
+    //        u - 2 * v + 2) * cp[8] + 6 * v * (-2 * u - v + 1) * cp[9];
+
+    // dfdt = 0 * cp[0] + 3 * t * t * cp[1] - 3 * (s + t - 1) * (s + t - 1) *
+    //   cp[2] +
+    //  3 * s * s * cp[3] + 6 * s * t * cp[4] +
+    //  3 * t * (-2 * s - 3 * t + 2) * cp[5] +
+    //  3 * (s + t - 1) * (s + 3 * t - 1) * cp[6] +
+    //  6 * s * (s + t - 1) * cp[7] - 3 * s * s * cp[8] +
+    //  6 * s * (-s - 2 * t + 1) * cp[9];
+
+    for (int dim = 0; dim < 3; ++dim) {
+      // du
+      triplets_u.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 0, 3 * s * s);
+      triplets_u.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 1, 0);
+      triplets_u.emplace_back(
+          i * 3 + dim, i * 30 + dim * 10 + 2, -3 * (s + t - 1) * (s + t - 1));
+      triplets_u.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 3, 6 * s * t);
+      triplets_u.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 4, 3 * t * t);
+      triplets_u.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 5, -3 * t * t);
+      triplets_u.emplace_back(
+          i * 3 + dim, i * 30 + dim * 10 + 6, 6 * t * (s + t - 1));
+      triplets_u.emplace_back(i * 3 + dim,
+                              i * 30 + dim * 10 + 7,
+                              3 * (s + t - 1) * (3 * s + t - 1));
+      triplets_u.emplace_back(
+          i * 3 + dim, i * 30 + dim * 10 + 8, 3 * s * (-3 * s - 2 * t + 2));
+      triplets_u.emplace_back(
+          i * 3 + dim, i * 30 + dim * 10 + 9, 6 * t * (-2 * s - t + 1));
+
+      // dv
+      triplets_v.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 0, 0);
+      triplets_v.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 1, 3 * t * t);
+      triplets_v.emplace_back(
+          i * 3 + dim, i * 30 + dim * 10 + 2, -3 * (s + t - 1) * (s + t - 1));
+      triplets_v.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 3, 3 * s * s);
+      triplets_v.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 4, 6 * s * t);
+      triplets_v.emplace_back(
+          i * 3 + dim, i * 30 + dim * 10 + 5, 3 * t * (-2 * s - 3 * t + 2));
+      triplets_v.emplace_back(i * 3 + dim,
+                              i * 30 + dim * 10 + 6,
+                              3 * (s + t - 1) * (s + 3 * t - 1));
+      triplets_v.emplace_back(
+          i * 3 + dim, i * 30 + dim * 10 + 7, 6 * s * (s + t - 1));
+      triplets_v.emplace_back(i * 3 + dim, i * 30 + dim * 10 + 8, -3 * s * s);
+      triplets_v.emplace_back(
+          i * 3 + dim, i * 30 + dim * 10 + 9, 6 * s * (-s - 2 * t + 1));
+    }
+  }
+
+  m_u.setFromTriplets(triplets_u.begin(), triplets_u.end());
+  m_v.setFromTriplets(triplets_v.begin(), triplets_v.end());
+}
+
 Eigen::SparseMatrix<double>
 CloughTocherOptimizer::generate_tracked_position_matrix()
 {
   Eigen::SparseMatrix<double> P_tracked, G2F_tracked, M2M_tracked,
-      Bezier_tracked;
+      Bezier_tracked, sqrt_area_weight_triple;
 
   P_G2F_tracked(G2F_tracked);
   Macro2Micro_tracked(M2M_tracked);
   bezier_coeff_with_uv_value_tracked(Bezier_tracked);
+  sqrt_area_weight_tracked_triple(sqrt_area_weight_triple);
 
-  P_tracked = Bezier_tracked * M2M_tracked * G2F_tracked;
+  P_tracked =
+      sqrt_area_weight_triple * Bezier_tracked * M2M_tracked * G2F_tracked;
 
   return P_tracked;
+}
+
+Eigen::SparseMatrix<double>
+sparse_stack(Eigen::SparseMatrix<double>& A,
+             Eigen::SparseMatrix<double>& B,
+             Eigen::SparseMatrix<double>& C)
+{
+  assert(A.cols() == B.cols());
+  assert(A.cols() == C.cols());
+
+  Eigen::SparseMatrix<double> m(A.rows() + B.rows() + C.rows(), A.cols());
+  std::vector<Eigen::Triplet<double>> triplets;
+
+  triplets.reserve(A.nonZeros() + B.nonZeros() + C.nonZeros());
+
+  for (int k = 0; k < A.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(A, k); it; ++it) {
+      triplets.emplace_back(it.row(), it.col(), it.value());
+    }
+  }
+
+  for (int k = 0; k < B.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(B, k); it; ++it) {
+      triplets.emplace_back(A.rows() + it.row(), it.col(), it.value());
+    }
+  }
+
+  for (int k = 0; k < C.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(C, k); it; ++it) {
+      triplets.emplace_back(
+          A.rows() + B.rows() + it.row(), it.col(), it.value());
+    }
+  }
+
+  m.setFromTriplets(triplets.begin(), triplets.end());
+  return m;
+}
+
+void
+CloughTocherOptimizer::sqrt_area_weight_tracked(Eigen::SparseMatrix<double>& m)
+{
+  const auto& tracked_cnt = m_tracked_vertices.size();
+  m.resize(tracked_cnt, tracked_cnt);
+  std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(tracked_cnt);
+
+  for (int64_t i = 0; i < tracked_cnt; ++i) {
+    triplets.emplace_back(i, i, std::sqrt(m_tracked_vertices[i].one_ring_area));
+  }
+
+  m.setFromTriplets(triplets.begin(), triplets.end());
+}
+
+void
+CloughTocherOptimizer::sqrt_area_weight_tracked_triple(
+    Eigen::SparseMatrix<double>& m)
+{
+  const auto& tracked_cnt = m_tracked_vertices.size();
+  m.resize(3 * tracked_cnt, 3 * tracked_cnt);
+  std::vector<Eigen::Triplet<double>> triplets;
+  triplets.reserve(3 * tracked_cnt);
+
+  for (int64_t i = 0; i < tracked_cnt; ++i) {
+    for (int dim = 0; dim < 3; ++dim) {
+      triplets.emplace_back(i * 3 + dim,
+                            i * 3 + dim,
+                            std::sqrt(m_tracked_vertices[i].one_ring_area));
+    }
+  }
+
+  m.setFromTriplets(triplets.begin(), triplets.end());
+}
+
+Eigen::SparseMatrix<double>
+CloughTocherOptimizer::generate_tracked_position_normal_matrix(double weight)
+{
+  Eigen::SparseMatrix<double> A_pos, A_du, A_dv, G2F_tracked, M2M_tracked,
+      Bezier_tracked, Bezier_du, Bezier_dv, normal_mat, sqrt_area_weight,
+      sqrt_area_weight_triple;
+
+  // call compute normals here
+  compute_tracked_vertices_normals();
+
+  P_G2F_tracked(G2F_tracked);
+  Macro2Micro_tracked(M2M_tracked);
+  bezier_coeff_with_uv_value_tracked(Bezier_tracked);
+  dudv_bezier_coeff_with_uv_value_tracked(Bezier_du, Bezier_dv);
+  normal_matrix_tracked(normal_mat);
+  sqrt_area_weight_tracked(sqrt_area_weight);
+  sqrt_area_weight_tracked_triple(sqrt_area_weight_triple);
+
+  // A_pos = weight * (Bezier_tracked * M2M_tracked * G2F_tracked);
+
+  A_pos = weight * (sqrt_area_weight_triple * Bezier_tracked * M2M_tracked *
+                    G2F_tracked);
+  A_du = (1. - weight) * (sqrt_area_weight * normal_mat * Bezier_du *
+                          M2M_tracked * G2F_tracked);
+  A_dv = (1. - weight) * (sqrt_area_weight * normal_mat * Bezier_dv *
+                          M2M_tracked * G2F_tracked);
+
+  return sparse_stack(A_pos, A_du, A_dv);
+
+  // return A_pos;
 }
 
 Eigen::VectorXd
@@ -1876,8 +2303,29 @@ CloughTocherOptimizer::build_tracked_vertices_vector()
   Eigen::VectorXd p(3 * num_vertices);
   for (int64_t i = 0; i < num_vertices; ++i) {
     for (int n = 0; n < 3; ++n) {
-      p[(3 * i) + n] = m_tracked_vertices[i].pos_3d[n];
+      p[(3 * i) + n] = m_tracked_vertices[i].pos_3d[n] *
+                       std::sqrt(m_tracked_vertices[i].one_ring_area);
     }
+  }
+
+  return p;
+}
+
+Eigen::VectorXd
+CloughTocherOptimizer::build_tracked_vertices_pos_normal_vector(double w)
+{
+  int num_vertices = m_tracked_vertices.size();
+  Eigen::VectorXd p(5 * num_vertices);
+  // Eigen::VectorXd p(3 * num_vertices);
+  for (int64_t i = 0; i < num_vertices; ++i) {
+    for (int n = 0; n < 3; ++n) {
+      p[(3 * i) + n] = m_tracked_vertices[i].pos_3d[n] * w *
+                       std::sqrt(m_tracked_vertices[i].one_ring_area);
+    }
+  }
+
+  for (int64_t i = num_vertices * 3; i < num_vertices * 5; ++i) {
+    p[i] = 0;
   }
 
   return p;
@@ -1900,7 +2348,7 @@ CloughTocherOptimizer::optimize_laplacian_energy_tracked(
 
   // compute hessian
   timer.start();
-  double k = compute_normalized_fitting_weight();
+  double k = compute_normalized_fitting_weight_tracked();
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
   const Eigen::SparseMatrix<double>& hessian_smooth = get_stiffness_matrix();
@@ -2009,13 +2457,14 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy_tracked(
   initialize_data_log();
 
   // get tracked vertices vector
-  Eigen::VectorXd v0 = build_tracked_vertices_vector();
+  // Eigen::VectorXd v0 = build_tracked_vertices_vector();
+  Eigen::VectorXd v0 = build_tracked_vertices_pos_normal_vector(0.5);
 
   // build initial position vector
   Eigen::VectorXd p_init = build_node_vector(bezier_control_points);
 
   // get fixed matrices
-  double k = compute_normalized_fitting_weight();
+  double k = compute_normalized_fitting_weight_tracked();
   spdlog::info("Using normalized fitting weight {}", k);
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
@@ -2038,10 +2487,12 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy_tracked(
   //.  = 0.5 * k * (p^TA^TAp - 2 v0^TAp + v0^2)
   // derivative = k A^T( Ap - v0)
   // hessian = k A^T A
-  const Eigen::SparseMatrix<double>& A = generate_tracked_position_matrix();
+  // const Eigen::SparseMatrix<double>& A = generate_tracked_position_matrix();
+  const Eigen::SparseMatrix<double>& A =
+      generate_tracked_position_normal_matrix(0.5);
   const Eigen::SparseMatrix<double>& P = get_position_matrix();
   // Eigen::saveMarket(A, "A.txt");
-  Eigen::saveMarket(P, "P.txt");
+  // Eigen::saveMarket(P, "P.txt");
 
   std::tie(energy_fit, derivative_fit, hessian_fit) =
       generate_position_energy_quadratic_tracked(
@@ -2325,7 +2776,8 @@ CloughTocherOptimizer::optimize_fitting_term_direct(
   spdlog::info("test fitting direct");
 
   // get tracked vertices
-  Eigen::VectorXd v0 = build_tracked_vertices_vector();
+  // Eigen::VectorXd v0 = build_tracked_vertices_vector();
+  Eigen::VectorXd v0 = build_tracked_vertices_pos_normal_vector(0.5);
 
   // build initial position vector
   Eigen::VectorXd p0 = build_node_vector(bezier_control_points);
@@ -2334,7 +2786,9 @@ CloughTocherOptimizer::optimize_fitting_term_direct(
   double k = 1;
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
   const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
-  const Eigen::SparseMatrix<double>& A = generate_tracked_position_matrix();
+  // const Eigen::SparseMatrix<double>& A = generate_tracked_position_matrix();
+  const Eigen::SparseMatrix<double>& A =
+      generate_tracked_position_normal_matrix(0.5);
   // const Eigen::SparseMatrix<double>& P = get_position_matrix();
 
   Eigen::SparseMatrix<double> hessian =
@@ -2375,6 +2829,52 @@ CloughTocherOptimizer::optimize_fitting_term_direct(
 
   spdlog::set_level(spdlog::level::off);
 
+  return build_control_points(p);
+}
+
+std::vector<Eigen::Vector3d>
+CloughTocherOptimizer::optimize_fitting_pos_and_normal_without_c1(
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    double weight = 0.5)
+{
+  spdlog::set_level(spdlog::level::info);
+  spdlog::info("test fitting pos and normal without c1, pos weight {}", weight);
+
+  // get tracked vertices and normal (0)
+  Eigen::VectorXd v0 = build_tracked_vertices_pos_normal_vector(weight);
+  // Eigen::VectorXd v0 = build_tracked_vertices_vector();
+
+  // build initial position vector
+  Eigen::VectorXd p0 = build_node_vector(bezier_control_points);
+
+  // double k = compute_normalized_fitting_weight();
+
+  // compute hessian
+  const Eigen::SparseMatrix<double>& A =
+      generate_tracked_position_normal_matrix(weight);
+
+  Eigen::SparseMatrix<double> hessian = A.transpose() * A;
+
+  Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> hessian_inverse;
+  hessian_inverse.compute(hessian);
+
+  // get base energy
+  double E0 = 0.5 * v0.dot(v0);
+
+  // get derivative
+  Eigen::VectorXd derivative = -A.transpose() * v0;
+
+  spdlog::info("initial fit energy: {}",
+               evaluate_quadratic_energy(hessian, derivative, E0, p0));
+
+  Eigen::VectorXd p = -hessian_inverse.solve(derivative);
+  Eigen::VectorXd res = (hessian * p) + derivative;
+
+  spdlog::info("optimized energy is {}",
+               evaluate_quadratic_energy(hessian, derivative, E0, p));
+  spdlog::info("residual error is {}", res.cwiseAbs().maxCoeff());
+
+  spdlog::set_level(spdlog::level::off);
   return build_control_points(p);
 }
 
@@ -2657,4 +3157,68 @@ CloughTocherOptimizer::compute_area_weighted_fitting_weight_matrix_tracked(
   }
 
   m.setFromTriplets(triplets.begin(), triplets.end());
+}
+
+void
+CloughTocherOptimizer::serialize_dofs(
+    const std::string& filename,
+    CloughTocherSurface& ct_surface,
+    const std::vector<Eigen::Vector3d>& bezier_control_points)
+{
+  std::ofstream file(filename);
+
+  // const auto& f_charts = m_affine_manifold.m_face_charts;
+  // Eigen::SparseMatrix<double, 1> b2l_mat;
+  // ct_surface.bezier2lag_full_mat(b2l_mat);
+  // auto lag_control_points = b2l_mat * bezier_control_points;
+
+  // file << std::setprecision(16);
+
+  // for (const auto& f_chart : f_charts) {
+  //   const auto& nodes = f_chart.lagrange_nodes;
+  //   std::vector<Eigen::Vector3d> control_points;
+  //   for (const auto& nid : nodes) {
+  //     control_points.push_back(bezier_control_points[nid]);
+  //   }
+  //   assert(control_points.size() == 19);
+
+  //   Eigen::Matrix<double, 12, 3> lag_ind_control_points;
+  //   for (int i = 0; i < 12; ++i) {
+  //     lag_ind_control_points.row(i) = lag_control_points[nodes[i]];
+  //   }
+
+  //   // get p0 p1 p2 d01 d10 d12 d21 d20 d02 h01 h12 h20
+  //   // compute from lagrange nodes
+  //   const auto& L2d_ind = L_L2d_ind_m();
+  //   Eigen::Matrix<double, 12, 3> dofs = L2d_ind * lag_ind_control_points;
+
+  //   // get h01_e h12_e h20_e: midpoint derivative along edge
+  //   // compute from bezier points
+  //   Eigen::Matrix<double, 3, 3> dof_extra;
+  //   dof_extra.row(0) = 3. / 4. *
+  //                      (-control_points[0] - control_points[3] +
+  //                       control_points[4] + control_points[1]);
+  //   dof_extra.row(1) = 3. / 4. *
+  //                      (-control_points[1] - control_points[5] +
+  //                       control_points[6] + control_points[2]);
+  //   dof_extra.row(2) = 3. / 4. *
+  //                      (-control_points[2] - control_points[7] +
+  //                       control_points[8] + control_points[0]);
+
+  //   for (int i = 0; i < 12; ++i) {
+  //     for (int dim = 0; dim < 3; ++dim) {
+  //       file << dofs(i, dim) << " ";
+  //     }
+  //     file << std::endl;
+  //   }
+
+  //   for (int i = 0; i < 3; ++i) {
+  //     for (int dim = 0; dim < 3; ++dim) {
+  //       file << dof_extra(i, dim) << " ";
+  //     }
+  //     file << std::endl;
+  //   }
+  // }
+
+  file.close();
 }

@@ -213,6 +213,40 @@ public:
       const std::vector<Eigen::Vector3d>& bezier_control_points,
       int subdivision_level);
 
+  struct tracked_vertex_info
+  {
+    int64_t fid;
+    Eigen::Vector3d pos_3d;
+    Eigen::Vector3d dfdu;
+    Eigen::Vector3d dfdv;
+
+    Eigen::Vector2d pos_uv; // global
+
+    int micro_id;
+    double micro_u; // local
+    double micro_v; // local
+
+    Eigen::Vector2d micro_v0;
+    Eigen::Vector2d micro_v1;
+    Eigen::Vector2d micro_v2;
+
+    double area;
+  };
+
+  std::vector<tracked_vertex_info> generate_tracked_vertices_info(
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      int subdivision_level,
+      const Eigen::MatrixXd& V,
+      const Eigen::MatrixXi& F);
+
+  std::vector<tracked_vertex_info> generate_tracked_vertices_info_from_cylinder(
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      int subdivision_level,
+      const Eigen::MatrixXd& V,
+      const Eigen::MatrixXi& F,
+      double radius,
+      double angle_scale);
+
   void serialize_boundary_data(const std::string& v_filename,
                                const std::string& e_filename);
 };

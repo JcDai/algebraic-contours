@@ -190,6 +190,7 @@ public:
       const std::vector<Eigen::Vector3d>& bezier_control_points) const;
 
   double compute_normalized_fitting_weight() const;
+  double compute_normalized_fitting_weight_tracked() const;
 
   Eigen::SparseMatrix<double> generate_position_matrix(
       const Eigen::VectorXd& p) const;
@@ -410,6 +411,15 @@ public:
     Eigen::Vector3d pos_3d;
     Eigen::Vector2d local_uv_pos;
     double one_ring_area;
+
+    Eigen::Vector3d dfdu;
+    Eigen::Vector3d dfdv;
+
+    Eigen::Vector2d old_v0;
+    Eigen::Vector2d old_v1;
+    Eigen::Vector2d old_v2;
+
+    Eigen::Vector3d normal;
   };
 
   bool fit_tracked_vertices;
@@ -434,8 +444,33 @@ public:
    */
   void bezier_coeff_with_uv_value_tracked(Eigen::SparseMatrix<double>& m);
 
+  void dudv_bezier_coeff_with_uv_value_tracked(
+      Eigen::SparseMatrix<double>& m_u,
+      Eigen::SparseMatrix<double>& m_v);
+
   void compute_area_weighted_fitting_weight_matrix_tracked(
       Eigen::SparseMatrix<double>& m);
+
+  std::array<Eigen::Vector3d, 2> transform_tangent_old_to_new(
+      const Eigen::Vector2d& old_v0,
+      const Eigen::Vector2d& old_v1,
+      const Eigen::Vector2d& old_v2,
+      const Eigen::Vector2d& new_v0,
+      const Eigen::Vector2d& new_v1,
+      const Eigen::Vector2d& new_v2,
+      const Eigen::Vector3d& old_du,
+      const Eigen::Vector3d& old_dv);
+
+  void compute_tracked_vertices_normals();
+
+  /**
+   * @brief compute N from N * A_tangent * p, size of (#tracked_vertice by 3 *
+   * #tracked_vertice), block [1, 3] diagonal
+   */
+  void normal_matrix_tracked(Eigen::SparseMatrix<double>& m);
+
+  void sqrt_area_weight_tracked(Eigen::SparseMatrix<double>& m);
+  void sqrt_area_weight_tracked_triple(Eigen::SparseMatrix<double>& m);
 
   /**
    * @brief generate position matrix P for tracked vertices.
@@ -445,7 +480,15 @@ public:
    */
   Eigen::SparseMatrix<double> generate_tracked_position_matrix();
 
+  /**
+   * @brief generate weight * A_pos stack (1 - weight) * A_normal (n_target dot
+   * du + n_target dot dv)
+   */
+  Eigen::SparseMatrix<double> generate_tracked_position_normal_matrix(
+      double weight);
+
   Eigen::VectorXd build_tracked_vertices_vector();
+  Eigen::VectorXd build_tracked_vertices_pos_normal_vector(double w);
 
   std::vector<Eigen::Vector3d> evaluate_tracked_vertices(
       const std::vector<Eigen::Vector3d>& bezier_control_points);
@@ -454,12 +497,21 @@ public:
   std::vector<Eigen::Vector3d> optimize_fitting_term_direct(
       const std::vector<Eigen::Vector3d>& bezier_control_points);
 
+  std::vector<Eigen::Vector3d> optimize_fitting_pos_and_normal_without_c1(
+      const std::vector<Eigen::Vector3d>& bezier_control_points,
+      double weight);
+
   std::vector<Eigen::Vector3d> optimize_fitting_term_iterative(
       const std::vector<Eigen::Vector3d>& bezier_control_points,
       int iterations,
       double step_size);
 
   std::vector<Eigen::Vector3d> direct_fitting_without_c1(
+      const std::vector<Eigen::Vector3d>& bezier_control_points);
+
+  void serialize_dofs(
+      const std::string& filename,
+      CloughTocherSurface& ct_surface,
       const std::vector<Eigen::Vector3d>& bezier_control_points);
 };
 
@@ -490,6 +542,15 @@ write_tracked_vertices_with_subdivision_level(
     const std::vector<Eigen::Vector3d>& bezier_control_points,
     const std::string& filename,
     int subdivision_level);
+
+void
+write_full_tracked_vertices_with_subdivision_level(
+    CloughTocherSurface& ct_surface,
+    const std::vector<Eigen::Vector3d>& bezier_control_points,
+    const std::string& filename,
+    int subdivision_level,
+    const Eigen::MatrixXd& V,
+    const Eigen::MatrixXi& F);
 
 // write edge geometry to file
 void

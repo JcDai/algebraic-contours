@@ -77,15 +77,40 @@ if __name__ == "__main__":
     print("start time: ", start_time)
 
     # step 1 read
-    tets, vertices, winding_numbers, tet_surface_origin, surface_adj_tet, para_in_v, para_in_f, para_in_v_to_tet_v_map, surface_tet_faces, surface_vertices = read_and_generate_embedded_surface(
-        workspace_path, input_file, slice=drop_unrelated_tet, debug=True)
+    (
+        tets,
+        vertices,
+        winding_numbers,
+        tet_surface_origin,
+        surface_adj_tet,
+        para_in_v,
+        para_in_f,
+        para_in_v_to_tet_v_map,
+        surface_tet_faces,
+        surface_vertices,
+    ) = read_and_generate_embedded_surface(
+        workspace_path, input_file, slice=drop_unrelated_tet, debug=True
+    )
 
-    tets_regular, tets_vertices_regular, surface_adj_tet, tet_surface, winding_numbers = simplicial_embedding(
-        tets, vertices, winding_numbers, tet_surface_origin, surface_adj_tet, surface_tet_faces)
+    (
+        tets_regular,
+        tets_vertices_regular,
+        surface_adj_tet,
+        tet_surface,
+        winding_numbers,
+    ) = simplicial_embedding(
+        tets,
+        vertices,
+        winding_numbers,
+        tet_surface_origin,
+        surface_adj_tet,
+        surface_tet_faces,
+    )
 
     # step 2 cone arrangement and parametrization
     generate_frame_field(
-        workspace_path, path_to_generate_cone_exe, meshfile="embedded_surface.obj")
+        workspace_path, path_to_generate_cone_exe, meshfile="embedded_surface.obj"
+    )
 
     remove_adj_cones(workspace_path)
 
@@ -104,41 +129,92 @@ if __name__ == "__main__":
     #                 conefile="embedded_surface_Th_hat_new", fieldfile="embedded_surface_kappa_hat")
 
     parametrization_free_cones(
-        workspace_path, path_to_para_exe, cone_file="embedded_surface_Th_hat_new", field_file="embedded_surface_kappa_hat", meshfile="embedded_surface.obj")
+        workspace_path,
+        path_to_para_exe,
+        cone_file="embedded_surface_Th_hat_new",
+        field_file="embedded_surface_kappa_hat",
+        meshfile="embedded_surface.obj",
+    )
 
     # compute_cone_vids(workspace_path)
     compute_cone_vids(workspace_path, cone_file="embedded_surface_Th_hat_new")
 
-    parametrization_split(workspace_path, tets_vertices_regular, tets_regular, surface_adj_tet, para_in_v_to_tet_v_map,
-                          path_to_toolkit_para_exe, meshfile_before_para="embedded_surface.obj", meshfile_after_para="parameterized_mesh.obj")
+    parametrization_split(
+        workspace_path,
+        tets_vertices_regular,
+        tets_regular,
+        surface_adj_tet,
+        para_in_v_to_tet_v_map,
+        path_to_toolkit_para_exe,
+        meshfile_before_para="embedded_surface.obj",
+        meshfile_after_para="parameterized_mesh.obj",
+    )
 
     # cone_split(workspace_path, path_to_toolkit_cone_exe, "toolkit_para_split_tetmesh_tets.vtu",
     #            "surface_uv_after_para_split.obj", "cone_vids_after_para_split.txt", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
 
-    cone_split_once_only(workspace_path, path_to_toolkit_cone_exe, "toolkit_para_split_tetmesh_tets.vtu",
-                         "surface_uv_after_para_split.obj", "cone_vids_after_para_split.txt", "surface_tet_local_face_map_after_para_split.txt", "surface_adj_tet_after_para_split.txt", "surface_v_to_tet_v_after_para_split.txt")
+    cone_split_once_only(
+        workspace_path,
+        path_to_toolkit_cone_exe,
+        "toolkit_para_split_tetmesh_tets.vtu",
+        "surface_uv_after_para_split.obj",
+        "cone_vids_after_para_split.txt",
+        "surface_tet_local_face_map_after_para_split.txt",
+        "surface_adj_tet_after_para_split.txt",
+        "surface_v_to_tet_v_after_para_split.txt",
+    )
 
     # exit()
 
     # step 3 face split
-    tet_points_after_face_split, tet_cells_after_face_split, new_winding_numbers, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map = face_split(workspace_path, "toolkit_cone_split_tetmesh_tets.vtu", "surface_uv_after_cone_split.obj",
-                                                                                                                                                  "surface_v_to_tet_v_after_cone_split.txt", "surface_adj_tet_after_cone_split.txt")
+    (
+        tet_points_after_face_split,
+        tet_cells_after_face_split,
+        new_winding_numbers,
+        face_split_f_to_tet_v_map,
+        para_out_v_to_tet_v_map,
+    ) = face_split(
+        workspace_path,
+        "toolkit_cone_split_tetmesh_tets.vtu",
+        "surface_uv_after_cone_split.obj",
+        "surface_v_to_tet_v_after_cone_split.txt",
+        "surface_adj_tet_after_cone_split.txt",
+    )
 
     call_gmsh(workspace_path)
 
     # step 4 generate CT constraints
-    call_CT_code(workspace_path, path_to_ct_exe,
-                 "surface_uv_after_cone_split.obj", skip_cons=False, use_initial_guess=True)
+    call_CT_code(
+        workspace_path,
+        path_to_ct_exe,
+        "surface_uv_after_cone_split.obj",
+        skip_cons=False,
+        use_initial_guess=True,
+    )
 
-    call_CT_optimize_code(workspace_path, path_to_ct_optimize_exe,
-                          "surface_uv_after_cone_split.obj", ct_weight, ct_iteration, use_initial_guess=True)
+    call_CT_optimize_code(
+        workspace_path,
+        path_to_ct_optimize_exe,
+        "surface_uv_after_cone_split.obj",
+        ct_weight,
+        ct_iteration,
+        use_initial_guess=True,
+    )
 
     # step 5 map tri to tet
     tet_edge_to_vertices, tet_face_to_vertices = map_tri_nodes_to_tet_nodes(
-        workspace_path, output_name, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map)
+        workspace_path, output_name, face_split_f_to_tet_v_map, para_out_v_to_tet_v_map
+    )
 
-    interpolate_initial_solution(output_name, "CT/laplace_beltrami_mesh.msh", "degenerate_special.msh",
-                                 output_name+"_initial_tetmesh.msh", initial_guess_weight, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
+    interpolate_initial_solution(
+        output_name,
+        "CT/laplace_beltrami_mesh.msh",
+        "degenerate_special.msh",
+        output_name + "_initial_tetmesh.msh",
+        initial_guess_weight,
+        output_name + "_tri_to_tet_v_map.txt",
+        "CT_lag2bezier_matrix.txt",
+    )
 
     # interpolate_initial_solution_test(output_name, "CT_degenerate_cubic_bezier_points.msh",
     #                                   output_name+"_initial_tetmesh.msh", initial_guess_weight, output_name + "_tri_to_tet_v_map.txt", "CT_lag2bezier_matrix.txt")
@@ -153,16 +229,31 @@ if __name__ == "__main__":
     # call_CT_code_with_normals(workspace_path, path_to_ct_exe,
     #                           "surface_uv_after_cone_split.obj", "CT_smoothed_normals.txt")
 
-    soft_constraint_cubic_optimization(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                                       output_name + "_initial_tetmesh.msh", "CT/laplace_beltrami_mesh.msh", "CT/laplacian_mesh.msh", "CT_lag2bezier_matrix.txt")
+    soft_constraint_cubic_optimization(
+        workspace_path,
+        output_name + "_tri_to_tet_v_map.txt",
+        output_name + "_initial_tetmesh.msh",
+        "CT/laplace_beltrami_mesh.msh",
+        "CT/laplacian_mesh.msh",
+        "CT_lag2bezier_matrix.txt",
+    )
 
     # soft_constraint_cubic_optimization(workspace_path, output_name + "_tri_to_tet_v_map.txt",
     #                                    output_name + "_interp_initial_mesh.msh", "laplace_beltrami_mesh.msh", "laplacian_mesh.msh", "CT_lag2bezier_matrix.txt")
 
     # step 7 build hard constraints
 
-    build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
-                                                      "CT_bezier_constraints_expanded_old.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded_old.txt", "CT_bezier_r2f_mat_col_idx_map_old.txt", output_name + "_interp_initial_mesh.msh")
+    build_full_expanded_bezier_hard_constraint_matrix(
+        workspace_path,
+        output_name + "_tri_to_tet_v_map.txt",
+        "CT_bezier_constraints_expanded_old.txt",
+        output_name + "_initial_tetmesh.msh",
+        tet_edge_to_vertices,
+        tet_face_to_vertices,
+        "CT_bezier_r2f_expanded_old.txt",
+        "CT_bezier_r2f_mat_col_idx_map_old.txt",
+        output_name + "_interp_initial_mesh.msh",
+    )
 
     # build_full_expanded_bezier_hard_constraint_matrix(workspace_path, output_name + "_tri_to_tet_v_map.txt",
     #                                                   "CT_bezier_constraints_expanded.txt", output_name + "_initial_tetmesh.msh", tet_edge_to_vertices, tet_face_to_vertices, "CT_bezier_r2f_expanded.txt", "CT_bezier_r2f_mat_col_idx_map.txt", output_name + "_interp_initial_mesh.msh")
@@ -174,11 +265,27 @@ if __name__ == "__main__":
     print("cons took: ", cons_time - start_time)
 
     # step 8 polyfem
-    create_polyfem_json(enable_offset, output_name, output_name + "_initial_tetmesh.msh", "soft.hdf5",
-                        "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
+    create_polyfem_json(
+        enable_offset,
+        output_name,
+        output_name + "_initial_tetmesh.msh",
+        "soft.hdf5",
+        "CT_bezier_all_matrices.hdf5",
+        weight_soft_1,
+        elasticity_mode,
+        "",
+    )
 
-    create_polyfem_json_amips(enable_offset, output_name, output_name + "_initial_tetmesh.msh", "soft.hdf5",
-                              "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")
+    create_polyfem_json_amips(
+        enable_offset,
+        output_name,
+        output_name + "_initial_tetmesh.msh",
+        "soft.hdf5",
+        "CT_bezier_all_matrices.hdf5",
+        weight_soft_1,
+        elasticity_mode,
+        "",
+    )
 
     # create_polyfem_json(enable_offset, output_name, output_name + "_interp_initial_mesh.msh", "soft.hdf5",
     #                     "CT_bezier_all_matrices.hdf5", weight_soft_1, elasticity_mode, "")

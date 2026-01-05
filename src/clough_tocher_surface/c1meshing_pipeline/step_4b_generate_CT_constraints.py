@@ -16,9 +16,16 @@ import datetime
 from utils import *
 
 
-def call_CT_code(workspace_path, path_to_ct_exe, meshfile, skip_cons=False, use_initial_guess=False):
-    print("[{}] ".format(datetime.datetime.now()),
-          "Calling Clough Tocher code")
+def call_CT_code(
+    workspace_path,
+    path_to_ct_exe,
+    meshfile,
+    skip_cons=False,
+    use_initial_guess=False,
+    preserve_feature=False,
+    feature_edge_file="",
+):
+    print("[{}] ".format(datetime.datetime.now()), "Calling Clough Tocher code")
 
     ct_command = ""
     if skip_cons:
@@ -26,33 +33,54 @@ def call_CT_code(workspace_path, path_to_ct_exe, meshfile, skip_cons=False, use_
             path_to_ct_exe
             + " --input "
             + workspace_path
-            + meshfile + " -o CT --skip_constraint true"
+            + meshfile
+            + " -o CT --skip_constraint true"
         )
     else:
-        ct_command = (
-            path_to_ct_exe
-            + " --input "
-            + workspace_path
-            + meshfile + " -o CT"
-        )
+        ct_command = path_to_ct_exe + " --input " + workspace_path + meshfile + " -o CT"
 
     if use_initial_guess:
         ct_command += " --use_incenter"
+
+    if preserve_feature:
+        ct_command += " --skip_cone_constraints --feature_edge " + feature_edge_file
 
     subprocess.run(ct_command, shell=True, check=True)
 
 
-def call_CT_optimize_code(workspace_path, path_to_ct_optimize_exe, meshfile, ct_weight, ct_iteration, use_initial_guess=False):
-    print("[{}] ".format(datetime.datetime.now()),
-          "Calling Clough Tocher cubic optimization code")
+def call_CT_optimize_code(
+    workspace_path,
+    path_to_ct_optimize_exe,
+    meshfile,
+    ct_weight,
+    ct_iteration,
+    skip_cons=False,
+    use_initial_guess=False,
+    preserve_feature=False,
+    feature_edge_file="",
+    step_size=1,
+):
+    print(
+        "[{}] ".format(datetime.datetime.now()),
+        "Calling Clough Tocher cubic optimization code",
+    )
     ct_command = (
         path_to_ct_optimize_exe
         + " --input "
         + workspace_path
-        + meshfile + " -o CT -w " + str(ct_weight) + " -n " + str(ct_iteration)
+        + meshfile
+        + " -o CT -w "
+        + str(ct_weight)
+        + " -n "
+        + str(ct_iteration)
+        + " --step_size "
+        + str(step_size)
     )
 
     if use_initial_guess:
         ct_command += " --use_incenter"
+
+    if preserve_feature:
+        ct_command += " --skip_cone_constraints --feature_edge " + feature_edge_file
 
     subprocess.run(ct_command, shell=True, check=True)

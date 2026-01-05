@@ -33,7 +33,7 @@ def face_split(workspace_path, tet_after_para_vertices, tet_after_para_tets, par
     tet_surface_para_out = {}
 
     for key in surface_adj_tet_para_out:
-        print(key)
+        # print(key)
         assert len(surface_adj_tet_para_out[key]) == 2
         tet_surface_para_out[surface_adj_tet_para_out[key][0]] = [key]
         tet_surface_para_out[surface_adj_tet_para_out[key][1]] = [key]
@@ -54,10 +54,10 @@ def face_split(workspace_path, tet_after_para_vertices, tet_after_para_tets, par
     new_winding_numbers = {}
 
     for tid in range(len(tet_after_para_tets)):
-        print(tid)
+        # print(tid)
         # non surface case
         if tid not in tet_surface_para_out:
-            print("skip")
+            # print("skip")
             # propagate winding number
             new_winding_numbers[len(
                 tet_after_face_split_tets)] = winding_numbers[tid]
@@ -70,12 +70,12 @@ def face_split(workspace_path, tet_after_para_vertices, tet_after_para_tets, par
 
         # surface case
         t_sf = tet_surface_para_out[tid][0]
-        print("t_sf: ", t_sf)
-        print(surface_adj_tet_para_out[t_sf])
+        # print("t_sf: ", t_sf)
+        # print(surface_adj_tet_para_out[t_sf])
         # print(t_sf)
         f_vs = para_out_f[t_sf]
         f_vs_tet_base = [para_out_v_to_tet_v_map[vid] for vid in f_vs]
-        print(f_vs_tet_base)
+        # print(f_vs_tet_base)
         f_vs_coords = [np.array(para_out_v[vid]) for vid in f_vs]
 
         # add new vertex
@@ -92,7 +92,7 @@ def face_split(workspace_path, tet_after_para_vertices, tet_after_para_tets, par
 
         # add new tets
         old_tet = tet_after_para_tets[tid]
-        print(old_tet)
+        # print(old_tet)
         local_ids = [-1, -1, -1, -1]
         for i in range(3):
             for j in range(4):
@@ -134,7 +134,7 @@ def face_split(workspace_path, tet_after_para_vertices, tet_after_para_tets, par
 
     # print(new_winding_numbers)
 
-    with open("winding_numbers.txt", "w") as f:
+    with open("winding_numbers_after_face_split.txt", "w") as f:
         for key in new_winding_numbers:
             # print(key, new_winding_numbers[key][0])
             f.write("{} {}\n".format(key, new_winding_numbers[key][0]))

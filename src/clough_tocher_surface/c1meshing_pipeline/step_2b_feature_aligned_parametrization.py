@@ -17,14 +17,26 @@ import math
 from utils import *
 
 
-def generate_field_collapsed_cone(workspace_path, path_to_generate_field, input_dir, input_name, output_dir, collapse_cone=True):
-    print("[{}] ".format(datetime.datetime.now()),
-          "Calling generate field code with collapse_cone")
+def generate_field_collapsed_cone(
+    workspace_path,
+    path_to_generate_field,
+    input_dir,
+    input_name,
+    output_dir,
+    collapse_cone=True,
+):
+    print(
+        "[{}] ".format(datetime.datetime.now()),
+        "Calling generate field code with collapse_cone",
+    )
     field_command = (
         path_to_generate_field
         + " --mesh "
         + input_dir
-        + input_name + ".obj" + " --output " + output_dir
+        + input_name
+        + ".obj"
+        + " --output "
+        + output_dir
     )
     if collapse_cone:
         field_command += " --collapse_cones"
@@ -34,14 +46,21 @@ def generate_field_collapsed_cone(workspace_path, path_to_generate_field, input_
     subprocess.run(field_command, shell=True, check=True)
 
 
-def feature_aligned_parametrization(workspace_path, path_to_feature_aligned_para, input_dir, input_name, output_dir):
-    print("[{}] ".format(datetime.datetime.now()),
-          "Calling feature-aligned parametrization")
+def feature_aligned_parametrization(
+    workspace_path, path_to_feature_aligned_para, input_dir, input_name, output_dir
+):
+    print(
+        "[{}] ".format(datetime.datetime.now()),
+        "Calling feature-aligned parametrization",
+    )
     para_command = (
         path_to_feature_aligned_para
         + " --name "
         + input_name
-        + " -i " + input_dir + " --use_existing_field -o " + output_dir
+        + " -i "
+        + input_dir
+        + " --use_existing_field -o "
+        + output_dir
     )
 
     print(para_command)
@@ -49,7 +68,32 @@ def feature_aligned_parametrization(workspace_path, path_to_feature_aligned_para
     subprocess.run(para_command, shell=True, check=True)
 
 
-def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertices, tets, original_obj, refined_obj, surface_v_to_tet_v_map_list, surface_adj_tets, tet_surface, winding_numbers):
+def get_feature_file(workspace_path, para_file, feature_edge_file):
+    feature_edges = []
+    with open(para_file, "r") as file:
+        for line in file:
+            if line.startswith("l "):
+                tokens = line.split()
+                feature_edges.append([int(tokens[1]) - 1, int(tokens[2]) - 1])
+
+    with open(feature_edge_file, "w") as file:
+        for e in feature_edges:
+            file.write("{} {}\n".format(e[0], e[1]))
+
+
+def fa_para_split(
+    workspace_path,
+    field_refined_to_original_face_map_file,
+    para_refined_to_original_face_map_file,
+    tet_vertices,
+    tets,
+    original_obj,
+    refined_obj,
+    surface_v_to_tet_v_map_list,
+    surface_adj_tets,
+    tet_surface,
+    winding_numbers,
+):
     surface_vertices, _, _, tris, _, _ = igl.read_obj(original_obj)
     para_vertices, _, _, para_tris, _, _ = igl.read_obj(refined_obj)
 
@@ -59,7 +103,12 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
 
     print("check v map validity...")
     for key in surface_v_to_tet_v_map:
-        if np.linalg.norm(surface_vertices[key] - tet_vertices[surface_v_to_tet_v_map[key]]) > 1e-7:
+        if (
+            np.linalg.norm(
+                surface_vertices[key] - tet_vertices[surface_v_to_tet_v_map[key]]
+            )
+            > 1e-7
+        ):
             print("mislatch " + key + " and " + surface_v_to_tet_v_map[key])
             print(surface_vertices[key])
             print(tet_vertices[surface_v_to_tet_v_map[key]])
@@ -79,21 +128,30 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
                     print("f_vs: ", f_vs, " f_vs_in_tet_base: ", f_vs_in_tet_base)
 
     # convert refine->origin map to orignal->refine map
-    refined_to_original_face_map = np.loadtxt(
-        refined_to_original_face_map_file).astype(np.int32)
+    # para out to in => field_refine[para_refine]
+    f_refine_map = np.loadtxt(field_refined_to_original_face_map_file).astype(np.int32)
+    p_refine_map = np.loadtxt(para_refined_to_original_face_map_file).astype(np.int32)
     para_in_to_out_face_map = {}
-    for i in range(refined_to_original_face_map.shape[0]):
-        if refined_to_original_face_map[i] in para_in_to_out_face_map:
-            para_in_to_out_face_map[refined_to_original_face_map[i]].append(i)
+    for i in range(p_refine_map.shape[0]):
+        original_fid = f_refine_map[p_refine_map[i]]
+        assert original_fid < tris.shape[0]
+        if original_fid in para_in_to_out_face_map:
+            para_in_to_out_face_map[original_fid].append(i)
         else:
-            para_in_to_out_face_map[refined_to_original_face_map[i]] = [i]
+            para_in_to_out_face_map[original_fid] = [i]
+
+    # print(para_in_to_out_face_map[19])
+    # print(para_in_to_out_face_map[61])
+    # print(para_in_to_out_face_map[77])
+    # print(para_in_to_out_face_map[1573])
+    # print(para_in_to_out_face_map[1676])
 
     # add new vertices to tets and update map
     old_surface_v_cnt = surface_vertices.shape[0]
-    new_surface_vs = para_vertices[old_surface_v_cnt:, ]
+    new_surface_vs = para_vertices[old_surface_v_cnt:,]
 
-    print(np.max(para_vertices[:old_surface_v_cnt, ]-surface_vertices))
-    print(np.min(para_vertices[:old_surface_v_cnt, ]-surface_vertices))
+    print(np.max(para_vertices[:old_surface_v_cnt,] - surface_vertices))
+    print(np.min(para_vertices[:old_surface_v_cnt,] - surface_vertices))
 
     # print(tet_vertices.shape)
     print("new_surface_vs shape: ", new_surface_vs.shape)
@@ -101,7 +159,9 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
 
     for i in range(new_surface_vs.shape[0]):
         new_idx = tet_vertices.shape[0]
+        # print([new_surface_vs[i]])
         tet_vertices = np.append(tet_vertices, [new_surface_vs[i]], axis=0)
+        # add new tet vertices to surface_v_to_tet_v_map
         surface_v_to_tet_v_map[i + old_surface_v_cnt] = new_idx
 
     # print(tet_vertices)
@@ -120,19 +180,21 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
         if len(para_in_to_out_face_map[i]) == 1:
             # not splitted
             # print(i)
-            new_surface_adj_tets[para_in_to_out_face_map[i]
-                                 [0]] = surface_adj_tets[i]
+            new_surface_adj_tets[para_in_to_out_face_map[i][0]] = surface_adj_tets[i]
             continue
         else:
             splitted_faces = para_in_to_out_face_map[i]
             splitted_faces_in_tet_vid = [
-                [surface_v_to_tet_v_map[vid] for vid in para_tris[f]] for f in splitted_faces]
+                [surface_v_to_tet_v_map[vid] for vid in para_tris[f]]
+                for f in splitted_faces
+            ]
 
             # print(splitted_faces_in_tet_vid)
 
             for tet_id in surface_adj_tets[i]:
                 # mark as tet to drop
-                keep_flag[i] = False
+                # keep_flag[i] = False
+                keep_flag[tet_id] = False
 
                 tet = tets[tet_id]
                 mapped_tri = [surface_v_to_tet_v_map[k] for k in tris[i]]
@@ -146,11 +208,13 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
                 for k, spf in enumerate(splitted_faces_in_tet_vid):
 
                     if splitted_faces[k] not in new_surface_adj_tets:
-                        new_surface_adj_tets[splitted_faces[k]] = [len(
-                            new_tets) + tets.shape[0]]
+                        new_surface_adj_tets[splitted_faces[k]] = [
+                            len(new_tets) + tets.shape[0]
+                        ]
                     else:
-                        new_surface_adj_tets[splitted_faces[k]].append(len(
-                            new_tets) + tets.shape[0])
+                        new_surface_adj_tets[splitted_faces[k]].append(
+                            len(new_tets) + tets.shape[0]
+                        )
                     new_tets.append([spf[0], spf[1], spf[2], apex])
                     new_tets_winding_numbers.append(winding_numbers[tet_id])
 
@@ -166,7 +230,7 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
             final_winding_numbers.append(winding_numbers[i])
             old_tid_to_new_tid_map[i] = final_tet_cnt
 
-        final_tet_cnt += 1
+            final_tet_cnt += 1
 
     print("kept old tets cnt: ", final_tet_cnt)
 
@@ -175,7 +239,9 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
 
     for key in new_surface_adj_tets:
         for i in range(len(new_surface_adj_tets[key])):
-            new_surface_adj_tets[key][i] = old_tid_to_new_tid_map[new_surface_adj_tets[key][i]]
+            new_surface_adj_tets[key][i] = old_tid_to_new_tid_map[
+                new_surface_adj_tets[key][i]
+            ]
 
     for i in range(len(new_tets)):
         final_tets.append(np.array(new_tets[i]))
@@ -187,9 +253,16 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
     final_tets_oriented = []
 
     for tet in final_tets:
-        if orient3d(tet_vertices[tet[0]], tet_vertices[tet[1]], tet_vertices[tet[2]], tet_vertices[tet[3]]) <= 0:
-            final_tets_oriented.append(
-                np.array([tet[1], tet[0], tet[2], tet[3]]))
+        if (
+            orient3d(
+                tet_vertices[tet[0]],
+                tet_vertices[tet[1]],
+                tet_vertices[tet[2]],
+                tet_vertices[tet[3]],
+            )
+            <= 0
+        ):
+            final_tets_oriented.append(np.array([tet[1], tet[0], tet[2], tet[3]]))
         else:
             final_tets_oriented.append(tet)
 
@@ -197,24 +270,77 @@ def fa_para_split(workspace_path, refined_to_original_face_map_file, tet_vertice
 
     print("check v map validity 2...")
     for key in surface_v_to_tet_v_map:
-        if np.linalg.norm(para_vertices[key] - tet_vertices[surface_v_to_tet_v_map[key]]) > 1e-7:
-            print("mislatch " + str(key) + " and " +
-                  str(surface_v_to_tet_v_map[key]))
+        if (
+            np.linalg.norm(
+                para_vertices[key] - tet_vertices[surface_v_to_tet_v_map[key]]
+            )
+            > 1e-7
+        ):
+            print("mislatch " + str(key) + " and " + str(surface_v_to_tet_v_map[key]))
             print(para_vertices[key])
             print(tet_vertices[surface_v_to_tet_v_map[key]])
 
-    # print("check v map validity with tet vertices...")
-    # for key in new_surface_adj_tets:
-    #     tets = new_surface_adj_tets[key]
+    print("check v map validity with tet vertices...")
+    break_flag = False
+    for key in new_surface_adj_tets:
+        ttt = new_surface_adj_tets[key]
 
-    #     f_vs = para_tris[key]
-    #     f_vs_in_tet_base = [surface_v_to_tet_v_map[fvid] for fvid in f_vs]
+        f_vs = para_tris[key]
+        f_vs_in_tet_base = [surface_v_to_tet_v_map[fvid] for fvid in f_vs]
 
-    #     for tid in tets:
-    #         tet = final_tets_oriented[tid]
-    #         for tvid in f_vs_in_tet_base:
-    #             if tvid not in tet:
-    #                 print("error: {} not found in tet {} ".format(tvid, tid))
-    #                 print("f_vs: ", f_vs, " f_vs_in_tet_base: ", f_vs_in_tet_base)
+        for tid in ttt:
+            tet = final_tets[tid]
+            for tvid in f_vs_in_tet_base:
+                if tvid not in tet:
+                    print(
+                        "error: {} not found in tet {}: [{}, {}, {}, {}] ".format(
+                            tvid, tid, tet[0], tet[1], tet[2], tet[3]
+                        )
+                    )
+                    print("f_vs: ", f_vs, " f_vs_in_tet_base: ", f_vs_in_tet_base)
 
-    return tet_vertices, final_tets_oriented, final_winding_numbers, surface_v_to_tet_v_map, new_surface_adj_tets
+                    break_flag = True
+                    # break
+
+            if break_flag:
+                break
+
+        if break_flag:
+            break
+
+    print("check v map validity with oriented tet vertices...")
+    for key in new_surface_adj_tets:
+        ttt = new_surface_adj_tets[key]
+
+        f_vs = para_tris[key]
+        f_vs_in_tet_base = [surface_v_to_tet_v_map[fvid] for fvid in f_vs]
+
+        for tid in ttt:
+            tet = final_tets_oriented[tid]
+            for tvid in f_vs_in_tet_base:
+                if tvid not in tet:
+                    print("error: {} not found in tet {} ".format(tvid, tid))
+                    print("f_vs: ", f_vs, " f_vs_in_tet_base: ", f_vs_in_tet_base)
+
+    # test output winding >=0.5
+    # print(final_tets_oriented.shape)
+
+    tets_in_winding = []
+    for i in range(final_tets_oriented.shape[0]):
+        # print(final_winding_numbers[i])
+        if abs(final_winding_numbers[i]) >= 0.5:
+            # print(final_tets_oriented[i])
+            tets_in_winding.append(final_tets_oriented[i])
+
+    tets_in_winding = np.array(tets_in_winding)
+    # print(tets_in_winding.shape)
+    tetmesh_in_winding = mio.Mesh(tet_vertices, [("tetra", tets_in_winding)])
+    tetmesh_in_winding.write("tet_para_split_in_winding.msh", file_format="gmsh")
+
+    return (
+        tet_vertices,
+        final_tets_oriented,
+        final_winding_numbers,
+        surface_v_to_tet_v_map,
+        new_surface_adj_tets,
+    )
