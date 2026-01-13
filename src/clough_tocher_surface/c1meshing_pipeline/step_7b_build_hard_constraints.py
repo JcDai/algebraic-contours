@@ -604,6 +604,19 @@ def build_full_expanded_bezier_hard_constraint_matrix(
             other_ind_ids.append(id)
     other_ind_ids = np.array(other_ind_ids)
 
+    print("sf_ind: ", sf_ind_ids.shape[0])
+    print("sf_dep: ", sf_dep_ids.shape[0])
+    print("other_ind: ", other_ind_ids.shape[0])
+    print("other_dep: ", other_dep_ids.shape[0])
+    print(
+        "sum: ",
+        sf_ind_ids.shape[0]
+        + sf_dep_ids.shape[0]
+        + other_dep_ids.shape[0]
+        + other_ind_ids.shape[0],
+    )
+    print("target: ", v.shape[0] * 3)
+
     assert (
         sf_ind_ids.shape[0]
         + sf_dep_ids.shape[0]

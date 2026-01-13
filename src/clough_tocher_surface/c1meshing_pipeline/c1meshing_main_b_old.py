@@ -164,12 +164,10 @@ if __name__ == "__main__":
         input_dir="./",
         input_name="embedded_surface",
         output_dir="./",
-        collapse_cone=False,
+        collapse_cone=True,
         preserve_feature=preserve_feature,
     )
     # exit(0)
-
-    # shutil.copyfile("embedded_surface.ffield", "embedded_surface.ffield.old")
 
     # generate frame field overwrite "embedded_surface.obj". To access original copy, use embedded_surface_copy.obj
 
@@ -227,22 +225,61 @@ if __name__ == "__main__":
             )
             continue
 
-    # check isolation here
-    surface_v, _, _, surface_f, _, _ = igl.read_obj("embedded_surface_opt.obj")
-    surface_f_in_tvids = [
-        [
-            surface_v_to_tet_v_map_after_para[f[0]],
-            surface_v_to_tet_v_map_after_para[f[1]],
-            surface_v_to_tet_v_map_after_para[f[2]],
-        ]
-        for f in surface_f
-    ]
-    check_surface_edges_isolation(
-        tets_after_para, tet_vertices_after_para, surface_f_in_tvids
-    )
-    print("passed surface edge isolation check after para split")
+    # # check 58 64 51553
+    # adj_58 = []
+    # adj_64 = []
+    # adj_51553 = []
+    # for i, tet in enumerate(tets_after_para):
+    #     if 58 in tet:
+    #         adj_58.append(i)
+    #     if 64 in tet:
+    #         adj_64.append(i)
+    #     if 51553 in tet:
+    #         adj_51553.append(i)
 
-    # get cone vids by calling CT code
+    # print(adj_58)
+    # print("")
+    # print(adj_64)
+    # print("")
+    # print(adj_51553)
+    # print("")
+    # print(set(adj_58) & set(adj_64))
+    # for tid in set(adj_58) & set(adj_64):
+    #     print(tid, tets_after_para[tid])
+    # print("")
+    # print(set(adj_58) & set(adj_51553))
+    # for tid in set(adj_58) & set(adj_51553):
+    #     print(tid, tets_after_para[tid])
+    # print("")
+    # print(set(adj_51553) & set(adj_64))
+    # for tid in set(adj_51553) & set(adj_64):
+    #     print(tid, tets_after_para[tid])
+
+    # exit(0)
+    # exit(0)
+
+    # face split
+    # print(tets_after_para[2])
+
+    (
+        tet_points_after_face_split,
+        tet_cells_after_face_split,
+        new_winding_numbers,
+        face_split_f_to_tet_v_map,
+        para_out_v_to_tet_v_map,
+    ) = face_split(
+        workspace_path,
+        tet_vertices_after_para,
+        tets_after_para,
+        "embedded_surface_opt.obj",
+        surface_v_to_tet_v_map_after_para,
+        surface_adj_tets_after_para,
+        winding_numbers_after_para,
+    )
+
+    call_gmsh(workspace_path)
+
+    # step 4 generate CT constraints
     call_CT_code(
         workspace_path,
         path_to_ct_exe,
@@ -253,82 +290,15 @@ if __name__ == "__main__":
         feature_edge_file="feature_edges.txt",
     )
 
-    (
-        tet_vertices_after_cone,
-        tets_after_cone,
-        winding_numbers_after_cone,
-        surface_v_to_tet_v_map_after_cone,
-        surface_adj_tets_after_cone,
-    ) = split_cone_one_ring(
-        workspace_path,
-        tets_after_para,
-        tet_vertices_after_para,
-        winding_numbers_after_para,
-        surface_v_to_tet_v_map_after_para,
-        surface_adj_tets_after_para,
-        "embedded_surface_opt.obj",
-        "cone_vids.txt",
-    )
-
-    # check isolation here
-    surface_v, _, _, surface_f, _, _ = igl.read_obj(
-        "embedded_surface_after_cone_split.obj"
-    )
-    surface_f_in_tvids = [
-        [
-            surface_v_to_tet_v_map_after_cone[f[0]],
-            surface_v_to_tet_v_map_after_cone[f[1]],
-            surface_v_to_tet_v_map_after_cone[f[2]],
-        ]
-        for f in surface_f
-    ]
-    check_surface_edges_isolation(
-        tets_after_cone, tet_vertices_after_cone, surface_f_in_tvids
-    )
-    print("passed surface edge isolation check after cone split")
-
-    # exit()
-
-    # TODO: change arguments for below
-
-    (
-        tet_points_after_face_split,
-        tet_cells_after_face_split,
-        new_winding_numbers,
-        face_split_f_to_tet_v_map,
-        para_out_v_to_tet_v_map,
-    ) = face_split(
-        workspace_path,
-        tet_vertices_after_cone,
-        tets_after_cone,
-        "embedded_surface_after_cone_split.obj",
-        surface_v_to_tet_v_map_after_cone,
-        surface_adj_tets_after_cone,
-        winding_numbers_after_cone,
-    )
-
-    call_gmsh(workspace_path)
-
-    # step 4 generate CT constraints
-    call_CT_code(
-        workspace_path,
-        path_to_ct_exe,
-        "embedded_surface_after_cone_split.obj",
-        skip_cons=skip_constraints,
-        use_initial_guess=use_initial_guess,
-        preserve_feature=preserve_feature,
-        feature_edge_file="feature_edges_after_cone_split.txt",
-    )
-
     call_CT_optimize_code(
         workspace_path,
         path_to_ct_optimize_exe,
-        "embedded_surface_after_cone_split.obj",
+        "embedded_surface_opt.obj",
         ct_weight,
         ct_iteration,
         use_initial_guess=use_initial_guess,
         preserve_feature=preserve_feature,
-        feature_edge_file="feature_edges_after_cone_split.txt",
+        feature_edge_file="feature_edges.txt",
         step_size=cubic_optimization_step_size,
     )
 

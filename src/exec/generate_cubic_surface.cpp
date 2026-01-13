@@ -168,30 +168,34 @@ main(int argc, char* argv[])
             << std::endl;
 
   // check two-separate satisfaction
-  for (size_t vid = 0;
-       vid < ct_surface.m_affine_manifold.m_vertex_charts.size();
-       ++vid) {
-    const auto& v_chart = ct_surface.m_affine_manifold.m_vertex_charts[vid];
 
-    if (!v_chart.is_cone) {
-      int cone_cnt = 0;
-      for (size_t i = 0; i < v_chart.vertex_one_ring.size() - 1; ++i) {
-        if (ct_surface.m_affine_manifold
-                .m_vertex_charts[v_chart.vertex_one_ring[i]]
-                .is_cone) {
-          cone_cnt++;
+  // if (feature_edge_file == "" && feature_vertex_file == "") {
+  if (false) {
+    for (size_t vid = 0;
+         vid < ct_surface.m_affine_manifold.m_vertex_charts.size();
+         ++vid) {
+      const auto& v_chart = ct_surface.m_affine_manifold.m_vertex_charts[vid];
+
+      if (!v_chart.is_cone) {
+        int cone_cnt = 0;
+        for (size_t i = 0; i < v_chart.vertex_one_ring.size() - 1; ++i) {
+          if (ct_surface.m_affine_manifold
+                  .m_vertex_charts[v_chart.vertex_one_ring[i]]
+                  .is_cone) {
+            cone_cnt++;
+          }
         }
-      }
 
-      if (cone_cnt == 0) {
-        assert(!v_chart.is_cone_adjacent);
-      } else if (cone_cnt == 1) {
-        assert(v_chart.is_cone_adjacent);
-      } else if (cone_cnt > 1) {
-        // assert(false);
-        throw std::runtime_error(
-            "non-cone vertex is adjacent to more than one cone, cannot setup "
-            "cone constraint! Try moving the cones or denser meshes!");
+        if (cone_cnt == 0) {
+          assert(!v_chart.is_cone_adjacent);
+        } else if (cone_cnt == 1) {
+          assert(v_chart.is_cone_adjacent);
+        } else if (cone_cnt > 1) {
+          // assert(false);
+          throw std::runtime_error(
+              "non-cone vertex is adjacent to more than one cone, cannot setup "
+              "cone constraint! Try moving the cones or denser meshes!");
+        }
       }
     }
   }

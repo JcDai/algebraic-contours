@@ -252,10 +252,16 @@ CloughTocherOptimizer::compute_normalized_fitting_weight() const
   Eigen::VectorXd double_area;
   igl::doublearea(V, faces, double_area);
   double area = double_area.sum() / 2.;
+  // if (invert_area) {
+  //   normalized_fitting_weight /= area;
+  // } else {
+  //   normalized_fitting_weight *= area;
+  // }
+
   if (invert_area) {
-    normalized_fitting_weight /= area;
-  } else {
     normalized_fitting_weight *= area;
+  } else {
+    normalized_fitting_weight /= area;
   }
 
   // optionally normalize by the vertex count
@@ -513,9 +519,9 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
       break;
 
     // serialize if checkpoint iteration
-    // int checkpoint = 10;
-    int checkpoint = 1;
-    if (((ID.iter % checkpoint) == 0) || (ID.iter < 0)) {
+    int checkpoint = 20;
+    // int checkpoint = 1;
+    if (((ID.iter % checkpoint) == 0) || (ID.iter < 0) || (ID.iter < 3)) {
       checkpoint_control_points(optimized_control_points, ID.iter);
     }
   }

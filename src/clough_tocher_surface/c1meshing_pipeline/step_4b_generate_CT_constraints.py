@@ -45,6 +45,9 @@ def call_CT_code(
     if preserve_feature:
         ct_command += " --skip_cone_constraints --feature_edge " + feature_edge_file
 
+    # if preserve_feature:
+    #     ct_command += " --feature_edge " + feature_edge_file
+
     subprocess.run(ct_command, shell=True, check=True)
 
 
@@ -82,5 +85,8 @@ def call_CT_optimize_code(
 
     if preserve_feature:
         ct_command += " --skip_cone_constraints --feature_edge " + feature_edge_file
+
+    # if preserve_feature:
+    #     ct_command += " --feature_edge " + feature_edge_file
 
     subprocess.run(ct_command, shell=True, check=True)

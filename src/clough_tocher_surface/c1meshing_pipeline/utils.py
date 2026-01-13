@@ -28,11 +28,13 @@ def orient3d(aa, bb, cc, dd):
 
     return np.linalg.det(mat) > 0
 
+
 # check if face is contained by a tet
 
 
 def face_in_tet(f, t):
     return all(ff in t for ff in f)
+
 
 # check if two face are the same
 
@@ -45,6 +47,7 @@ def face_equal(f0, f1):
     if ff0 == ff1:
         return True
     return False
+
 
 # check if D is in ABC
 
@@ -73,6 +76,7 @@ def on_tri(A, B, C, D, eps=1e-10):
 
     return False
 
+
 # open JSON after validifying it
 
 
@@ -88,34 +92,35 @@ def is_valid_json(parser, arg):
 
 
 def sample1(n):
-    v = np.array([
-        [0, 0],
-        [1, 0],
-        [0, 1],
-        #
-        [1/3, 0],
-        [2/3, 0],
+    v = np.array(
+        [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            #
+            [1 / 3, 0],
+            [2 / 3, 0],
+            [2 / 3, 1 / 3],
+            [1 / 3, 2 / 3],
+            [0, 2 / 3],
+            [0, 1 / 3],
+            [1 / 3, 1 / 3],
+        ]
+    )
 
-        [2/3, 1/3],
-        [1/3, 2/3],
-
-        [0, 2/3],
-        [0, 1/3],
-
-        [1/3, 1/3]
-    ])
-
-    f = np.array([
-        [0, 3, 8],
-        [3, 9, 8],
-        [3, 4, 9],
-        [4, 5, 9],
-        [4, 1, 5],
-        [8, 9, 7],
-        [9, 6, 7],
-        [9, 5, 6],
-        [7, 6, 2]
-    ])
+    f = np.array(
+        [
+            [0, 3, 8],
+            [3, 9, 8],
+            [3, 4, 9],
+            [4, 5, 9],
+            [4, 1, 5],
+            [8, 9, 7],
+            [9, 6, 7],
+            [9, 5, 6],
+            [7, 6, 2],
+        ]
+    )
 
     v, f = igl.upsample(v, f, n)
 
@@ -123,9 +128,9 @@ def sample1(n):
 
 
 def sample(n):
-    V = np.zeros((n*n, 2))
-    F = np.zeros((2*(n-1)*(n-1), 3), dtype=int)
-    delta = 1. / (n - 1)
+    V = np.zeros((n * n, 2))
+    F = np.zeros((2 * (n - 1) * (n - 1), 3), dtype=int)
+    delta = 1.0 / (n - 1)
     map = np.full((n, n), -1, dtype=int)
     index = 0
     for i in range(n):
@@ -139,11 +144,11 @@ def sample(n):
     index = 0
     for i in range(n - 1):
         for j in range(n - 1):
-            if map[i, j] >= 0 and map[i+1, j] >= 0 and map[i, j+1] >= 0:
-                F[index] = [map[i, j], map[i+1, j], map[i, j+1]]
+            if map[i, j] >= 0 and map[i + 1, j] >= 0 and map[i, j + 1] >= 0:
+                F[index] = [map[i, j], map[i + 1, j], map[i, j + 1]]
                 index += 1
-            if map[i+1, j] >= 0 and map[i+1, j+1] >= 0 and map[i, j+1] >= 0:
-                F[index] = [map[i+1, j], map[i+1, j+1], map[i, j+1]]
+            if map[i + 1, j] >= 0 and map[i + 1, j + 1] >= 0 and map[i, j + 1] >= 0:
+                F[index] = [map[i + 1, j], map[i + 1, j + 1], map[i, j + 1]]
                 index += 1
     F = F[:index]
     return V, F
@@ -152,9 +157,18 @@ def sample(n):
 def lagr0(x, y):
     helper_0 = pow(x, 2)
     helper_1 = pow(y, 2)
-    result_0 = -27.0 / 2.0 * helper_0 * y + 9 * helper_0 - 27.0 / 2.0 * helper_1 * x + 9 * helper_1 - \
-        9.0 / 2.0 * pow(x, 3) + 18 * x * y - 11.0 / 2.0 * x - \
-        9.0 / 2.0 * pow(y, 3) - 11.0 / 2.0 * y + 1
+    result_0 = (
+        -27.0 / 2.0 * helper_0 * y
+        + 9 * helper_0
+        - 27.0 / 2.0 * helper_1 * x
+        + 9 * helper_1
+        - 9.0 / 2.0 * pow(x, 3)
+        + 18 * x * y
+        - 11.0 / 2.0 * x
+        - 9.0 / 2.0 * pow(y, 3)
+        - 11.0 / 2.0 * y
+        + 1
+    )
 
     return result_0
 
@@ -205,8 +219,7 @@ def lagr9(x, y):
 
 
 def eval_lagr(p, nodes):
-    lagrs = [lagr0, lagr1, lagr2, lagr3, lagr4,
-             lagr5, lagr6, lagr7, lagr8, lagr9]
+    lagrs = [lagr0, lagr1, lagr2, lagr3, lagr4, lagr5, lagr6, lagr7, lagr8, lagr9]
 
     x = p[:, 0]
     y = p[:, 1]
@@ -214,6 +227,22 @@ def eval_lagr(p, nodes):
     res = np.zeros((p.shape[0], nodes.shape[1]))
 
     for i, n in enumerate(nodes):
-        res += lagrs[i](x, y)[:, None]*n
+        res += lagrs[i](x, y)[:, None] * n
 
     return res
+
+
+def write_tetmesh(filename, T, V):
+    with open(filename, "w") as file:
+        # write v numbers
+        file.write("{}\n".format(V.shape[0]))
+        # write t numbers
+        file.write("{}\n".format(T.shape[0]))
+
+        # write V
+        for v in V:
+            file.write("{} {} {}\n".format(v[0], v[1], v[2]))
+
+        # write T
+        for t in T:
+            file.write("{} {} {} {}\n".format(t[0], t[1], t[2], t[3]))
