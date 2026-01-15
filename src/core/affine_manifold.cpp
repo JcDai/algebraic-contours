@@ -1641,6 +1641,37 @@ AffineManifold::mark_feature_edges(
       m_vertex_charts[i].is_feature_edge_interior = true;
     }
   }
+
+  // fill broken endpoints
+  for (size_t i = 0; i < m_vertex_charts.size(); ++i) {
+    if (m_vertex_charts[i].is_feature_edge_endpoint) {
+      for (const auto& one_ring_vid : m_vertex_charts[i].vertex_one_ring) {
+        if (m_vertex_charts[one_ring_vid].is_feature_edge_endpoint ||
+            m_vertex_charts[one_ring_vid].is_feature_edge_intersection) {
+          // treat this point as intersection, i.e set as free
+          // TODO: give this a new type
+          m_vertex_charts[i].is_feature_edge_endpoint = false;
+          m_vertex_charts[i].is_feature_edge_intersection = true;
+          break;
+        }
+      }
+    }
+  }
+
+  // mark non-feature edges as feature if both endpoint is feature
+  // endpoint/intersection
+  for (auto& e : m_edge_charts) {
+    if (e.is_feature_edge) {
+      // skip already marked
+      continue;
+    }
+    if ((m_vertex_charts[e.left_vertex_index].is_feature_edge_endpoint ||
+         m_vertex_charts[e.left_vertex_index].is_feature_edge_intersection) &&
+        (m_vertex_charts[e.right_vertex_index].is_feature_edge_endpoint ||
+         m_vertex_charts[e.right_vertex_index].is_feature_edge_intersection)) {
+      e.is_feature_edge = true;
+    }
+  }
 }
 
 void
