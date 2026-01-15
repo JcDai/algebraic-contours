@@ -62,6 +62,10 @@ if __name__ == "__main__":
     preserve_feature = args.spec["preserve_feature"]
     cubic_optimization_step_size = args.spec["cubic_optimization_step_size"]
 
+    try_fully_aligned = args.spec[
+        "try_fully_aligned"
+    ]  # if set to true, may create really bad triangles
+
     path_to_generate_field_exe = args.bins["generate_field_collapsed_cones_binary"]
     path_to_feature_aligned_para_exe = args.bins[
         "feature_aligned_parametrization_binary"
@@ -74,6 +78,8 @@ if __name__ == "__main__":
         "cubic_optimization_binary"
     ]  # path to optimize_cubic_surface bin
     path_to_polyfem_exe = args.bins["polyfem_binary"]  # path to polyfem bin
+    path_to_symmetric_dirichlet_exe = args.bins["symmetric_dirichlet_binary"]
+    path_to_symmetric_dirichlet_json = args.bins["symmetric_dirichlet_json"]
 
     skip_constraints = False
 
@@ -164,7 +170,7 @@ if __name__ == "__main__":
         input_dir="./",
         input_name="embedded_surface",
         output_dir="./",
-        collapse_cone=False,
+        collapse_cone=True,
         preserve_feature=preserve_feature,
     )
     # exit(0)
@@ -174,8 +180,15 @@ if __name__ == "__main__":
     # generate frame field overwrite "embedded_surface.obj". To access original copy, use embedded_surface_copy.obj
 
     feature_aligned_parametrization(
-        workspace_path, path_to_feature_aligned_para_exe, "./", "embedded_surface", "./"
+        workspace_path,
+        path_to_feature_aligned_para_exe,
+        "./",
+        "embedded_surface",
+        "./",
+        try_fully_align=try_fully_aligned,
     )
+
+    # exit(0)
 
     if preserve_feature:
         get_feature_file(
@@ -242,11 +255,21 @@ if __name__ == "__main__":
     )
     print("passed surface edge isolation check after para split")
 
+    # call symmetric dirichlet to optimize the uv
+    symmetric_dirichlet(
+        workspace_path,
+        path_to_symmetric_dirichlet_exe,
+        ".",
+        "embedded_surface_opt",
+        path_to_sd_json=path_to_symmetric_dirichlet_json,
+    )
+    # this generates embedded_surface_opt_out.obj
+
     # get cone vids by calling CT code
     call_CT_code(
         workspace_path,
         path_to_ct_exe,
-        "embedded_surface_opt.obj",
+        "embedded_surface_opt_out.obj",
         skip_cons=skip_constraints,
         use_initial_guess=use_initial_guess,
         preserve_feature=preserve_feature,
@@ -266,8 +289,10 @@ if __name__ == "__main__":
         winding_numbers_after_para,
         surface_v_to_tet_v_map_after_para,
         surface_adj_tets_after_para,
-        "embedded_surface_opt.obj",
+        "embedded_surface_opt_out.obj",
         "cone_vids.txt",
+        "feature_edges.txt",
+        preserve_feature,
     )
 
     # check isolation here
