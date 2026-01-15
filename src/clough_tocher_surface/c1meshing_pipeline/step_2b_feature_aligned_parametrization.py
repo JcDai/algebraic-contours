@@ -43,7 +43,7 @@ def generate_field_collapsed_cone(
         field_command += " --collapse_cones"
 
     if not preserve_feature:
-        field_command += " --feature_angle -1"
+        field_command += " --dihedral_angle -1"
 
     print(field_command)
 
@@ -51,22 +51,17 @@ def generate_field_collapsed_cone(
 
 
 def feature_aligned_parametrization(
-    workspace_path, path_to_feature_aligned_para, input_dir, input_name, output_dir
+    workspace_path,
+    path_to_feature_aligned_para,
+    input_dir,
+    input_name,
+    output_dir,
+    try_fully_align=False,
 ):
     print(
         "[{}] ".format(datetime.datetime.now()),
         "Calling feature-aligned parametrization",
     )
-    # para_command = (
-    #     path_to_feature_aligned_para
-    #     + " --name "
-    #     + input_name
-    #     + " -i "
-    #     + input_dir
-    #     + " --use_existing_field -o "
-    #     + output_dir
-    # )
-
     para_command = (
         path_to_feature_aligned_para
         + " --name "
@@ -75,12 +70,48 @@ def feature_aligned_parametrization(
         + input_dir
         + " --use_existing_field -o "
         + output_dir
-        + " --show_parameterization"
     )
+
+    if not try_fully_align:
+        para_command += " --max_itr 0"
+
+    # para_command = (
+    #     path_to_feature_aligned_para
+    #     + " --name "
+    #     + input_name
+    #     + " -i "
+    #     + input_dir
+    #     + " --use_existing_field -o "
+    #     + output_dir
+    #     + " --show_parameterization"
+    # )
 
     print(para_command)
 
     subprocess.run(para_command, shell=True, check=True)
+
+
+def symmetric_dirichlet(
+    workspace_path, path_to_sd, input_dir, para_model_name, path_to_sd_json
+):
+    print(
+        "[{}] ".format(datetime.datetime.now()),
+        "Calling symmetric dirichlet",
+    )
+
+    sd_command = (
+        path_to_sd
+        + " --input "
+        + input_dir
+        + " --model "
+        + para_model_name
+        + " -j "
+        + path_to_sd_json
+    )
+
+    print(sd_command)
+
+    subprocess.run(sd_command, shell=True, check=True)
 
 
 def get_feature_file(workspace_path, para_file, feature_edge_file):
@@ -551,6 +582,8 @@ def split_cone_one_ring(
     surface_adj_tets,
     para_file,
     cone_vid_file,
+    feature_edge_file,
+    preserve_feature=False,
 ):
     """
     only split the cones with 2 separate problem
@@ -560,6 +593,13 @@ def split_cone_one_ring(
     S_V, UV_V, _, S_F, UV_F, _ = igl.read_obj(para_file)
     # read feature edges
     feature_edges = {}
+    vids_on_feature_edges = {}
+    # with open(feature_edge_file, "r") as file:
+    #     for line in file:
+    #         ss = line.split()
+    #         feature_edges[str(int(ss[0])) + "+" + str(int(ss[1]))] = True  # "{e0}+{e1}"
+    #         vids_on_feature_edges[int(ss[0])] = True
+    #         vids_on_feature_edges[int(ss[1])] = True
     with open(para_file, "r") as file:
         for line in file:
             ss = line.split()
@@ -567,6 +607,8 @@ def split_cone_one_ring(
                 feature_edges[str(int(ss[1]) - 1) + "+" + str(int(ss[2]) - 1)] = (
                     True  # "{e0}+{e1}"
                 )
+                vids_on_feature_edges[int(ss[1]) - 1] = True
+                vids_on_feature_edges[int(ss[2]) - 1] = True
 
     # tetmesh connectivity initialization
     TV = tets.tolist()
@@ -619,10 +661,20 @@ def split_cone_one_ring(
         for adj_vid in adj_list[vid]:
             if is_cone[adj_vid]:
                 cone_adj.append(adj_vid)
+        if is_cone[vid]:
+            cone_adj.append(vid)
 
         if len(cone_adj) > 1:
             cone_vids_to_split.extend(cone_adj)
     cone_vids_to_split = np.unique(np.array(cone_vids_to_split))
+
+    if preserve_feature:
+        cone_vids_to_split_feature = []
+        # cones on feature edges no need to split
+        for vid in cone_vids_to_split:
+            if vid not in vids_on_feature_edges:
+                cone_vids_to_split_feature.append(vid)
+        cone_vids_to_split = cone_vids_to_split_feature
 
     # print(cone_vids)
 
@@ -1039,6 +1091,11 @@ def split_cone_one_ring(
                     f[0] + 1, f_uv[0] + 1, f[1] + 1, f_uv[1] + 1, f[2] + 1, f_uv[2] + 1
                 )
             )
+        # write feature edges
+        for key in feature_edges:
+            if feature_edges[key]:
+                ss = key.split("+")
+                file.write("l {} {}\n".format(int(ss[0]) + 1, int(ss[1]) + 1))
 
     # write uv obj
     with open("embedded_surface_uv_after_cone_split.obj", "w") as file:
