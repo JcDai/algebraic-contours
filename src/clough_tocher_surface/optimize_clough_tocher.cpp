@@ -6,6 +6,7 @@
 #include "clough_tocher_patch.hpp"
 #include "igl/doublearea.h"
 
+// #include <Eigen/src/CholmodSupport/CholmodSupport.h>
 #include <numbers>
 #include <unsupported/Eigen/SparseExtra>
 
@@ -342,6 +343,9 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   double k = compute_normalized_fitting_weight();
   spdlog::info("Using normalized fitting weight {}", k);
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
+
+  Eigen::saveMarket(C, "debug_ind2full.txt");
+
   const Eigen::SparseMatrix<double>& F = get_full_to_ind_matrix();
   // Eigen::SparseMatrix<double> P = generate_position_matrix();
 
@@ -388,11 +392,24 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   }
   derivative = C.transpose() * (derivative_smooth + k * derivative_fit);
   hessian = C.transpose() * ((hessian_smooth + k * hessian_fit) * C);
+
+  Eigen::saveMarket(hessian_smooth, "debug_hessian_smooth.txt");
+  Eigen::saveMarket(hessian_fit, "debug_hessian_fit.txt");
+
   hessian_inverse.compute(hessian);
 
   Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
   Eigen::VectorXd res = (hessian * N1) + derivative;
   ID.solve_residual = res.cwiseAbs().maxCoeff();
+
+  // // TODO: remove it, also the C above
+  // // Eigen::saveMarket(hessian_inverse.matrixL(), "debug_hessian_inv_L.txt");
+  Eigen::saveMarket(hessian, "debug_hessian.txt");
+  std::ofstream derivative_file("debug_derivative.txt");
+  for (int k = 0; k < derivative.size(); ++k) {
+    derivative_file << std::setprecision(16) << derivative[k] << std::endl;
+  }
+  derivative_file.close();
 
   spdlog::info("initial fit energy: {}", energy_fit);
   spdlog::info("initial smoothness energy: {}", energy_smooth);
@@ -3227,4 +3244,64 @@ CloughTocherOptimizer::serialize_dofs(
   // }
 
   file.close();
+}
+
+bool
+compute_newton_update_dir_with_reg(Eigen::SparseMatrix<double>& hessian,
+                                   Eigen::VectorXd& derivative,
+                                   Eigen::VectorXd& x,
+                                   double initial_reg_weight,
+                                   double reg_weight_inc,
+                                   double max_reg_weight)
+{
+  assert(hessian.rows() == hessian.cols());
+  Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> solver;
+
+  // try initial factorization
+  solver.compute(hessian);
+
+  if (solver.info() == Eigen::Success) {
+    // initial factorization succeeded, try solve
+    x = -solver.solve(derivative);
+
+    if (solver.info() == Eigen::Success) {
+      // solve succeed, return true
+      return true;
+    }
+  }
+
+  // initial solve failed
+  double reg_weight = initial_reg_weight;
+  Eigen::SparseMatrix<double> hessian_reg = hessian;
+  Eigen::SparseMatrix<double> I(hessian.rows(), hessian.cols());
+  I.setIdentity();
+  I.makeCompressed();
+
+  // try add regularization term
+  while (solver.info() != Eigen::Success) {
+    if (reg_weight > max_reg_weight || !(reg_weight > 0)) {
+      // next reg_weight exceeded max_reg_weight or reg_weight<=0, solve failed
+      return false;
+    }
+    //  add reg_weight
+    hessian_reg = hessian + reg_weight * I;
+    solver.compute(hessian_reg);
+
+    if (solver.info() == Eigen::Success) {
+      // factorization succeed, try solve
+      x = -solver.solve(derivative);
+
+      if (solver.info() == Eigen::Success) {
+        // solve also succeeded, return true
+        return true;
+      }
+    }
+
+    // update next reg weight for next iteration
+    reg_weight *= reg_weight_inc;
+  }
+
+  // should not get here
+  assert(false);
+  return false;
 }

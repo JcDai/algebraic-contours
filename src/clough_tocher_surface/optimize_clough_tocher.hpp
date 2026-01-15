@@ -557,3 +557,11 @@ void
 write_polylines_to_obj(const std::string& filename,
                        const std::vector<SpatialVector>& points,
                        const std::vector<std::vector<int>>& polylines);
+
+bool
+compute_newton_update_dir_with_reg(Eigen::SparseMatrix<double>& hessian,
+                                   Eigen::VectorXd& derivative,
+                                   Eigen::VectorXd& x,
+                                   double initial_reg_weight = 1.,
+                                   double reg_weight_inc = 10.,
+                                   double max_reg_weight = 1e8);
