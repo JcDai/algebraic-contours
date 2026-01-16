@@ -318,7 +318,11 @@ CloughTocherOptimizer::generate_position_energy_quadratic(
   Eigen::VectorXd p = build_node_vector(optimized_control_points);
   Eigen::VectorXd d = p - p_init;
 
-  Eigen::SparseMatrix<double> P = generate_position_matrix(d);
+  Eigen::SparseMatrix<double> P =
+      generate_position_matrix(d); // use together with normalized weight
+  // Eigen::SparseMatrix<double> P = generate_area_weighted_position_matrix(
+  //     d); // use together with input weight, area weight is included in this
+  //         // function
   Eigen::VectorXd g = P * d;
   double energy = g.dot(d);
   P *= p_norm * (p_norm - 1);
@@ -341,6 +345,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
   // get fixed matrices
   double k = compute_normalized_fitting_weight();
+  // double k = fitting_weight; // use together with area weighted position
+  // matrix
   spdlog::info("Using normalized fitting weight {}", k);
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
 
@@ -396,9 +402,22 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   Eigen::saveMarket(hessian_smooth, "debug_hessian_smooth.txt");
   Eigen::saveMarket(hessian_fit, "debug_hessian_fit.txt");
 
-  hessian_inverse.compute(hessian);
+  // hessian_inverse.compute(hessian);
+  // Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
+  Eigen::VectorXd N1;
+  bool solve_succeed = compute_newton_update_dir_with_reg(
+      hessian_inverse,
+      hessian,
+      derivative,
+      N1,
+      1,
+      10,
+      1e10); // compute direction with regularization term
 
-  Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
+  if (!solve_succeed) {
+    spdlog::error("connot find newton update direction");
+    exit(0);
+  }
   Eigen::VectorXd res = (hessian * N1) + derivative;
   ID.solve_residual = res.cwiseAbs().maxCoeff();
 
@@ -423,8 +442,25 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   for (ID.iter = 1; ID.iter < iterations + 1; ++ID.iter) {
     // solve for optimal solution
     Eigen::VectorXd g = -derivative;
-    Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
+    // Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
+    Eigen::VectorXd N1;
+    bool solve_succeed = compute_newton_update_dir_with_reg(
+        hessian_inverse,
+        hessian,
+        derivative,
+        N1,
+        1,
+        10,
+        1e10); // compute direction with regularization term
+
+    if (!solve_succeed) {
+      spdlog::error("connot find newton update direction");
+      exit(0);
+    }
     Eigen::VectorXd p1 = C * N1;
+
+    // TODO: CHECK this residual is computed with original hessian but N1 is
+    // probably from a regularized hessian
     Eigen::VectorXd res = (hessian * N1) + derivative;
     ID.solve_residual = res.cwiseAbs().maxCoeff();
     // Eigen::VectorXd d = N1 - N0;
@@ -532,7 +568,7 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
         1e-4, ID.solve_residual * 10); // allow order of magnitude growth
 
     // exit if done
-    if (ID.step_size < 1e-10)
+    if (ID.step_size < 1e-13)
       break;
 
     // serialize if checkpoint iteration
@@ -1274,6 +1310,66 @@ CloughTocherOptimizer::generate_position_matrix(const Eigen::VectorXd& p) const
       int I = 3 * i + d;
       position_matrix_trips.push_back(
           Triplet(I, I, power(std::abs(p[I]), p_norm - 2)));
+    }
+  }
+
+  // build matrix
+  Eigen::SparseMatrix<double> position_matrix;
+  position_matrix.resize(3 * num_nodes, 3 * num_nodes);
+  position_matrix.setFromTriplets(position_matrix_trips.begin(),
+                                  position_matrix_trips.end());
+
+  return position_matrix;
+}
+
+Eigen::SparseMatrix<double>
+CloughTocherOptimizer::generate_area_weighted_position_matrix(
+    const Eigen::VectorXd& p) const
+{
+  // compute area
+  const auto& V = get_vertices();
+  const auto& faces = get_faces();
+
+  Eigen::VectorXd area;
+  igl::doublearea(V, faces, area);
+  area /= 2.;
+  double area_sum = area.sum();
+  double area_sum_square = area_sum * area_sum;
+
+  // get list of position vertex indices
+  const auto& affine_manifold = get_affine_manifold();
+  int num_faces = affine_manifold.num_faces();
+  int num_nodes = affine_manifold.m_lagrange_nodes.size(); // TODO Replace
+  std::vector<bool> is_vertex_node(num_nodes, false);
+  std::vector<double> node_one_ring_area(num_nodes, 0);
+  for (int fijk = 0; fijk < num_faces; ++fijk) {
+    FaceManifoldChart face_chart = affine_manifold.get_face_chart(fijk);
+    const auto& nodes = face_chart.lagrange_nodes;
+    is_vertex_node[nodes[0]] = true;
+    is_vertex_node[nodes[1]] = true;
+    is_vertex_node[nodes[2]] = true;
+
+    // assign 1/3 of the face area to the node one ring area
+    node_one_ring_area[nodes[0]] += area[fijk] / 3.;
+    node_one_ring_area[nodes[1]] += area[fijk] / 3.;
+    node_one_ring_area[nodes[2]] += area[fijk] / 3.;
+  }
+
+  // assemble IJV matrix entries
+  std::vector<Triplet> position_matrix_trips;
+  for (int i = 0; i < num_nodes; ++i) {
+    if (!is_vertex_node[i]) {
+      continue;
+    }
+
+    for (int d = 0; d < 3; ++d) {
+      int I = 3 * i + d;
+      position_matrix_trips.push_back(Triplet(
+          I,
+          I,
+          node_one_ring_area[i] / area_sum_square *
+              power(std::abs(p[I]), p_norm - 2))); // TODO: check if this is
+                                                   // correct with p_norm != 2
     }
   }
 
@@ -3247,15 +3343,16 @@ CloughTocherOptimizer::serialize_dofs(
 }
 
 bool
-compute_newton_update_dir_with_reg(Eigen::SparseMatrix<double>& hessian,
-                                   Eigen::VectorXd& derivative,
-                                   Eigen::VectorXd& x,
-                                   double initial_reg_weight,
-                                   double reg_weight_inc,
-                                   double max_reg_weight)
+compute_newton_update_dir_with_reg(
+    Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>& solver,
+    Eigen::SparseMatrix<double>& hessian,
+    Eigen::VectorXd& derivative,
+    Eigen::VectorXd& x,
+    double initial_reg_weight,
+    double reg_weight_inc,
+    double max_reg_weight)
 {
   assert(hessian.rows() == hessian.cols());
-  Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> solver;
 
   // try initial factorization
   solver.compute(hessian);
@@ -3266,9 +3363,12 @@ compute_newton_update_dir_with_reg(Eigen::SparseMatrix<double>& hessian,
 
     if (solver.info() == Eigen::Success) {
       // solve succeed, return true
+      spdlog::debug("initial solve succeed");
       return true;
     }
   }
+
+  spdlog::debug("initial solve failed");
 
   // initial solve failed
   double reg_weight = initial_reg_weight;
@@ -3281,6 +3381,7 @@ compute_newton_update_dir_with_reg(Eigen::SparseMatrix<double>& hessian,
   while (solver.info() != Eigen::Success) {
     if (reg_weight > max_reg_weight || !(reg_weight > 0)) {
       // next reg_weight exceeded max_reg_weight or reg_weight<=0, solve failed
+      spdlog::debug("reg_weight {} invalid, solve failed", reg_weight);
       return false;
     }
     //  add reg_weight
@@ -3293,9 +3394,12 @@ compute_newton_update_dir_with_reg(Eigen::SparseMatrix<double>& hessian,
 
       if (solver.info() == Eigen::Success) {
         // solve also succeeded, return true
+        spdlog::debug("solve succeeded with reg_weight {}", reg_weight);
         return true;
       }
     }
+
+    spdlog::debug("solve failed with reg_weight {}", reg_weight);
 
     // update next reg weight for next iteration
     reg_weight *= reg_weight_inc;

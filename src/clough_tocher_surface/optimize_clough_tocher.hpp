@@ -195,6 +195,12 @@ public:
   Eigen::SparseMatrix<double> generate_position_matrix(
       const Eigen::VectorXd& p) const;
 
+  // instead of 1, every entry is Ai/A_sum^2 where Ai is
+  // \sum(one_ring_tri_area)/3 use this together with input fitting weight, not
+  // normalized
+  Eigen::SparseMatrix<double> generate_area_weighted_position_matrix(
+      const Eigen::VectorXd& p) const;
+
   void initialize_data_log();
   void write_data_log_entry();
   void close_logs();
@@ -559,9 +565,11 @@ write_polylines_to_obj(const std::string& filename,
                        const std::vector<std::vector<int>>& polylines);
 
 bool
-compute_newton_update_dir_with_reg(Eigen::SparseMatrix<double>& hessian,
-                                   Eigen::VectorXd& derivative,
-                                   Eigen::VectorXd& x,
-                                   double initial_reg_weight = 1.,
-                                   double reg_weight_inc = 10.,
-                                   double max_reg_weight = 1e8);
+compute_newton_update_dir_with_reg(
+    Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>& solver,
+    Eigen::SparseMatrix<double>& hessian,
+    Eigen::VectorXd& derivative,
+    Eigen::VectorXd& x,
+    double initial_reg_weight = 1.,
+    double reg_weight_inc = 10.,
+    double max_reg_weight = 1e8);
