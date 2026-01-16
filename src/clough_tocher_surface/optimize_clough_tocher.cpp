@@ -399,8 +399,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   derivative = C.transpose() * (derivative_smooth + k * derivative_fit);
   hessian = C.transpose() * ((hessian_smooth + k * hessian_fit) * C);
 
-  Eigen::saveMarket(hessian_smooth, "debug_hessian_smooth.txt");
-  Eigen::saveMarket(hessian_fit, "debug_hessian_fit.txt");
+  // Eigen::saveMarket(hessian_smooth, "debug_hessian_smooth.txt");
+  // Eigen::saveMarket(hessian_fit, "debug_hessian_fit.txt");
 
   // hessian_inverse.compute(hessian);
   // Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
@@ -423,12 +423,12 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
   // // TODO: remove it, also the C above
   // // Eigen::saveMarket(hessian_inverse.matrixL(), "debug_hessian_inv_L.txt");
-  Eigen::saveMarket(hessian, "debug_hessian.txt");
-  std::ofstream derivative_file("debug_derivative.txt");
-  for (int k = 0; k < derivative.size(); ++k) {
-    derivative_file << std::setprecision(16) << derivative[k] << std::endl;
-  }
-  derivative_file.close();
+  // Eigen::saveMarket(hessian, "debug_hessian.txt");
+  // std::ofstream derivative_file("debug_derivative.txt");
+  // for (int k = 0; k < derivative.size(); ++k) {
+  //   derivative_file << std::setprecision(16) << derivative[k] << std::endl;
+  // }
+  // derivative_file.close();
 
   spdlog::info("initial fit energy: {}", energy_fit);
   spdlog::info("initial smoothness energy: {}", energy_smooth);
