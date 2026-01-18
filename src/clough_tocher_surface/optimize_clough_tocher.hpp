@@ -198,8 +198,7 @@ public:
   // instead of 1, every entry is Ai/A_sum^2 where Ai is
   // \sum(one_ring_tri_area)/3 use this together with input fitting weight, not
   // normalized
-  Eigen::SparseMatrix<double> generate_area_weighted_position_matrix(
-      const Eigen::VectorXd& p) const;
+  Eigen::SparseMatrix<double> generate_area_weighted_fitting_weight() const;
 
   void initialize_data_log();
   void write_data_log_entry();
@@ -247,6 +246,9 @@ private:
     double solve_time;
     double solve_residual;
     double constraint_error;
+
+    double energy_smooth;
+    double energy_fit;
   };
   IterationData ID;
 

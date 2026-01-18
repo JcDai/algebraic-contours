@@ -345,9 +345,20 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
   // get fixed matrices
   double k = compute_normalized_fitting_weight();
+
+  // TODO: just for test, use super large initial weight then relax
+  double k_init = k;
+  double p_norm_init = p_norm;
+  // p_norm = 3 * p_norm_init;
+  k *= 1e20;
+
   // double k = fitting_weight; // use together with area weighted position
   // matrix
+  spdlog::info("Using initial normalized fitting weight {}", k_init);
   spdlog::info("Using normalized fitting weight {}", k);
+  spdlog::info("Using initial p_norm {}", p_norm_init);
+  spdlog::info("Using p_norm {}", p_norm);
+  // Eigen::SparseMatrix<double> k = generate_area_weighted_fitting_weight();
   const Eigen::SparseMatrix<double>& C = get_ind_to_full_matrix();
 
   Eigen::saveMarket(C, "debug_ind2full.txt");
@@ -436,10 +447,36 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
   // ID.initial_energy = std::numeric_limits<double>::infinity();
   // ID.initial_energy = evaluate_quadratic_energy(hessian, derivative, E0, N0);
   ID.initial_energy = energy_smooth + k * energy_fit;
+  ID.energy_smooth = energy_smooth;
+  ID.energy_fit = energy_fit;
   spdlog::info("initial energy: {}", ID.initial_energy);
   double max_res_error = 10. * ID.solve_residual;
   ID.step_size = step_size;
   for (ID.iter = 1; ID.iter < iterations + 1; ++ID.iter) {
+    if (ID.iter > 1) {
+      k = (k > k_init) ? std::max(k_init, k / 10) : k;
+    }
+
+    int prev_p_norm = p_norm;
+    // p_norm = (k > k_init) ? 3 * p_norm_init : p_norm_init;
+
+    spdlog::info("Using k = {}, p_norm = {}", k, p_norm);
+
+    // compute initial energy use updated weight (added for high fitting weight
+    // start)
+    // need to compute new energy fit since p_norm changed
+    if (p_norm != prev_p_norm) {
+      // compute new system for fitting term if p_norm changed
+      std::tie(energy_fit, derivative_fit, hessian_fit) =
+          generate_position_energy_quadratic(bezier_control_points,
+                                             optimized_control_points);
+      derivative = C.transpose() * (derivative_smooth + k * derivative_fit);
+      hessian = C.transpose() * ((hessian_smooth + k * hessian_fit) * C);
+      ID.energy_fit = energy_fit;
+    }
+
+    ID.initial_energy = ID.energy_smooth + k * ID.energy_fit;
+
     // solve for optimal solution
     Eigen::VectorXd g = -derivative;
     // Eigen::VectorXd N1 = -hessian_inverse.solve(derivative);
@@ -513,6 +550,8 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
 
       // compute optimized energy
       ID.optimized_energy = energy_smooth + k * energy_fit;
+      ID.energy_fit = energy_fit;
+      ID.energy_smooth = energy_smooth;
 
       // invert hessian
       timer.start();
@@ -538,7 +577,7 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
         spdlog::info("switching to gradient");
         d = g;
       }
-      if (ID.step_size < 1e-10)
+      if (ID.step_size < 1e-13 && !(k > k_init))
         break;
 
       // reduce step size and continue
@@ -572,9 +611,10 @@ CloughTocherOptimizer::optimize_laplace_beltrami_energy(
       break;
 
     // serialize if checkpoint iteration
-    int checkpoint = 20;
+    int checkpoint = 5;
     // int checkpoint = 1;
-    if (((ID.iter % checkpoint) == 0) || (ID.iter < 0) || (ID.iter < 3)) {
+    if (((ID.iter % checkpoint) == 0) || ((ID.iter % checkpoint) == 1) ||
+        (ID.iter < 0) || (ID.iter < 3)) {
       checkpoint_control_points(optimized_control_points, ID.iter);
     }
   }
@@ -1323,8 +1363,7 @@ CloughTocherOptimizer::generate_position_matrix(const Eigen::VectorXd& p) const
 }
 
 Eigen::SparseMatrix<double>
-CloughTocherOptimizer::generate_area_weighted_position_matrix(
-    const Eigen::VectorXd& p) const
+CloughTocherOptimizer::generate_area_weighted_fitting_weight() const
 {
   // compute area
   const auto& V = get_vertices();
@@ -1364,12 +1403,8 @@ CloughTocherOptimizer::generate_area_weighted_position_matrix(
 
     for (int d = 0; d < 3; ++d) {
       int I = 3 * i + d;
-      position_matrix_trips.push_back(Triplet(
-          I,
-          I,
-          node_one_ring_area[i] / area_sum_square *
-              power(std::abs(p[I]), p_norm - 2))); // TODO: check if this is
-                                                   // correct with p_norm != 2
+      position_matrix_trips.push_back(
+          Triplet(I, I, node_one_ring_area[i] / area_sum_square));
     }
   }
 
@@ -3354,6 +3389,8 @@ compute_newton_update_dir_with_reg(
 {
   assert(hessian.rows() == hessian.cols());
 
+  spdlog::set_level(spdlog::level::debug);
+
   // try initial factorization
   solver.compute(hessian);
 
@@ -3364,6 +3401,7 @@ compute_newton_update_dir_with_reg(
     if (solver.info() == Eigen::Success) {
       // solve succeed, return true
       spdlog::debug("initial solve succeed");
+      spdlog::set_level(spdlog::level::info);
       return true;
     }
   }
@@ -3382,6 +3420,7 @@ compute_newton_update_dir_with_reg(
     if (reg_weight > max_reg_weight || !(reg_weight > 0)) {
       // next reg_weight exceeded max_reg_weight or reg_weight<=0, solve failed
       spdlog::debug("reg_weight {} invalid, solve failed", reg_weight);
+      spdlog::set_level(spdlog::level::info);
       return false;
     }
     //  add reg_weight
@@ -3395,6 +3434,7 @@ compute_newton_update_dir_with_reg(
       if (solver.info() == Eigen::Success) {
         // solve also succeeded, return true
         spdlog::debug("solve succeeded with reg_weight {}", reg_weight);
+        spdlog::set_level(spdlog::level::info);
         return true;
       }
     }
@@ -3406,6 +3446,7 @@ compute_newton_update_dir_with_reg(
   }
 
   // should not get here
+  spdlog::set_level(spdlog::level::info);
   assert(false);
   return false;
 }

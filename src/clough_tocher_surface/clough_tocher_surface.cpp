@@ -6136,7 +6136,7 @@ CloughTocherSurface::bezier_cone_constraints_expanded(
       }
     }
     // debug message
-    std::cout << "cone " << vid << " computed." << std::endl;
+    // std::cout << "cone " << vid << " computed." << std::endl;
   }
 }
 

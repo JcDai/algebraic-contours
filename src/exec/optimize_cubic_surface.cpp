@@ -196,7 +196,7 @@ main(int argc, char* argv[])
 
   // normalize area
   spdlog::info("normalizing uv area");
-  // uv *= std::sqrt(area / uv_area);
+  uv *= std::sqrt(area / uv_area);
   igl::doublearea(uv, FT, double_area);
   uv_area = double_area.sum() / 2.;
   spdlog::info("new uv area: {}", uv_area);
